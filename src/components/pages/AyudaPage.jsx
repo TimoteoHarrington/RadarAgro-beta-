@@ -31,7 +31,7 @@ export function AyudaPage({ apiStatus, goPage, reloadAll }) {
     {nombre:'UVA · BCRA', id:'uva', detalle:'Valor diario ARS · historial', endpoint:'argentinadatos.com/uva', cache:'60 min'},
     {nombre:'IPC · INDEC', id:'inflacion', detalle:'Inflación mensual e interanual', endpoint:'argentinadatos.com/inflacion', cache:'60 min'},
     {nombre:'Tasas · BCRA', id:'tasas', detalle:'Plazo fijo · depósitos 30d por entidad', endpoint:'argentinadatos.com/tasas', cache:'30 min'},
-    {nombre:'Riesgo País · EMBI+', id:'riesgo', detalle:'JP Morgan · historial diario', endpoint:'argentinadatos.com/riesgo-pais', cache:'15 min'},
+    {nombre:'Riesgo País · EMBI+', id:'riesgoPais', detalle:'JP Morgan · historial diario', endpoint:'argentinadatos.com/riesgo-pais', cache:'15 min'},
     {nombre:'Feriados', id:'feriados', detalle:'Feriados nacionales del año', endpoint:'argentinadatos.com/feriados', cache:'24 h'},
   ];
 

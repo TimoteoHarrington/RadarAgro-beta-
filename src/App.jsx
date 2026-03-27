@@ -2,6 +2,7 @@
 import React from 'react';
 import { Ticker }        from './components/layout/Ticker';
 import { Navbar }        from './components/layout/Navbar';
+import { Footer }        from './components/layout/Footer';
 import { HomePage }      from './components/pages/HomePage';
 import { GranosPage }    from './components/pages/GranosPage';
 import { HaciendaPage }  from './components/pages/HaciendaPage';
@@ -36,6 +37,7 @@ export default function App() {
         {activePage === 'feriados'   && <FeriadosPage  goPage={goPage} feriados={feriados} />}
         {activePage === 'ayuda'      && <AyudaPage     goPage={goPage} apiStatus={apiStatus} reloadAll={reloadAll} />}
       </div>
+      <Footer goPage={goPage} />
     </>
   );
 }

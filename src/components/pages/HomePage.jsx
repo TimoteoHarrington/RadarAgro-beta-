@@ -12,7 +12,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
 
   const [editMode, setEditMode]       = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
-  
+
   const updateTs = lastUpdate
     ? lastUpdate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' p. m. hs'
     : '—';
@@ -57,7 +57,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
   return (
     <div className="page-enter">
 
-      {/* ── HOME HERO — idéntico al HTML MVP ── */}
+      {/* ── HOME HERO ── */}
       <div className="home-hero">
         <div className="home-hero-left">
           <div className="home-hero-eyebrow">
@@ -98,7 +98,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
           <div className="edit-bar">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 600 }}>Editando</span>
-              <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Arrastrá para reordenar · cambiá tamaño con los botones · ✕ para ocultar</span>
+              <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Arrastrá desde la parte superior para reordenar · grip esquina inferior derecha para cambiar tamaño · para ocultar</span>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
               <button
@@ -129,7 +129,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
                   {inactiveWidgets.map(w => (
                     <div key={w.id} className="wcat-item" onClick={() => { activateWidget(w.id); setShowCatalog(false); }}>
                       <div className="wcat-body">
-                        <div className="wcat-name">{w.icon} {w.name}</div>
+                        <div className="wcat-name">{w.name}</div>
                         <div className="wcat-desc">{w.desc}</div>
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--accent)', letterSpacing: '.06em', flexShrink: 0 }}>+ AGREGAR</span>
@@ -159,7 +159,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
           return (
             <div
               key={w.id}
-              className={sizeClass(size)}
+              className={`${sizeClass(size)}${editMode ? ' widget--editing' : ''}`}
               data-id={w.id}
               draggable={editMode}
               onDragStart={editMode ? (e) => onDragStart(e, w.id) : undefined}
@@ -169,27 +169,31 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
             >
               {editMode && (
                 <>
-                  <div className="widget-drag-handle" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '28px', display: 'flex', alignItems: 'center', padding: '0 12px', cursor: 'grab', zIndex: 20, background: 'rgba(77,158,240,.08)', borderBottom: '1px solid rgba(77,158,240,.15)' }}>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--accent)', letterSpacing: '.08em' }}>⠿ MOVER</span>
-                  </div>
+                  {/* Sombra oscura sobre el contenido */}
+                  <div className="widget-edit-fog" />
+
+                  {/* Handle de arrastre — toda la parte superior */}
+                  <div className="widget-edit-drag" title="Arrastrar para mover" />
+
+                  {/* ✕ cerrar — esquina superior derecha */}
                   <button
+                    className="widget-edit-close"
                     onClick={() => removeWidget(w.id)}
-                    style={{ position: 'absolute', top: '6px', right: '8px', zIndex: 30, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: '16px', lineHeight: 1 }}
-                    title="Ocultar"
+                    title="Ocultar widget"
                   >✕</button>
-                  <div style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 25, display: 'flex', gap: '3px' }}>
+
+                  {/* Botones de tamaño — esquina inferior derecha */}
+                  <div className="widget-edit-sizes">
                     {allowed.map(s => (
                       <button
                         key={s}
+                        className={`widget-sz-btn${size === s ? ' sel' : ''}`}
                         onClick={() => setWidgetSize(w.id, s)}
-                        className={`wcat-sz${size === s ? ' sel' : ''}`}
-                        style={{ fontSize: '8px', padding: '3px 7px' }}
                       >
                         {SIZE_LABELS[s]}
                       </button>
                     ))}
                   </div>
-                  <div style={{ position: 'absolute', inset: 0, borderRadius: '14px', background: 'rgba(0,0,0,.35)', pointerEvents: 'none', zIndex: 10 }} />
                 </>
               )}
               <WidgetRenderer

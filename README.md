@@ -1,6 +1,6 @@
 # RadarAgro — Dashboard Agrícola React + Vite
 
-Migración profesional del monolito `index.html` a **React 18 + Vite 5**.
+Proyecto **React 18 + Vite 5**.
 
 ---
 

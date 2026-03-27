@@ -1,7 +1,7 @@
-// HomePage.jsx — exactamente igual al HTML de referencia (MVP)
+// HomePage.jsx
 import React, { useState, useRef, useCallback } from 'react';
 import { useClock } from '../../hooks/useClock';
-import { useWidgets, WIDGET_DEFS } from '../../hooks/useWidgets';
+import { useWidgets } from '../../hooks/useWidgets';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
 
 const SIZE_LABELS = { normal: 'Pequeño', wide: 'Mediano', full: 'Grande' };
@@ -12,6 +12,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
 
   const [editMode, setEditMode]       = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [dragOver, setDragOver]       = useState(null); // id del widget que recibe el drop
 
   const updateTs = lastUpdate
     ? lastUpdate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' p. m. hs'
@@ -21,22 +22,48 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
   const inactiveWidgets = orderedDefs.filter(w => !widgetState[w.id]?.active);
 
   // ── Drag & Drop ──────────────────────────────────────────
-  const dragSrc = useRef(null);
+  const dragSrc      = useRef(null);
+  const dragCounter  = useRef({}); // contador por widget para ignorar child events
+
   const onDragStart = useCallback((e, id) => {
     dragSrc.current = id;
     e.dataTransfer.effectAllowed = 'move';
-    e.currentTarget.classList.add('dragging');
+    // pequeño delay para que el ghost no muestre el estado "editando"
+    setTimeout(() => e.currentTarget.classList.add('widget--dragging'), 0);
   }, []);
+
   const onDragEnd = useCallback((e) => {
-    e.currentTarget.classList.remove('dragging');
+    e.currentTarget.classList.remove('widget--dragging');
     dragSrc.current = null;
+    dragCounter.current = {};
+    setDragOver(null);
   }, []);
+
+  const onDragEnter = useCallback((e, id) => {
+    e.preventDefault();
+    dragCounter.current[id] = (dragCounter.current[id] || 0) + 1;
+    if (dragSrc.current && dragSrc.current !== id) {
+      setDragOver(id);
+    }
+  }, []);
+
+  const onDragLeave = useCallback((e, id) => {
+    dragCounter.current[id] = (dragCounter.current[id] || 1) - 1;
+    if (dragCounter.current[id] <= 0) {
+      dragCounter.current[id] = 0;
+      setDragOver(prev => prev === id ? null : prev);
+    }
+  }, []);
+
   const onDragOver = useCallback((e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   }, []);
+
   const onDrop = useCallback((e, targetId) => {
     e.preventDefault();
+    setDragOver(null);
+    dragCounter.current = {};
     const srcId = dragSrc.current;
     if (!srcId || srcId === targetId) return;
     const order = orderedDefs.map(w => w.id);
@@ -48,10 +75,13 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
     reorderWidgets(newOrder);
   }, [orderedDefs, reorderWidgets]);
 
-  const sizeClass = (size) => {
-    if (size === 'wide') return 'widget w-wide';
-    if (size === 'full') return 'widget w-full';
-    return 'widget';
+  const sizeClass = (id, size) => {
+    let cls = 'widget';
+    if (size === 'wide') cls = 'widget w-wide';
+    if (size === 'full') cls = 'widget w-full';
+    if (editMode) cls += ' widget--editing';
+    if (dragOver === id) cls += ' widget--drop-target';
+    return cls;
   };
 
   return (
@@ -98,7 +128,7 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
           <div className="edit-bar">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 600 }}>Editando</span>
-              <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Arrastrá desde la parte superior para reordenar · grip esquina inferior derecha para cambiar tamaño · para ocultar</span>
+              <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Arrastrá para reordenar · elegí tamaño · ✕ para ocultar</span>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
               <button
@@ -116,7 +146,6 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
             </div>
           </div>
 
-          {/* CATALOG PANEL */}
           {showCatalog && (
             <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
               <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>
@@ -159,30 +188,25 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
           return (
             <div
               key={w.id}
-              className={`${sizeClass(size)}${editMode ? ' widget--editing' : ''}`}
+              className={sizeClass(w.id, size)}
               data-id={w.id}
               draggable={editMode}
               onDragStart={editMode ? (e) => onDragStart(e, w.id) : undefined}
               onDragEnd={editMode ? onDragEnd : undefined}
+              onDragEnter={editMode ? (e) => onDragEnter(e, w.id) : undefined}
+              onDragLeave={editMode ? (e) => onDragLeave(e, w.id) : undefined}
               onDragOver={editMode ? onDragOver : undefined}
               onDrop={editMode ? (e) => onDrop(e, w.id) : undefined}
             >
               {editMode && (
                 <>
-                  {/* Sombra oscura sobre el contenido */}
+                  {/* Sombra oscura */}
                   <div className="widget-edit-fog" />
 
-                  {/* Handle de arrastre — toda la parte superior */}
-                  <div className="widget-edit-drag" title="Arrastrar para mover" />
+                  {/* ✕ cerrar */}
+                  <button className="widget-edit-close" onClick={() => removeWidget(w.id)} title="Ocultar">✕</button>
 
-                  {/* ✕ cerrar — esquina superior derecha */}
-                  <button
-                    className="widget-edit-close"
-                    onClick={() => removeWidget(w.id)}
-                    title="Ocultar widget"
-                  >✕</button>
-
-                  {/* Botones de tamaño — esquina inferior derecha */}
+                  {/* Botones de tamaño — centrados en la parte inferior */}
                   <div className="widget-edit-sizes">
                     {allowed.map(s => (
                       <button

@@ -1,5 +1,5 @@
-// HomePage.jsx — Inicio profesional · RadarAgro
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+// HomePage.jsx — exactamente igual al HTML de referencia (MVP)
+import React, { useState, useRef, useCallback } from 'react';
 import { useClock } from '../../hooks/useClock';
 import { useWidgets, WIDGET_DEFS } from '../../hooks/useWidgets';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
@@ -12,29 +12,23 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
 
   const [editMode, setEditMode]       = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
-  const [mounted, setMounted]         = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 80);
-    return () => clearTimeout(t);
-  }, []);
-
+  
   const updateTs = lastUpdate
-    ? lastUpdate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
-    : null;
+    ? lastUpdate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' p. m. hs'
+    : '—';
 
   const visibleWidgets  = orderedDefs.filter(w => widgetState[w.id]?.active);
   const inactiveWidgets = orderedDefs.filter(w => !widgetState[w.id]?.active);
 
-  // Drag & Drop
+  // ── Drag & Drop ──────────────────────────────────────────
   const dragSrc = useRef(null);
   const onDragStart = useCallback((e, id) => {
     dragSrc.current = id;
     e.dataTransfer.effectAllowed = 'move';
-    e.currentTarget.style.opacity = '0.5';
+    e.currentTarget.classList.add('dragging');
   }, []);
   const onDragEnd = useCallback((e) => {
-    e.currentTarget.style.opacity = '';
+    e.currentTarget.classList.remove('dragging');
     dragSrc.current = null;
   }, []);
   const onDragOver = useCallback((e) => {
@@ -60,125 +54,85 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
     return 'widget';
   };
 
-  const D = dolares || {};
-  const f$ = v => v ? '$' + Math.round(v).toLocaleString('es-AR') : '—';
-  const hasData = !!D.pOf;
-
   return (
-    <div className={`page-enter home-root${mounted ? ' home-root--in' : ''}`}>
+    <div className="page-enter">
 
-      {/* HERO */}
-      <div className="hh">
-        <div className="hh-left">
-          <div className="hh-eyebrow">
-            <span className="hh-dot" />
-            <span className="hh-live">EN VIVO</span>
-            <span className="hh-sep">·</span>
-            <span className="hh-weekday">{weekday}</span>
-            <span className="hh-sep">·</span>
-            <span className="hh-time">{timeShort}</span>
+      {/* ── HOME HERO — idéntico al HTML MVP ── */}
+      <div className="home-hero">
+        <div className="home-hero-left">
+          <div className="home-hero-eyebrow">
+            <span className="home-hero-dot" />
+            <span style={{ textTransform: 'capitalize' }}>{weekday}</span>
+            <span style={{ color: 'var(--text3)' }}>·</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)' }}>{timeShort}</span>
           </div>
-          <h1 className="hh-date">{dateStr}</h1>
-          <p className="hh-sub">Pizarra BCR · MAG Cañuelas · MATBA-ROFEX · CBOT</p>
+          <h1 className="home-hero-date">{dateStr}</h1>
+          <p className="home-hero-sub">Cierre pizarra BCR · MAG Cañuelas · MATBA-ROFEX · CBOT</p>
         </div>
 
-        <div className="hh-center">
-          {hasData ? (
-            <div className="hh-kpi-strip">
-              <HeroKPI label="OFICIAL" val={f$(D.pOf)} cls="fl" />
-              <div className="hh-kpi-div" />
-              <HeroKPI label="MEP" val={f$(D.pMep)} cls={kpiCls(D.bMep)} note={D.bMep != null ? fmtPct(D.bMep) : null} />
-              <div className="hh-kpi-div" />
-              <HeroKPI label="BLUE" val={f$(D.pBlu)} cls={kpiCls(D.bBlu)} note={D.bBlu != null ? fmtPct(D.bBlu) : null} />
-              <div className="hh-kpi-div" />
-              <HeroKPI label="CCL" val={f$(D.pCcl)} cls={kpiCls(D.bCcl)} note={D.bCcl != null ? fmtPct(D.bCcl) : null} />
-            </div>
-          ) : (
-            <div className="hh-loading-strip">
-              <div className="hh-loading-dot" />
-              <span>Cargando datos…</span>
-            </div>
-          )}
-        </div>
-
-        <div className="hh-right">
-          {updateTs && (
-            <div className="hh-upd">
-              <svg width="8" height="8" viewBox="0 0 8 8">
-                <circle cx="4" cy="4" r="3" fill="none" stroke="var(--green)" strokeWidth="1.2" />
-                <circle cx="4" cy="4" r="1.5" fill="var(--green)" />
-              </svg>
-              <span>Act. <strong>{updateTs}</strong></span>
-            </div>
-          )}
-          <div className="hh-actions">
-            <button className="hh-help-btn" onClick={() => goPage('ayuda')} title="Ayuda">?</button>
+        <div className="home-hero-right">
+          <div className="home-hero-upd">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <circle cx="6" cy="6" r="4.5" stroke="var(--green)" strokeWidth="1.2" />
+              <circle cx="6" cy="6" r="2" fill="var(--green)" />
+            </svg>
+            <span>Actualizado <strong>{updateTs}</strong></span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span>
             {!editMode && (
-              <button className="hh-edit-btn" onClick={() => setEditMode(true)}>
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                  <rect x="1" y="3" width="14" height="1.5" rx=".75"/>
-                  <rect x="1" y="7.25" width="14" height="1.5" rx=".75"/>
-                  <rect x="1" y="11.5" width="9" height="1.5" rx=".75"/>
+              <button className="hero-customize-btn" onClick={() => setEditMode(true)}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M2 4h12v1.5H2zm0 3h12v1.5H2zm0 3h8v1.5H2z" />
                 </svg>
-                Personalizar
+                PERSONALIZAR
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* QUICK NAV */}
-      <div className="hh-quicknav">
-        {[
-          { id: 'granos',     ico: '🌾', lbl: 'Granos' },
-          { id: 'hacienda',   ico: '🐄', lbl: 'Hacienda' },
-          { id: 'financiero', ico: '💵', lbl: 'Financiero' },
-          { id: 'macro',      ico: '📊', lbl: 'Macro' },
-          { id: 'insumos',    ico: '⚗️', lbl: 'Insumos' },
-          { id: 'indices',    ico: '📈', lbl: 'Índices' },
-          { id: 'impuestos',  ico: '📋', lbl: 'Impositivo' },
-          { id: 'feriados',   ico: '📅', lbl: 'Feriados' },
-        ].map(it => (
-          <button key={it.id} className="hh-qn-btn" onClick={() => goPage(it.id)}>
-            <span className="hh-qn-ico">{it.ico}</span>
-            <span className="hh-qn-lbl">{it.lbl}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* EDIT MODE BAR */}
+      {/* ── EDIT MODE BAR ── */}
       {editMode && (
-        <div className="em-wrap">
-          <div className="em-bar">
-            <div className="em-bar-left">
-              <span className="em-badge">✦ EDITANDO</span>
-              <span className="em-hint">Arrastrá para reordenar · cambiá tamaño · ✕ para ocultar</span>
+        <div style={{ marginBottom: '16px' }}>
+          <div className="edit-bar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 600 }}>Editando</span>
+              <span style={{ fontSize: '12px', color: 'var(--text3)' }}>Arrastrá para reordenar · cambiá tamaño con los botones · ✕ para ocultar</span>
             </div>
-            <div className="em-bar-right">
-              <button className="em-add-btn" onClick={() => setShowCatalog(v => !v)}>
+            <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
+              <button
+                onClick={() => setShowCatalog(v => !v)}
+                style={{ background: 'var(--bg3)', border: '1px solid var(--line2)', color: 'var(--text2)', fontFamily: 'var(--body)', fontSize: '12px', padding: '7px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
+              >
                 + Agregar widget
               </button>
-              <button className="em-done-btn" onClick={() => { setEditMode(false); setShowCatalog(false); }}>
+              <button
+                onClick={() => { setEditMode(false); setShowCatalog(false); }}
+                style={{ background: 'var(--accent)', border: 'none', color: '#fff', fontFamily: 'var(--body)', fontSize: '12px', padding: '7px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+              >
                 Listo
               </button>
             </div>
           </div>
 
+          {/* CATALOG PANEL */}
           {showCatalog && (
-            <div className="em-catalog">
-              <div className="em-catalog-hd">Widgets disponibles</div>
+            <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+                Widgets disponibles
+              </div>
               {inactiveWidgets.length === 0 ? (
-                <div className="em-catalog-empty">Todos los widgets están activos</div>
+                <div style={{ padding: '16px 18px', fontSize: '12px', color: 'var(--text3)' }}>Todos los widgets están activos</div>
               ) : (
-                <div className="em-catalog-grid">
+                <div className="widget-catalog">
                   {inactiveWidgets.map(w => (
-                    <div key={w.id} className="em-cat-item" onClick={() => { activateWidget(w.id); setShowCatalog(false); }}>
-                      <span className="em-cat-ico">{w.icon}</span>
-                      <div className="em-cat-body">
-                        <div className="em-cat-name">{w.name}</div>
-                        <div className="em-cat-desc">{w.desc}</div>
+                    <div key={w.id} className="wcat-item" onClick={() => { activateWidget(w.id); setShowCatalog(false); }}>
+                      <div className="wcat-body">
+                        <div className="wcat-name">{w.icon} {w.name}</div>
+                        <div className="wcat-desc">{w.desc}</div>
                       </div>
-                      <span className="em-cat-add">+ AGREGAR</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--accent)', letterSpacing: '.06em', flexShrink: 0 }}>+ AGREGAR</span>
                     </div>
                   ))}
                 </div>
@@ -188,15 +142,13 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
         </div>
       )}
 
-      {/* WIDGET GRID */}
-      <div className="widget-grid" style={{ marginTop: editMode ? '0' : '20px' }}>
+      {/* ── WIDGET GRID ── */}
+      <div className="widget-grid" style={{ marginTop: '20px' }}>
         {visibleWidgets.length === 0 && !editMode && (
-          <div className="wg-empty">
-            <div className="wg-empty-icon">—</div>
-            <div className="wg-empty-title">No hay widgets activos</div>
-            <div className="wg-empty-sub">
-              Hacé clic en <strong>Personalizar</strong> para agregar widgets.
-            </div>
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px 20px', color: 'var(--text3)' }}>
+            <div style={{ fontSize: '32px', marginBottom: '12px' }}>—</div>
+            <div style={{ fontFamily: 'var(--display)', fontSize: '16px', color: 'var(--text2)', marginBottom: '8px' }}>No hay widgets activos</div>
+            <div>Hacé clic en <strong style={{ color: 'var(--accent)' }}>PERSONALIZAR</strong> para agregar widgets.</div>
           </div>
         )}
 
@@ -216,25 +168,29 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
               onDrop={editMode ? (e) => onDrop(e, w.id) : undefined}
             >
               {editMode && (
-                <div className="widget-edit-overlay">
-                  <div className="widget-drag-bar">
-                    <span className="widget-drag-icon">⠿</span>
-                    <span className="widget-drag-label">MOVER</span>
-                    <div className="widget-sz-btns">
-                      {allowed.map(s => (
-                        <button
-                          key={s}
-                          className={`widget-sz-btn${size === s ? ' active' : ''}`}
-                          onClick={() => setWidgetSize(w.id, s)}
-                        >
-                          {SIZE_LABELS[s]}
-                        </button>
-                      ))}
-                    </div>
-                    <button className="widget-rm-btn" onClick={() => removeWidget(w.id)}>✕</button>
+                <>
+                  <div className="widget-drag-handle" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '28px', display: 'flex', alignItems: 'center', padding: '0 12px', cursor: 'grab', zIndex: 20, background: 'rgba(77,158,240,.08)', borderBottom: '1px solid rgba(77,158,240,.15)' }}>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--accent)', letterSpacing: '.08em' }}>⠿ MOVER</span>
                   </div>
-                  <div className="widget-edit-fog" />
-                </div>
+                  <button
+                    onClick={() => removeWidget(w.id)}
+                    style={{ position: 'absolute', top: '6px', right: '8px', zIndex: 30, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: '16px', lineHeight: 1 }}
+                    title="Ocultar"
+                  >✕</button>
+                  <div style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 25, display: 'flex', gap: '3px' }}>
+                    {allowed.map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setWidgetSize(w.id, s)}
+                        className={`wcat-sz${size === s ? ' sel' : ''}`}
+                        style={{ fontSize: '8px', padding: '3px 7px' }}
+                      >
+                        {SIZE_LABELS[s]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ position: 'absolute', inset: 0, borderRadius: '14px', background: 'rgba(0,0,0,.35)', pointerEvents: 'none', zIndex: 10 }} />
+                </>
               )}
               <WidgetRenderer
                 widgetId={w.id}
@@ -250,18 +206,3 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
     </div>
   );
 }
-
-// Helpers
-function HeroKPI({ label, val, cls, note }) {
-  const colorMap = { up: 'var(--green)', dn: 'var(--red)', fl: 'var(--text2)' };
-  return (
-    <div className="hh-kpi">
-      <div className="hh-kpi-label">{label}</div>
-      <div className="hh-kpi-val" style={{ color: colorMap[cls] || 'var(--white)' }}>{val}</div>
-      {note && <div className={`hh-kpi-note ${cls}`}>{note}</div>}
-    </div>
-  );
-}
-
-function kpiCls(v) { return v == null ? 'fl' : v > 0 ? 'up' : v < 0 ? 'dn' : 'fl'; }
-function fmtPct(v) { return (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '% br.'; }

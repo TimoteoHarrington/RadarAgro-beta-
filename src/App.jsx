@@ -18,11 +18,8 @@ import { useLiveData }   from './hooks/useLiveData';
 
 export default function App() {
   const { activePage, goPage } = useNavigation();
-  const {
-    dolares, inflacion, riesgoPais, feriados, uva, tasas,
-    emae, reservas, baseMonetaria, merval, badlar,
-    apiStatus, lastUpdate, reloadAll,
-  } = useLiveData();
+  const { dolares, inflacion, riesgoPais, feriados, uva, tasas,
+          apiStatus, lastUpdate, reloadAll } = useLiveData();
 
   return (
     <>
@@ -33,18 +30,7 @@ export default function App() {
         {activePage === 'granos'     && <GranosPage    goPage={goPage} />}
         {activePage === 'hacienda'   && <HaciendaPage  goPage={goPage} />}
         {activePage === 'financiero' && <FinancieroPage goPage={goPage} dolares={dolares} uva={uva} tasas={tasas} />}
-        {activePage === 'macro'      && (
-          <MacroPage
-            goPage={goPage}
-            inflacion={inflacion}
-            riesgoPais={riesgoPais}
-            emae={emae}
-            reservas={reservas}
-            baseMonetaria={baseMonetaria}
-            merval={merval}
-            badlar={badlar}
-          />
-        )}
+        {activePage === 'macro'      && <MacroPage     goPage={goPage} inflacion={inflacion} riesgoPais={riesgoPais} />}
         {activePage === 'insumos'    && <InsumosPage   goPage={goPage} />}
         {activePage === 'indices'    && <IndicesPage   goPage={goPage} />}
         {activePage === 'impuestos'  && <ImpuestosPage goPage={goPage} />}

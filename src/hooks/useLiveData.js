@@ -1,6 +1,6 @@
 // hooks/useLiveData.js — corregido con parsing correcto de DolarApi
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchDolares, fetchInflacion, fetchInflacionInteranual, fetchRiesgoPais, fetchRiesgoPaisUltimo, fetchFeriados, fetchUVA, fetchTasasPlazoFijo, fetchTasasDepositos } from '../services/api';
+import { fetchDolares, fetchInflacion, fetchInflacionInteranual, fetchRiesgoPais, fetchRiesgoPaisUltimo, fetchFeriados, fetchUVA, fetchTasasPlazoFijo, fetchTasasDepositos, fetchIPC, fetchEMAE, fetchCountryRisk } from '../services/api';
 
 const POLL_INTERVAL = 5 * 60 * 1000;
 
@@ -8,12 +8,13 @@ export function useLiveData() {
   const [dolares,    setDolares]    = useState(null);
   const [inflacion,  setInflacion]  = useState(null);
   const [riesgoPais, setRiesgoPais] = useState(null);
+  const [emae,       setEmae]       = useState(null);
   const [feriados,   setFeriados]   = useState(null);
   const [uva,        setUva]        = useState(null);
   const [tasas,      setTasas]      = useState(null);
   const [apiStatus,  setApiStatus]  = useState({
     dolares: 'loading', inflacion: 'loading', riesgoPais: 'loading',
-    feriados: 'loading', uva: 'loading', tasas: 'loading',
+    emae: 'loading', feriados: 'loading', uva: 'loading', tasas: 'loading',
   });
   const [lastUpdate, setLastUpdate] = useState(null);
   const timerRef = useRef(null);
@@ -65,16 +66,33 @@ export function useLiveData() {
     setLastUpdate(new Date());
   }, []);
 
-  // ── Inflación ─────────────────────────────────────────────
+  // ── Inflación (ArgensStats primario, ArgentinaDatos fallback) ─
   const loadInflacion = useCallback(async () => {
     setStatus('inflacion', 'loading');
+    const { data: asData, error: asError } = await fetchIPC();
+
+    if (!asError && asData?.success && asData?.data) {
+      const d = asData.data;
+      setInflacion({
+        valor:       d.values?.yearly   ?? null,
+        mensual:     d.values?.monthly  ?? null,
+        acumulado:   d.values?.accumulated ?? null,
+        fecha:       d.date,
+        fuente:      'argenstats',
+        history:     null, // ArgensStats /inflation solo devuelve el valor actual
+        iaHistory:   null,
+      });
+      setStatus('inflacion', 'ok');
+      return;
+    }
+
+    // Fallback a ArgentinaDatos
     const [{ data: mens }, { data: ia }] = await Promise.all([
       fetchInflacion(),
       fetchInflacionInteranual(),
     ]);
     if (!Array.isArray(mens) || mens.length === 0) { setStatus('inflacion', 'error'); return; }
     const last = mens[mens.length - 1];
-    // Interanual: usar endpoint si disponible, sino calcular rolling 12m
     let valIA = null;
     let iaHistory = [];
     if (Array.isArray(ia) && ia.length) {
@@ -86,17 +104,36 @@ export function useLiveData() {
       valIA = (ult12.reduce((acc, d) => acc * (1 + parseFloat(d.valor || 0) / 100), 1) - 1) * 100;
     }
     setInflacion({
-      valor: valIA,
-      fecha: last?.fecha,
-      history: mens,
+      valor:     valIA,
+      mensual:   parseFloat(last?.valor ?? 0),
+      acumulado: null,
+      fecha:     last?.fecha,
+      fuente:    'argentinadatos',
+      history:   mens,
       iaHistory,
     });
     setStatus('inflacion', 'ok');
   }, []);
 
-  // ── Riesgo País ───────────────────────────────────────────
+  // ── Riesgo País (ArgensStats primario, ArgentinaDatos fallback) ─
   const loadRiesgoPais = useCallback(async () => {
     setStatus('riesgoPais', 'loading');
+    const { data: asData, error: asError } = await fetchCountryRisk();
+
+    if (!asError && asData?.success && asData?.data) {
+      const d = asData.data;
+      setRiesgoPais({
+        valor:  d.value ?? d.values?.current ?? null,
+        delta:  d.variation ?? d.values?.daily ?? null,
+        fecha:  d.date,
+        fuente: 'argenstats',
+        history: null,
+      });
+      setStatus('riesgoPais', 'ok');
+      return;
+    }
+
+    // Fallback a ArgentinaDatos
     const [{ data: ultimo }, { data: historial }] = await Promise.all([
       fetchRiesgoPaisUltimo(),
       fetchRiesgoPais(),
@@ -111,8 +148,27 @@ export function useLiveData() {
     const prvV = prev ? parseFloat(prev.valor ?? 0) : null;
     const delta = prvV != null ? val - prvV : null;
 
-    setRiesgoPais({ valor: val, delta, fecha: last?.fecha, history: hist.slice(-365) });
+    setRiesgoPais({ valor: val, delta, fecha: last?.fecha, fuente: 'argentinadatos', history: hist.slice(-365) });
     setStatus('riesgoPais', 'ok');
+  }, []);
+
+  // ── EMAE (ArgensStats) ────────────────────────────────────
+  const loadEmae = useCallback(async () => {
+    setStatus('emae', 'loading');
+    const { data: asData, error } = await fetchEMAE();
+    if (error || !asData?.success || !asData?.data) {
+      setStatus('emae', 'error');
+      return;
+    }
+    const d = asData.data;
+    setEmae({
+      mensual:   d.values?.monthly   ?? null,
+      anual:     d.values?.yearly    ?? null,
+      acumulado: d.values?.accumulated ?? null,
+      fecha:     d.date,
+      componente: d.component?.name ?? 'Nivel general',
+    });
+    setStatus('emae', 'ok');
   }, []);
 
   // ── Feriados ─────────────────────────────────────────────
@@ -159,9 +215,9 @@ export function useLiveData() {
   const loadAll = useCallback(() => {
     Promise.allSettled([
       loadDolares(), loadInflacion(), loadRiesgoPais(),
-      loadFeriados(), loadUva(), loadTasas(),
+      loadEmae(), loadFeriados(), loadUva(), loadTasas(),
     ]);
-  }, [loadDolares, loadInflacion, loadRiesgoPais, loadFeriados, loadUva, loadTasas]);
+  }, [loadDolares, loadInflacion, loadRiesgoPais, loadEmae, loadFeriados, loadUva, loadTasas]);
 
   useEffect(() => {
     loadAll();
@@ -169,5 +225,5 @@ export function useLiveData() {
     return () => clearInterval(timerRef.current);
   }, [loadAll]);
 
-  return { dolares, inflacion, riesgoPais, feriados, uva, tasas, apiStatus, lastUpdate, reloadAll: loadAll };
+  return { dolares, inflacion, riesgoPais, emae, feriados, uva, tasas, apiStatus, lastUpdate, reloadAll: loadAll };
 }

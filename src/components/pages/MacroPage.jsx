@@ -411,7 +411,7 @@ function RiesgoPaisChart({ history, range }) {
   );
 }
 
-export function MacroPage({ goPage, inflacion, riesgoPais }) {
+export function MacroPage({ goPage, inflacion, riesgoPais, emae }) {
   const [rpRange, setRpRange] = React.useState('1A');
   const rpVal      = riesgoPais?.valor ?? null;
   const rpDelta    = riesgoPais?.delta ?? null;
@@ -422,24 +422,41 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
   const rpDeltaCls  = rpDelta != null ? (rpDelta < 0 ? 'up' : 'dn') : 'fl';
   const rpVsBrasil  = rpVal != null ? (rpVal / 180).toFixed(1) + '×' : '—';
 
-  // IPC KPIs derivados de datos reales
-  const mensData = inflacion?.history ?? [];
-  const iaData   = inflacion?.iaHistory ?? [];
-  const lastIPC  = mensData[mensData.length - 1];
-  const prevIPC  = mensData[mensData.length - 2];
-  const ipcVal   = lastIPC ? parseFloat(lastIPC.valor || 0) : null;
-  const ipcPrev  = prevIPC ? parseFloat(prevIPC.valor || 0) : null;
-  const ipcDiff  = ipcVal != null && ipcPrev != null ? ipcVal - ipcPrev : null;
-  const ipcFp    = (lastIPC?.fecha || '').split('-');
-  const ipcMes   = ipcFp[1] ? MESES_C[+ipcFp[1]] + ' ' + ipcFp[0] : '—';
-  const ipcIA    = inflacion?.valor ?? null; // interanual si disponible
-  const prom3    = mensData.length >= 3 ? (mensData.slice(-3).reduce((a,d)=>a+parseFloat(d.valor||0),0)/3) : null;
-  const acumAnio = (() => {
+  // IPC KPIs — ArgensStats primario, ArgentinaDatos fallback
+  const mensData   = inflacion?.history ?? [];
+  const iaData     = inflacion?.iaHistory ?? [];
+  // Si ArgensStats devolvio datos directos los usamos, sino derivamos del historial
+  const ipcMensual = inflacion?.mensual ?? (mensData.length ? parseFloat(mensData[mensData.length - 1]?.valor || 0) : null);
+  const ipcIA      = inflacion?.valor   ?? null;
+  const ipcAcum    = inflacion?.acumulado ?? null;
+  const ipcFecha   = inflacion?.fecha   ?? mensData[mensData.length - 1]?.fecha ?? '';
+  const ipcFp      = ipcFecha.split('-');
+  const ipcMes     = ipcFp[1] ? MESES_C[+ipcFp[1]] + ' ' + ipcFp[0] : '—';
+  // Para comparacion mensual necesitamos el anterior (solo disponible via historial)
+  const lastIPC    = mensData[mensData.length - 1];
+  const prevIPC    = mensData[mensData.length - 2];
+  const ipcVal     = ipcMensual;
+  const ipcPrev    = prevIPC ? parseFloat(prevIPC.valor || 0) : null;
+  const ipcDiff    = ipcVal != null && ipcPrev != null ? ipcVal - ipcPrev : null;
+  const prom3      = mensData.length >= 3 ? (mensData.slice(-3).reduce((a,d)=>a+parseFloat(d.valor||0),0)/3) : null;
+  const acumAnio   = ipcAcum ?? (() => {
     const yr = new Date().getFullYear().toString();
     const thisYear = mensData.filter(d=>(d.fecha||'').startsWith(yr));
     if(!thisYear.length) return null;
     return (thisYear.reduce((acc,d)=>acc*(1+parseFloat(d.valor||0)/100),1)-1)*100;
   })();
+  const ipcFuente  = inflacion?.fuente === 'argenstats' ? 'ArgensStats' : 'ArgentinaDatos.com';
+
+  // EMAE KPIs — ArgensStats
+  const emaeAnual  = emae?.anual   ?? null;
+  const emaeAcum   = emae?.acumulado ?? null;
+  const emaeMes    = emae?.mensual  ?? null;
+  const emaeFecha  = emae?.fecha    ?? '';
+  const emaeComp   = emae?.componente ?? 'Nivel general';
+  const emaeFp     = emaeFecha.split('-');
+  const emaeMesLbl = emaeFp[1] ? MESES_C[+emaeFp[1]] + ' ' + emaeFp[0] : '—';
+  const fmtPct = v => v != null ? (v >= 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%' : '—';
+  const emaeColor  = emaeAnual != null ? (emaeAnual >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
 
   const fmt1 = v => v != null ? v.toFixed(1).replace('.',',')+'%' : '—';
   const fmtDiff = v => v != null ? (v>=0?'+':'')+v.toFixed(1).replace('.',',') + ' pp' : '—';
@@ -460,9 +477,9 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
       <div className="section">
         <div className="section-title">Indicadores clave · resumen</div>
         <div className="grid grid-4">
-          <div className="stat c-flat"><div className="stat-label">IPC General <span className="stat-badge fl">Ene 2026</span></div><div className="stat-val">2,4%</div><div className="stat-delta dn"> −0,4 pp vs dic · mínimo desde 2021</div><div className="stat-meta">Interanual: 74,3% · Núcleo: 2,1%</div></div>
-          <div className="stat c-flat"><div className="stat-label">EMAE General <span className="stat-badge fl">Nov 2025</span></div><div className="stat-val">+5,3%</div><div className="stat-delta up"> 6° mes consecutivo positivo</div><div className="stat-meta">Acumula +4,1% en 2025 · var. interanual</div></div>
-          <div className="stat c-flat"><div className="stat-label">Riesgo País EMBI+ <span className="stat-badge fl">HOY</span></div><div className="stat-val">{rpDisp}</div><div className={`stat-delta ${rpDeltaCls}`}>{rpDeltaDisp}</div><div className="stat-meta">Mínimo desde 2017 · Brasil: 180 pb</div></div>
+          <div className="stat c-flat"><div className="stat-label">IPC General <span className="stat-badge fl">{ipcMes}</span></div><div className="stat-val">{fmt1(ipcVal)}</div><div className={`stat-delta ${ipcDiff != null ? (ipcDiff < 0 ? 'up' : 'dn') : 'fl'}`}>{ipcDiff != null ? fmtDiff(ipcDiff) + ' vs mes anterior' : '—'}</div><div className="stat-meta">Interanual: {fmt1(ipcIA)} · Fuente: {ipcFuente}</div></div>
+          <div className="stat c-flat"><div className="stat-label">EMAE General <span className="stat-badge fl">{emaeMesLbl || 'cargando'}</span></div><div className="stat-val" style={{color:emaeColor}}>{fmtPct(emaeAnual)}</div><div className={`stat-delta ${emaeAnual != null ? (emaeAnual >= 0 ? 'up' : 'dn') : 'fl'}`}>{emaeAcum != null ? `Acumulado: ${fmtPct(emaeAcum)}` : 'var. interanual'}</div><div className="stat-meta">Fuente: ArgensStats · INDEC</div></div>
+          <div className="stat c-flat"><div className="stat-label">Riesgo País EMBI+ <span className="stat-badge fl">HOY</span></div><div className="stat-val">{rpDisp}</div><div className={`stat-delta ${rpDeltaCls}`}>{rpDeltaDisp}</div><div className="stat-meta">Fuente: {riesgoPais?.fuente === 'argenstats' ? 'ArgensStats' : 'JP Morgan · ArgentinaDatos'} · Brasil: 180 pb</div></div>
           <div className="stat c-flat"><div className="stat-label">PBI Real <span className="stat-badge fl">2025</span></div><div className="stat-val">+5,5%</div><div className="stat-delta up"> Recuperación tras −1,6% en 2024</div><div className="stat-meta">PBI nominal est.: USD 640B · INDEC</div></div>
         </div>
       </div>
@@ -472,7 +489,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
         <div className="section-title">Inflación — IPC mensual · INDEC</div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'20px'}}>
           {[
-            {lbl:'IPC General', badge:ipcMes, val:fmt1(ipcVal), delta:fmtDiff(ipcDiff), meta:`Interanual: ${fmt1(ipcIA)}`},
+            {lbl:'IPC General', badge:ipcMes, val:fmt1(ipcVal), delta:fmtDiff(ipcDiff) + ' vs mes ant.', meta:`Fuente: ${ipcFuente}`},
             {lbl:'Interanual',  badge:'',    val:fmt1(ipcIA),  delta:'acumulado 12 meses', meta:'vs mismo mes año anterior'},
             {lbl:'Acumulado año',badge:'',   val:fmt1(acumAnio),delta:ipcFp[0]||'—',      meta:'Desde enero del año en curso'},
             {lbl:'Promedio 3 meses',badge:'',val:fmt1(prom3),  delta:'últimos 3 meses',   meta:'Media simple mensual'},
@@ -496,7 +513,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
             {mensData.length > 0
               ? <IpcBarChart data={mensData} />
               : <div style={{height:'160px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando…</div>}
-            <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'6px',textAlign:'right'}}>Fuente: INDEC · ArgentinaDatos.com</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'6px',textAlign:'right'}}>Fuente: INDEC · {ipcFuente}</div>
           </div>
           <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
@@ -508,7 +525,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
             {(mensData.length > 0 || iaData.length > 0)
               ? <IpcLineChart iaData={iaData} mensData={mensData} />
               : <div style={{height:'160px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando…</div>}
-            <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'6px',textAlign:'right'}}>Fuente: INDEC · ArgentinaDatos.com</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'6px',textAlign:'right'}}>Fuente: INDEC · {ipcFuente}</div>
           </div>
         </div>
         <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden'}}>
@@ -520,7 +537,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
             <IpcHeatmap data={mensData} />
           </div>
           <div style={{padding:'8px 18px',borderTop:'1px solid var(--line)'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Fuente: INDEC · ArgentinaDatos.com · Frecuencia: mensual</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Fuente: INDEC · {ipcFuente} · Frecuencia: mensual</span>
           </div>
         </div>
       </div>
@@ -529,8 +546,20 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
       <div className="section">
         <div className="section-title">Actividad económica — EMAE · INDEC</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'12px',marginBottom:'16px'}}>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>EMAE General <span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>Nov 2025</span></div><div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--green)',lineHeight:1}}>+5,3%</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--green)',marginTop:'6px'}}>6° mes consecutivo positivo</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Variación interanual</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Acum. 2025</div><div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>+4,1%</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>Ene–Nov 2025</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>vs mismo período 2024</div></div>
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>
+              EMAE General <span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>{emaeMesLbl || 'cargando'}</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:emaeColor,lineHeight:1}}>{fmtPct(emaeAnual)}</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:emaeColor,marginTop:'6px'}}>{emaeAnual != null ? (emaeAnual >= 0 ? 'Crecimiento interanual' : 'Caida interanual') : 'cargando…'}</div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Variación interanual · ArgensStats</div>
+          </div>
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Acumulado año</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{fmtPct(emaeAcum)}</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>{emaeMesLbl ? `Ene–${emaeMesLbl}` : '—'}</div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>vs mismo período año anterior</div>
+          </div>
           <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Mejor sector</div><div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--green)',lineHeight:1.2}}>Construcción</div><div style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:'var(--green)',marginTop:'4px'}}>+9,2%</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Interanual · Nov 2025</div></div>
           <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>En contracción</div><div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--red)',lineHeight:1.2}}>Adm. Pública</div><div style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:'var(--red)',marginTop:'4px'}}>−1,8%</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Único sector negativo</div></div>
         </div>
@@ -622,7 +651,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
             );
           })()}
           <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'flex-end'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · ArgentinaDatos.com · Frecuencia: mensual</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · ArgensStats · Frecuencia: mensual</span>
           </div>
         </div>
       </div>
@@ -650,7 +679,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
               </div>
             </div>
             <RiesgoPaisChart history={riesgoPais?.history ?? []} range={rpRange} />
-            <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'8px',textAlign:'right'}}>Fuente: JP Morgan EMBI+ · ArgentinaDatos.com</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'8px',textAlign:'right'}}>Fuente: JP Morgan EMBI+ · {riesgoPais?.fuente === 'argenstats' ? 'ArgensStats' : 'ArgentinaDatos.com'}</div>
           </div>
           <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden',display:'flex',flexDirection:'column'}}>
             <div style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}>
@@ -673,7 +702,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
             ))}
           </div>
         </div>
-        <div className="source" style={{marginTop:'8px'}}>Fuente: JP Morgan EMBI+ · ArgentinaDatos.com · Frecuencia: diaria</div>
+        <div className="source" style={{marginTop:'8px'}}>Fuente: JP Morgan EMBI+ · {riesgoPais?.fuente === 'argenstats' ? 'ArgensStats' : 'ArgentinaDatos.com'} · Frecuencia: diaria</div>
       </div>
 
       {/* 5. PBI */}

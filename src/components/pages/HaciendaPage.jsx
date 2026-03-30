@@ -1,5 +1,397 @@
-// HaciendaPage.jsx — matches reference HTML exactly
+// HaciendaPage.jsx — Redesigned with full API coverage from Downtack PDF
 import React, { useState } from 'react';
+import {
+  HACIENDA_OVERVIEW,
+  HACIENDA_NOVILLOS, HACIENDA_NOVILLITOS, HACIENDA_VAQUILLONAS,
+  HACIENDA_VACAS, HACIENDA_TOROS, HACIENDA_MEJORES,
+  HACIENDA_CANUELAS, HACIENDA_ROSGAN,
+  HIST_MESES_HAC,
+  HIST_NOVILLO_ESP, HIST_NOVILLITO_ESP, HIST_VAQUILLONA, HIST_VACA_ESP, HIST_ROSGAN_INV,
+} from '../../data/hacienda.js';
+
+// ── Helpers ──────────────────────────────────────────────────
+const fmtARS  = v => '$\u00a0' + v.toLocaleString('es-AR');
+const fmtPct  = v => (v === 0 ? '= 0%' : (v > 0 ? '+' : '') + v.toFixed(1) + '%');
+const dirOf   = v => v > 0 ? 'up' : v < 0 ? 'dn' : 'fl';
+
+function Pill({ d, children }) {
+  return <span className={`pill ${d}`}>{children}</span>;
+}
+
+// ── Mini Line Chart ──────────────────────────────────────────
+function MiniLineChart({ series, labels, height = 200 }) {
+  const w = 900, h = height;
+  const pad = { t: 14, r: 20, b: 28, l: 58 };
+  const allVals = series.flatMap(s => s.data).filter(Number.isFinite);
+  const minV = Math.min(...allVals);
+  const maxV = Math.max(...allVals);
+  const rangeV = maxV - minV || 1;
+  const n = labels.length;
+  const xPos = i => pad.l + (i / (n - 1)) * (w - pad.l - pad.r);
+  const yPos = v => pad.t + (1 - (v - minV) / rangeV) * (h - pad.t - pad.b);
+  const mkPath = data => data.map((v, i) => `${i === 0 ? 'M' : 'L'}${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
+  const mkArea = data => {
+    const base = yPos(minV);
+    return mkPath(data) + ` L${xPos(n-1).toFixed(1)},${base} L${xPos(0).toFixed(1)},${base} Z`;
+  };
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height, display: 'block' }}>
+      {[0, 0.25, 0.5, 0.75, 1].map(t => {
+        const y = pad.t + (1 - t) * (h - pad.t - pad.b);
+        const v = minV + t * rangeV;
+        return (
+          <g key={t}>
+            <line x1={pad.l} y1={y} x2={w - pad.r} y2={y} stroke="var(--line)" strokeWidth="1" />
+            <text x={pad.l - 6} y={y + 4} textAnchor="end" fontSize={8} fill="var(--text3)" fontFamily="monospace">{Math.round(v).toLocaleString('es-AR')}</text>
+          </g>
+        );
+      })}
+      {labels.map((l, i) => (
+        <text key={i} x={xPos(i)} y={h - 4} textAnchor="middle" fontSize={8} fill="var(--text3)" fontFamily="monospace">{l}</text>
+      ))}
+      {series.map(s => (
+        <g key={s.label}>
+          <path d={mkArea(s.data)} fill={s.color} opacity={0.07} />
+          <path d={mkPath(s.data)} fill="none" stroke={s.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={xPos(n-1)} cy={yPos(s.data[n-1])} r={3} fill={s.color} />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+// ── Tabla estándar de hacienda ────────────────────────────────
+function HacTable({ rows }) {
+  return (
+    <div className="tbl-wrap" style={{ marginBottom: 24 }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Categoría</th>
+            <th className="r">Mín. ARS/kg</th>
+            <th className="r">Máx. ARS/kg</th>
+            <th className="r">Promedio</th>
+            <th className="r">Sem. anterior</th>
+            <th className="r">Var. %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => (
+            <tr key={row.categoria}>
+              <td className="bold">{row.categoria}</td>
+              <td className="r mono">{fmtARS(row.minimo)}</td>
+              <td className="r mono">{fmtARS(row.maximo)}</td>
+              <td className="r w mono">{fmtARS(row.promedio)}</td>
+              <td className="r dim mono">{fmtARS(row.semAnterior)}</td>
+              <td className="r"><Pill d={row.varDir}>{fmtPct(row.varPct)}</Pill></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Overview cards ───────────────────────────────────────────
+function OverviewCards() {
+  return (
+    <div className="grid grid-3" style={{ marginBottom: 28 }}>
+      {HACIENDA_OVERVIEW.map(item => {
+        const d = dirOf(item.var);
+        return (
+          <div key={item.id} className={`stat c-${d === 'up' ? 'green' : d === 'dn' ? 'red' : 'flat'}`}>
+            <div className="stat-label">
+              {item.nombre}
+              <span className={`stat-badge ${d}`}>{fmtPct(item.var)}</span>
+            </div>
+            <div className="stat-val sm">{fmtARS(item.precio)}</div>
+            <div className="stat-meta">{item.subcategoria} · {item.unidad}</div>
+            <div className="stat-meta" style={{ marginTop: 4 }}>Fuente: {item.fuente}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── TAB: Faena ───────────────────────────────────────────────
+function TabFaena() {
+  return (
+    <div className="section">
+      <div className="alert-strip info" style={{ marginBottom: 20 }}>
+        <span className="alert-icon">ℹ</span>
+        <span className="alert-text">
+          Precios expresados como rango <strong>mínimo – máximo</strong> en <strong>ARS/kg vivo</strong> ·
+          Fuente: Cañuelas MAG · 30/03/2026 · La variación se calcula sobre el promedio del rango vs. semana anterior
+        </span>
+      </div>
+
+      <div className="section-title">Novillos</div>
+      <HacTable rows={HACIENDA_NOVILLOS} />
+
+      <div className="section-title">Novillitos</div>
+      <HacTable rows={HACIENDA_NOVILLITOS} />
+
+      <div className="section-title">Vaquillonas</div>
+      <HacTable rows={HACIENDA_VAQUILLONAS} />
+
+      <div className="section-title">Vacas</div>
+      <HacTable rows={HACIENDA_VACAS} />
+
+      <div className="section-title">Toros</div>
+      <HacTable rows={HACIENDA_TOROS} />
+
+      <div className="section-title">Mejores</div>
+      <HacTable rows={HACIENDA_MEJORES} />
+
+      <div className="source">Fuente: Cañuelas MAG · 30/03/2026</div>
+    </div>
+  );
+}
+
+// ── TAB: Cañuelas ────────────────────────────────────────────
+function TabCanuelas() {
+  const [sel, setSel] = useState('inmag');
+  const ind = HACIENDA_CANUELAS.find(c => c.id === sel) || HACIENDA_CANUELAS[0];
+  const d = dirOf(ind.var1s);
+
+  return (
+    <div>
+      <div className="toggle" style={{ marginBottom: 24 }}>
+        {HACIENDA_CANUELAS.map(c => (
+          <button key={c.id} className={`tg${sel === c.id ? ' active' : ''}`} onClick={() => setSel(c.id)}>
+            {c.nombre}
+          </button>
+        ))}
+      </div>
+
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        {[
+          { label: 'Precio actual',    valor: fmtARS(ind.precio),       color: 'var(--white)',  sub: ind.unidad || 'ARS/kg vivo' },
+          { label: 'Var. semanal',     valor: fmtPct(ind.var1s),        color: d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)', sub: 'vs semana anterior' },
+          { label: 'Var. mensual',     valor: '+' + ind.var1m + '%',    color: 'var(--accent)', sub: 'vs mes anterior' },
+          { label: 'Var. trimestral',  valor: '+' + ind.var3m + '%',    color: 'var(--accent)', sub: 'vs 3 meses atrás' },
+        ].map(item => (
+          <div key={item.label} style={{ background: 'var(--bg1)', padding: '16px 18px' }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>{item.label}</div>
+            <div style={{ fontFamily: 'var(--display)', fontSize: 22, fontWeight: 700, color: item.color, letterSpacing: '-.02em' }}>{item.valor}</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>{item.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Description */}
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10, padding: '14px 18px', marginBottom: 24, fontSize: 13, color: 'var(--text2)', lineHeight: 1.55 }}>
+        <strong style={{ color: 'var(--white)' }}>{ind.nombre}</strong> — {ind.descripcion}
+      </div>
+
+      {/* Historical chart */}
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>Evolución {ind.nombre} · últimos 12 meses</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 20, height: 2, background: '#56c97a', borderRadius: 1 }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{ind.nombre}</span>
+          </div>
+        </div>
+        <MiniLineChart
+          series={[{ data: ind.histPrecio, color: '#56c97a', label: ind.nombre }]}
+          labels={HIST_MESES_HAC}
+          height={180}
+        />
+      </div>
+
+      {/* Comparativo semana anterior */}
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>Comparativo de períodos</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: 'var(--line)' }}>
+          {[
+            { label: 'Sem. anterior', valor: fmtARS(ind.semAnterior) },
+            { label: 'Mes anterior',  valor: fmtARS(ind.mesAnterior) },
+            { label: 'Actual',        valor: fmtARS(ind.precio) },
+          ].map(item => (
+            <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginBottom: 6 }}>{item.label}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 15, fontWeight: 700, color: 'var(--white)' }}>{item.valor}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="source" style={{ marginTop: 10 }}>Fuente: Cañuelas MAG · 30/03/2026</div>
+    </div>
+  );
+}
+
+// ── TAB: ROSGAN ──────────────────────────────────────────────
+function TabRosgan() {
+  const [sel, setSel] = useState('invernada');
+  const ind = HACIENDA_ROSGAN.find(r => r.id === sel) || HACIENDA_ROSGAN[0];
+  const d = dirOf(ind.var1s);
+
+  return (
+    <div>
+      <div className="toggle" style={{ marginBottom: 24 }}>
+        {HACIENDA_ROSGAN.map(r => (
+          <button key={r.id} className={`tg${sel === r.id ? ' active' : ''}`} onClick={() => setSel(r.id)}>
+            {r.nombre}
+          </button>
+        ))}
+      </div>
+
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        {[
+          { label: 'Precio actual',   valor: fmtARS(ind.precio),     color: 'var(--white)',  sub: 'ARS/kg vivo' },
+          { label: 'Var. semanal',    valor: fmtPct(ind.var1s),      color: d === 'up' ? 'var(--green)' : 'var(--red)', sub: 'vs semana anterior' },
+          { label: 'Var. mensual',    valor: '+' + ind.var1m + '%',  color: 'var(--accent)', sub: 'vs mes anterior' },
+          { label: 'Var. trimestral', valor: '+' + ind.var3m + '%',  color: 'var(--accent)', sub: 'vs 3 meses atrás' },
+        ].map(item => (
+          <div key={item.label} style={{ background: 'var(--bg1)', padding: '16px 18px' }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>{item.label}</div>
+            <div style={{ fontFamily: 'var(--display)', fontSize: 22, fontWeight: 700, color: item.color, letterSpacing: '-.02em' }}>{item.valor}</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>{item.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10, padding: '14px 18px', marginBottom: 24, fontSize: 13, color: 'var(--text2)', lineHeight: 1.55 }}>
+        <strong style={{ color: 'var(--white)' }}>{ind.nombre}</strong> — {ind.descripcion}
+      </div>
+
+      {/* Composición si disponible */}
+      {ind.composicion && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="section-title">Composición del índice</div>
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th>Categoría</th><th className="r">Peso (%)</th><th className="r">Precio ref. (ARS/kg)</th></tr></thead>
+              <tbody>
+                {ind.composicion.map(c => (
+                  <tr key={c.cat}>
+                    <td className="bold">{c.cat}</td>
+                    <td className="r mono">{c.peso}%</td>
+                    <td className="r w mono">{fmtARS(c.precio)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Chart */}
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>Evolución {ind.nombre} · últimos 12 meses</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 20, height: 2, background: '#4d9ef0', borderRadius: 1 }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{ind.nombre}</span>
+          </div>
+        </div>
+        <MiniLineChart
+          series={[{ data: ind.histPrecio, color: '#4d9ef0', label: ind.nombre }]}
+          labels={HIST_MESES_HAC}
+          height={180}
+        />
+      </div>
+
+      <div className="source">Fuente: ROSGAN — Bolsa de Comercio de Rosario · 30/03/2026</div>
+    </div>
+  );
+}
+
+// ── TAB: Histórico ────────────────────────────────────────────
+function TabHistorico() {
+  const series = [
+    { data: HIST_NOVILLO_ESP,   color: '#56c97a', label: 'Novillo Esp.' },
+    { data: HIST_NOVILLITO_ESP, color: '#4d9ef0', label: 'Novillito Esp.' },
+    { data: HIST_VAQUILLONA,    color: '#f0b840', label: 'Vaquillona' },
+    { data: HIST_VACA_ESP,      color: '#f07070', label: 'Vaca Esp.' },
+    { data: HIST_ROSGAN_INV,    color: '#c792ea', label: 'ROSGAN Inv.' },
+  ];
+
+  return (
+    <div>
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+            Evolución de precios · ARS/kg vivo · Mar 2025 – Feb 2026
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {series.map(s => (
+              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 20, height: 2, background: s.color, borderRadius: 1 }} />
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <MiniLineChart series={series} labels={HIST_MESES_HAC} height={240} />
+        {/* Stats strip */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
+          {series.map(s => {
+            const last = s.data[s.data.length - 1];
+            const first = s.data[0];
+            const varPct = ((last - first) / first * 100).toFixed(1);
+            return (
+              <div key={s.label} style={{ background: 'var(--bg2)', padding: '10px 12px', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 700, color: s.color }}>{fmtARS(last)}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: varPct > 0 ? 'var(--green)' : 'var(--red)', marginTop: 2 }}>+{varPct}% en 12m</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Comparativa por categoría */}
+      <div className="section-title">Comparativa actual por categoría</div>
+      <div className="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Categoría</th>
+              <th className="r">Precio actual (ARS/kg)</th>
+              <th className="r">Hace 6 meses</th>
+              <th className="r">Var. 6m</th>
+              <th className="r">Hace 12 meses</th>
+              <th className="r">Var. 12m</th>
+            </tr>
+          </thead>
+          <tbody>
+            {series.map(s => {
+              const last = s.data[s.data.length - 1];
+              const m6   = s.data[6];
+              const m12  = s.data[0];
+              const v6   = ((last - m6)  / m6  * 100).toFixed(1);
+              const v12  = ((last - m12) / m12 * 100).toFixed(1);
+              return (
+                <tr key={s.label}>
+                  <td className="bold">{s.label}</td>
+                  <td className="r w mono">{fmtARS(last)}</td>
+                  <td className="r dim mono">{fmtARS(m6)}</td>
+                  <td className="r"><span className={`pill ${parseFloat(v6) >= 0 ? 'up' : 'dn'}`}>{v6 > 0 ? '+' : ''}{v6}%</span></td>
+                  <td className="r dim mono">{fmtARS(m12)}</td>
+                  <td className="r"><span className={`pill ${parseFloat(v12) >= 0 ? 'up' : 'dn'}`}>{v12 > 0 ? '+' : ''}{v12}%</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="source">Fuente: Cañuelas MAG · ROSGAN · BCR · 30/03/2026</div>
+    </div>
+  );
+}
+
+// ── Main HaciendaPage ────────────────────────────────────────
+const TABS = [
+  { id: 'faena',     label: 'Faena' },
+  { id: 'canuelas',  label: 'Cañuelas' },
+  { id: 'rosgan',    label: 'ROSGAN' },
+  { id: 'historico', label: 'Histórico' },
+];
 
 export function HaciendaPage({ goPage }) {
   const [activeTab, setActiveTab] = useState('faena');
@@ -7,137 +399,27 @@ export function HaciendaPage({ goPage }) {
     <div className="page-enter">
       <div className="ph">
         <div>
-          <div className="ph-title">Hacienda <span className="help-pip" onClick={()=>goPage('ayuda')} title="Ayuda">?</span></div>
-          <div className="ph-sub">Faena · Invernada y Cría · MAG Cañuelas · Harrington &amp; La Fuente · 20/02/2026</div>
+          <div className="ph-title">Hacienda <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span></div>
+          <div className="ph-sub">Novillos · Novillitos · Vacas · Vaquillonas · Toros · Cañuelas INMAG/IGMAG · ROSGAN · 30/03/2026</div>
         </div>
       </div>
+
+      <OverviewCards />
+
       <div className="tabs">
-        <button className={`tab${activeTab==='faena'?' active':''}`} onClick={()=>setActiveTab('faena')}>Faena</button>
-        <button className={`tab${activeTab==='inv'?' active':''}`} onClick={()=>setActiveTab('inv')}>Invernada y Cría</button>
+        {TABS.map(t => (
+          <button key={t.id} className={`tab${activeTab === t.id ? ' active' : ''}`} onClick={() => setActiveTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {activeTab==='faena' && (
-        <div className="section">
-          <div className="alert-strip info" style={{marginBottom:'20px'}}>
-            <span className="alert-text">Precios expresados como rango <strong>mínimo – máximo</strong> en ARS/kg vivo · Fuente: MAG Cañuelas · 20/02/2026 · La variación se calcula sobre el promedio del rango vs. semana anterior</span>
-          </div>
-          <div className="section-title">Novillos</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Novillitos (290–340 kg)</td><td className="r mono">$5.000</td><td className="r mono">$5.600</td><td className="r w mono">$5.300</td><td className="r dim mono">$5.100</td><td className="r"><span className="pill up">+3,9%</span></td></tr>
-              <tr><td className="bold">Novillo liviano (340–390 kg)</td><td className="r mono">$5.000</td><td className="r mono">$5.300</td><td className="r w mono">$5.150</td><td className="r dim mono">$4.950</td><td className="r"><span className="pill up">+4,0%</span></td></tr>
-              <tr><td className="bold">Novillo mediano (390–450 kg)</td><td className="r mono">$4.800</td><td className="r mono">$5.100</td><td className="r w mono">$4.950</td><td className="r dim mono">$4.780</td><td className="r"><span className="pill up">+3,6%</span></td></tr>
-              <tr><td className="bold">Novillo pesado (+450 kg)</td><td className="r mono">$4.700</td><td className="r mono">$5.000</td><td className="r w mono">$4.850</td><td className="r dim mono">$4.850</td><td className="r"><span className="pill fl">0,0%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Vaquillonas</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Vaquillona liviana (280–310 kg)</td><td className="r mono">$5.000</td><td className="r mono">$5.600</td><td className="r w mono">$5.300</td><td className="r dim mono">$5.100</td><td className="r"><span className="pill up">+3,9%</span></td></tr>
-              <tr><td className="bold">Vaquillona mediana (310–360 kg)</td><td className="r mono">$5.000</td><td className="r mono">$5.300</td><td className="r w mono">$5.150</td><td className="r dim mono">$4.960</td><td className="r"><span className="pill up">+3,8%</span></td></tr>
-              <tr><td className="bold">Vaquillona pesada (360–430 kg)</td><td className="r mono">$4.100</td><td className="r mono">$5.000</td><td className="r w mono">$4.550</td><td className="r dim mono">$4.400</td><td className="r"><span className="pill up">+3,4%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Vacas</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Vaca consumo</td><td className="r mono">$3.100</td><td className="r mono">$3.700</td><td className="r w mono">$3.400</td><td className="r dim mono">$3.400</td><td className="r"><span className="pill fl">0,0%</span></td></tr>
-              <tr><td className="bold">Vaca carnicería</td><td className="r mono">$2.500</td><td className="r mono">$3.100</td><td className="r w mono">$2.800</td><td className="r dim mono">$2.900</td><td className="r"><span className="pill dn">−3,4%</span></td></tr>
-              <tr><td className="bold">Vaca conserva/manufactura</td><td className="r mono">$2.000</td><td className="r mono">$2.500</td><td className="r w mono">$2.250</td><td className="r dim mono">$2.350</td><td className="r"><span className="pill dn">−4,3%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Toros</div>
-          <div className="tbl-wrap"><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Toros buenos</td><td className="r mono">$2.500</td><td className="r mono">$3.000</td><td className="r w mono">$2.750</td><td className="r dim mono">$2.900</td><td className="r"><span className="pill dn">−5,2%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="source">Fuente: MAG Cañuelas · 20/02/2026</div>
-          <div style={{marginTop:'28px',background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'18px 22px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'4px'}}>
-              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>Evolución 12 meses · ARS/kg vivo · promedio de rango</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Mar 2025 – Feb 2026</div>
-            </div>
-            <div style={{display:'flex',gap:'16px',marginBottom:'12px',flexWrap:'wrap'}}>
-              <span style={{fontFamily:'var(--mono)',fontSize:'10px',display:'flex',alignItems:'center',gap:'5px'}}><span style={{width:'12px',height:'3px',display:'inline-block',background:'#56c97a',borderRadius:'2px'}}></span>Novillo mediano (390–450 kg)</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'10px',display:'flex',alignItems:'center',gap:'5px'}}><span style={{width:'12px',height:'3px',display:'inline-block',background:'#4d9ef0',borderRadius:'2px'}}></span>Ternero 160–180 kg</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'10px',display:'flex',alignItems:'center',gap:'5px'}}><span style={{width:'12px',height:'3px',display:'inline-block',background:'#f07070',borderRadius:'2px'}}></span>Vaca consumo</span>
-            </div>
-            <canvas id="hacienda-hist-canvas" style={{width:'100%',height:'220px',display:'block',cursor:'crosshair'}}></canvas>
-            <div id="hacienda-hist-tooltip" style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text2)',minHeight:'16px',marginTop:'8px',textAlign:'center',letterSpacing:'.04em'}}></div>
-            <div style={{display:'flex',gap:'24px',marginTop:'14px',paddingTop:'12px',borderTop:'1px solid var(--line)',flexWrap:'wrap'}}>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px'}}><span style={{color:'var(--text3)'}}>Novillo prom 6m: </span><span style={{color:'#56c97a',fontWeight:700}}>$4.842/kg</span></div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px'}}><span style={{color:'var(--text3)'}}>Ternero prom 6m: </span><span style={{color:'#4d9ef0',fontWeight:700}}>$6.058/kg</span></div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px'}}><span style={{color:'var(--text3)'}}>Ratio ternero/novillo: </span><span style={{color:'var(--accent)',fontWeight:700}}>1,37×</span></div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px'}}><span style={{color:'var(--text3)'}}>Var. novillo 12m: </span><span style={{color:'#56c97a',fontWeight:700}}>+81,8%</span></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab==='inv' && (
-        <div className="section">
-          <div className="alert-strip info" style={{marginBottom:'20px'}}>
-            <span className="alert-text">Precios expresados como rango <strong>mínimo – máximo</strong> en ARS/kg vivo (vientres en ARS/cabeza) · Fuente: Harrington &amp; La Fuente · 20/02/2026 · Plazo 30 y 60 días · Variación sobre promedio del rango</span>
-          </div>
-          <div className="section-title">Terneros</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Terneros hasta 160 kg</td><td className="r mono dim">—</td><td className="r mono">$6.600</td><td className="r w mono">$6.600</td><td className="r dim mono">$6.300</td><td className="r"><span className="pill up">+4,8%</span></td></tr>
-              <tr><td className="bold">Terneros 160–180 kg</td><td className="r mono">$6.300</td><td className="r mono">$6.500</td><td className="r w mono">$6.400</td><td className="r dim mono">$6.150</td><td className="r"><span className="pill up">+4,1%</span></td></tr>
-              <tr><td className="bold">Terneros 190–200 kg</td><td className="r mono">$6.200</td><td className="r mono">$6.400</td><td className="r w mono">$6.300</td><td className="r dim mono">$6.050</td><td className="r"><span className="pill up">+4,1%</span></td></tr>
-              <tr><td className="bold">Terneros 210–220 kg</td><td className="r mono">$5.900</td><td className="r mono">$6.100</td><td className="r w mono">$6.000</td><td className="r dim mono">$5.750</td><td className="r"><span className="pill up">+4,3%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Novillitos</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Novillitos 230–270 kg</td><td className="r mono">$5.150</td><td className="r mono">$5.450</td><td className="r w mono">$5.300</td><td className="r dim mono">$5.100</td><td className="r"><span className="pill up">+3,9%</span></td></tr>
-              <tr><td className="bold">Novillitos 270–330 kg</td><td className="r mono">$4.850</td><td className="r mono">$5.050</td><td className="r w mono">$4.950</td><td className="r dim mono">$4.780</td><td className="r"><span className="pill up">+3,6%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Terneras</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Terneras 150–160 kg</td><td className="r mono">$5.600</td><td className="r mono">$5.900</td><td className="r w mono">$5.750</td><td className="r dim mono">$5.500</td><td className="r"><span className="pill up">+4,5%</span></td></tr>
-              <tr><td className="bold">Terneras 170–200 kg</td><td className="r mono">$5.400</td><td className="r mono">$5.600</td><td className="r w mono">$5.500</td><td className="r dim mono">$5.280</td><td className="r"><span className="pill up">+4,2%</span></td></tr>
-              <tr><td className="bold">Terneras 200–230 kg</td><td className="r mono">$5.300</td><td className="r mono">$5.500</td><td className="r w mono">$5.400</td><td className="r dim mono">$5.200</td><td className="r"><span className="pill up">+3,8%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Vaquillonas</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Vaquillonas 230–270 kg</td><td className="r mono">$4.750</td><td className="r mono">$4.950</td><td className="r w mono">$4.850</td><td className="r dim mono">$4.680</td><td className="r"><span className="pill up">+3,6%</span></td></tr>
-              <tr><td className="bold">Vaquillonas 270–330 kg</td><td className="r mono">$4.650</td><td className="r mono">$4.850</td><td className="r w mono">$4.750</td><td className="r dim mono">$4.580</td><td className="r"><span className="pill up">+3,7%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Vaca de invernada</div>
-          <div className="tbl-wrap" style={{marginBottom:'24px'}}><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/kg</th><th className="r">Máximo ARS/kg</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Vaca de invernada</td><td className="r mono">$2.700</td><td className="r mono">$3.000</td><td className="r w mono">$2.850</td><td className="r dim mono">$2.750</td><td className="r"><span className="pill up">+3,6%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="section-title">Vientres · ARS/cabeza</div>
-          <div className="tbl-wrap"><table>
-            <thead><tr><th>Categoría</th><th className="r">Mínimo ARS/cab</th><th className="r">Máximo ARS/cab</th><th className="r">Promedio</th><th className="r">Sem. anterior</th><th className="r">Var. %</th></tr></thead>
-            <tbody>
-              <tr><td className="bold">Vaca nueva con cría</td><td className="r mono">$1.700.000</td><td className="r mono">$2.100.000</td><td className="r w mono">$1.900.000</td><td className="r dim mono">$1.850.000</td><td className="r"><span className="pill up">+2,7%</span></td></tr>
-              <tr><td className="bold">Vaca usada con cría</td><td className="r mono">$1.400.000</td><td className="r mono">$1.700.000</td><td className="r w mono">$1.550.000</td><td className="r dim mono">$1.500.000</td><td className="r"><span className="pill up">+3,3%</span></td></tr>
-              <tr><td className="bold">Vaquillona con cría</td><td className="r mono">$1.700.000</td><td className="r mono">$2.100.000</td><td className="r w mono">$1.900.000</td><td className="r dim mono">$1.820.000</td><td className="r"><span className="pill up">+4,4%</span></td></tr>
-            </tbody>
-          </table></div>
-          <div className="source">Fuente: Harrington &amp; La Fuente · 20/02/2026 · Plazo 30 y 60 días</div>
-        </div>
-      )}
+      <div>
+        {activeTab === 'faena'     && <TabFaena />}
+        {activeTab === 'canuelas'  && <TabCanuelas />}
+        {activeTab === 'rosgan'    && <TabRosgan />}
+        {activeTab === 'historico' && <TabHistorico />}
+      </div>
     </div>
   );
 }

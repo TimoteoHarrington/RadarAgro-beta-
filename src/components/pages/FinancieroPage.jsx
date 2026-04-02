@@ -128,6 +128,17 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra }) 
   const fP = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%' : '—';
   const fTNA = v => v != null ? v.toFixed(2).replace('.', ',') + '%' : '—';
 
+  // Delta diario en pesos: muestra '+$X hoy' o '−$X hoy' con clase CSS correcta
+  const fDelta$ = (delta) => {
+    if (delta == null) return { txt: '—', cls: 'fl' };
+    const abs = Math.abs(delta).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return delta >= 0
+      ? { txt: `+$${abs} hoy`, cls: 'up' }
+      : { txt: `−$${abs} hoy`, cls: 'dn' };
+  };
+  // Spread compra/venta
+  const fSpread = (spread) => spread != null ? `spread $${spread.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+
   const pOf  = dolares?.pOf  ? f$(dolares.pOf)  : 'actualizando…';
   const pMep = dolares?.pMep ? f$(dolares.pMep) : 'actualizando…';
   const pCcl = dolares?.pCcl ? f$(dolares.pCcl) : 'actualizando…';
@@ -190,12 +201,49 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra }) 
       <div className="section">
         <div className="section-title">Tipos de cambio · ARS/USD · BCRA / API Dolar</div>
         <div className="grid grid-3" style={{ marginBottom: '20px' }}>
-          <div className="stat c-flat"><div className="stat-label">Oficial BCRA <span className="stat-badge fl">—</span></div><div className="stat-val lg">{pOf}</div><div className="stat-delta up"> +$3 hoy</div><div className="stat-meta">Tipo vendedor minorista · crawling peg ~1%/mes</div></div>
-          <div className="stat c-flat"><div className="stat-label">MEP / Bolsa <span className="stat-badge fl">—</span></div><div className="stat-val lg">{pMep}</div><div className="stat-delta up"> +$8 hoy</div><div className="stat-meta">AL30D · Mercado secundario libre · legal</div></div>
-          <div className="stat c-flat"><div className="stat-label">CCL <span className="stat-badge fl">—</span></div><div className="stat-val lg">{pCcl}</div><div className="stat-delta up"> +$9 hoy</div><div className="stat-meta">Contado con liquidación · GD30 · exterior</div></div>
-          <div className="stat c-flat"><div className="stat-label">Blue <span className="stat-badge dn"> −0,4%</span></div><div className="stat-val lg">{pBlu}</div><div className="stat-delta dn"> −$5 hoy</div><div className="stat-meta">Mercado paralelo · informal · referencia</div></div>
-          <div className="stat c-flat"><div className="stat-label">Cripto (USDT) <span className="stat-badge fl">—</span></div><div className="stat-val lg">{pCry}</div><div className="stat-delta fl">…</div><div className="stat-meta">dolarapi.com · referencia</div></div>
-          <div className="stat c-flat"><div className="stat-label">Dólar Mayorista <span className="stat-badge fl">BCRA</span></div><div className="stat-val lg">{pMay}</div><div className="stat-delta fl">Tipo comprador · BCRA</div><div className="stat-meta">Referencia exportaciones · crawling peg</div></div>
+          {(() => {
+            const dOf  = fDelta$(dolares?.deltaOf);
+            const spOf = fSpread(dolares?.spreadOf);
+            const spBlu = fSpread(dolares?.spreadBlu);
+            return (<>
+              <div className="stat c-flat">
+                <div className="stat-label">Oficial BCRA <span className="stat-badge fl">vendedor</span></div>
+                <div className="stat-val lg">{pOf}</div>
+                <div className={`stat-delta ${dOf.cls}`}>{dOf.txt}</div>
+                <div className="stat-meta">{spOf ? spOf + ' · ' : ''}crawling peg ~1%/mes</div>
+              </div>
+              <div className="stat c-flat">
+                <div className="stat-label">MEP / Bolsa <span className="stat-badge fl">AL30D</span></div>
+                <div className="stat-val lg">{pMep}</div>
+                <div className="stat-delta fl">brecha {bMep}</div>
+                <div className="stat-meta">Mercado secundario libre · legal</div>
+              </div>
+              <div className="stat c-flat">
+                <div className="stat-label">CCL <span className="stat-badge fl">GD30</span></div>
+                <div className="stat-val lg">{pCcl}</div>
+                <div className="stat-delta fl">brecha {bCcl}</div>
+                <div className="stat-meta">Contado con liquidación · exterior</div>
+              </div>
+              <div className="stat c-flat">
+                <div className="stat-label">Blue <span className="stat-badge fl">informal</span></div>
+                <div className="stat-val lg">{pBlu}</div>
+                <div className="stat-delta fl">brecha {bBlu}{spBlu ? ' · ' + spBlu : ''}</div>
+                <div className="stat-meta">Mercado paralelo · referencia</div>
+              </div>
+              <div className="stat c-flat">
+                <div className="stat-label">Cripto (USDT) <span className="stat-badge fl">—</span></div>
+                <div className="stat-val lg">{pCry}</div>
+                <div className="stat-delta fl">brecha {bCry}</div>
+                <div className="stat-meta">dolarapi.com · referencia</div>
+              </div>
+              <div className="stat c-flat">
+                <div className="stat-label">Dólar Mayorista <span className="stat-badge fl">BCRA</span></div>
+                <div className="stat-val lg">{pMay}</div>
+                <div className="stat-delta fl">tipo comprador · BCRA</div>
+                <div className="stat-meta">Referencia exportaciones · crawling peg</div>
+              </div>
+            </>);
+          })()}
         </div>
 
         {/* Brechas — rediseño con cards + escala de precios */}

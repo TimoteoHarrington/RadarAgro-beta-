@@ -34,7 +34,10 @@ export function useLiveData() {
   // ── Dólares ──────────────────────────────────────────────────
   const loadDolares = useCallback(async () => {
     setStatus('dolares', 'loading');
-    const { data, error } = await fetchDolares();
+    const [{ data, error }, { data: cotiz }] = await Promise.all([
+      fetchDolares(),
+      fetchCotizaciones(),
+    ]);
     if (error || !Array.isArray(data)) { setStatus('dolares', 'error'); return; }
 
     const by = {};
@@ -42,13 +45,21 @@ export function useLiveData() {
       const key = (d.casa || d.nombre || '').toLowerCase().replace(/\s+/g, '');
       by[key] = d;
     });
-    const getVenta = (...keys) => {
+    const getVenta  = (...keys) => {
       for (const k of keys) {
         const d = by[k];
         if (d) { const v = parseFloat(d.venta ?? d.compra ?? 0); if (v > 0) return v; }
       }
       return null;
     };
+    const getCompra = (...keys) => {
+      for (const k of keys) {
+        const d = by[k];
+        if (d) { const v = parseFloat(d.compra ?? 0); if (v > 0) return v; }
+      }
+      return null;
+    };
+
     const pOf    = getVenta('oficial');
     const pMep   = getVenta('bolsa', 'mep');
     const pCcl   = getVenta('contadoconliqui', 'ccl', 'contado');
@@ -59,9 +70,26 @@ export function useLiveData() {
     const pBlend = pOf && pMep ? pOf * 0.8 + pMep * 0.2 : null;
     const pct    = (a, b) => a && b ? ((b - a) / a * 100) : null;
 
-    setDolares({ pOf, pMep, pCcl, pBlu, pCry, pMay, pTar, pBlend,
+    // Spread compra/venta para el oficial
+    const cOf = getCompra('oficial');
+    const spreadOf = pOf && cOf ? Math.round((pOf - cOf) * 100) / 100 : null;
+
+    // Delta diario oficial desde Yahoo Finance (via cotizaciones proxy)
+    const prevOf = cotiz?.oficial?.prevClose ?? null;
+    const deltaOf = pOf && prevOf ? Math.round((pOf - prevOf) * 100) / 100 : null;
+
+    // Delta Blue: compra vs venta como referencia de spread, no hay prevClose
+    const cBlu = getCompra('blue');
+    const spreadBlu = pBlu && cBlu ? Math.round((pBlu - cBlu) * 100) / 100 : null;
+
+    setDolares({
+      pOf, pMep, pCcl, pBlu, pCry, pMay, pTar, pBlend,
+      cOf, cBlu,
+      spreadOf, spreadBlu,
+      deltaOf,
       bMep: pct(pOf, pMep), bCcl: pct(pOf, pCcl),
-      bBlu: pct(pOf, pBlu), bCry: pct(pOf, pCry) });
+      bBlu: pct(pOf, pBlu), bCry: pct(pOf, pCry),
+    });
     setStatus('dolares', 'ok');
     setLastUpdate(new Date());
   }, []);

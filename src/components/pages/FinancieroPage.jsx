@@ -597,7 +597,7 @@ function BcraCambiarioSection({ bcra, loadBcra }) {
   return (
     <div className="section">
       <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>Indicadores BCRA — Cambiario, Índices e Inflación</span>
+        <span>Indicadores BCRA — Cambiario e Índices</span>
         {tsStr && <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>actualizado {tsStr}</span>}
       </div>
 
@@ -639,31 +639,6 @@ function BcraCambiarioSection({ bcra, loadBcra }) {
         </div>
       </div>
 
-      {/* Inflación esperada — útil en contexto financiero */}
-      {bcra?.byCat?.['Inflación'] && (
-        <div style={{ marginTop: '20px' }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '10px' }}>Inflación — BCRA</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-            {bcra.byCat['Inflación'].map(item => {
-              const v = item.valor != null ? parseFloat(item.valor) : null;
-              const vAnt = item.valorAnterior != null ? parseFloat(item.valorAnterior) : null;
-              const d = v != null && vAnt != null ? v - vAnt : null;
-              const [y, m, dd] = (item.fecha || '').split('-');
-              const color = v != null ? (v > 5 ? 'var(--red)' : v > 2 ? 'var(--gold)' : 'var(--green)') : 'var(--white)';
-              return (
-                <div key={item.key} className="stat c-flat">
-                  <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
-                  <div className="stat-val" style={{ color }}>{v != null ? v.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'}</div>
-                  {d != null && Math.abs(d) > 0.001
-                    ? <div className={`stat-delta ${d > 0 ? 'dn' : 'up'}`}>{(d>0?'+':'')+d.toFixed(2).replace('.',',')+' pp vs ant.'}</div>
-                    : <div className="stat-delta fl">sin variación</div>}
-                  <div className="stat-meta">BCRA · {dd}/{m}/{y}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
       <div className="source">Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
     </div>
   );

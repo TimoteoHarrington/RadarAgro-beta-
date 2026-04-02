@@ -36,7 +36,7 @@ const VARIABLES = [
 function fetchVar(idVariable) {
   const url = `https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias/${idVariable}?limit=2`;
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { rejectUnauthorized: false }, res => {
+    const req = https.get(url, res => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
 
     try {
       const result = await new Promise((resolve, reject) => {
-        const req2 = https.get(url, { rejectUnauthorized: false }, r => {
+        const req2 = https.get(url, r => {
           let data = '';
           r.on('data', chunk => data += chunk);
           r.on('end', () => {

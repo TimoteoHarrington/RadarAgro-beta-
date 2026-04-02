@@ -94,24 +94,35 @@ export default async function handler(req, res) {
       ? Math.round((thisYearIA.reduce((s, d) => s + d.valor, 0) / thisYearIA.length) * 10) / 10
       : null;
 
-    const sectorNames     = Object.keys(SECTOR_IDS);
-    const sectorIds       = Object.values(SECTOR_IDS);
-    const BATCH           = 5;
-    const sectorHistories = new Array(sectorNames.length).fill(null);
+    const sectorNames = Object.keys(SECTOR_IDS);
+    const sectorIds   = Object.values(SECTOR_IDS);
+    const BATCH       = 5;
 
+    // Armar batches
+    const batches = [];
     for (let b = 0; b < sectorIds.length; b += BATCH) {
-      const batchIds = sectorIds.slice(b, b + BATCH);
-      const result   = await fetchSeries(batchIds, 26).catch(() => null);
-      if (!result?.data?.length) continue;
+      batches.push({ start: b, ids: sectorIds.slice(b, b + BATCH) });
+    }
 
-      for (let i = 0; i < batchIds.length; i++) {
+    // Lanzar todos los batches en paralelo
+    const batchResults = await Promise.allSettled(
+      batches.map(({ ids }) => fetchSeries(ids, 26).catch(() => null))
+    );
+
+    // Reconstruir sectorHistories en orden
+    const sectorHistories = new Array(sectorNames.length).fill(null);
+    batchResults.forEach((res, bi) => {
+      const { start, ids } = batches[bi];
+      const result = res.status === 'fulfilled' ? res.value : null;
+      if (!result?.data?.length) return;
+
+      for (let i = 0; i < ids.length; i++) {
         const colIdx = i + 1;
-        const hist = result.data
+        sectorHistories[start + i] = result.data
           .filter(r => r[colIdx] != null)
           .map(r => ({ fecha: r[0], valor: parseFloat(r[colIdx]) }));
-        sectorHistories[b + i] = hist;
       }
-    }
+    });
 
     const sectors = [];
     for (let i = 0; i < sectorNames.length; i++) {

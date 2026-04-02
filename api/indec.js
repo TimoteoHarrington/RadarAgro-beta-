@@ -1,20 +1,13 @@
-// netlify/functions/indec.js
+// api/indec.js — Vercel Serverless Function
 // Proxea la API de Series de Tiempo de datos.gob.ar
 // Fuente: INDEC — EMAE (mensual) y PBI (trimestral)
 
 const API_BASE = 'https://apis.datos.gob.ar';
 const API_PATH = '/series/api/series/';
 
-// ── IDs de series ────────────────────────────────────────────
-// EMAE General — índice base 2004=100, frecuencia MENSUAL
-// Verificado: devuelve datos hasta 2026-01-01 con 265 registros mensuales
 const EMAE_IDX_ID = '143.3_NO_PR_2004_A_21';
+const PBI_IDX_ID  = '4.2_OGP_2004_T_17';
 
-// PBI trimestral — índice a precios constantes de 2004
-// Calculamos interanual manualmente comparando mismo trimestre año anterior
-const PBI_IDX_ID  = '4.2_OGP_2004_T_17'; // Oferta Global trimestral (proxy PBI, 88 registros desde 2004)
-
-// Sectores EMAE — índice base 2004=100
 const SECTOR_IDS = {
   'Agro, ganadería y silvicultura': '11.3_ISOM_2004_M_39',
   'Pesca':                          '11.3_VIPAA_2004_M_5',
@@ -32,8 +25,6 @@ const SECTOR_IDS = {
   'Salud':                          '11.3_HR_2004_M_24',
 };
 
-// ── fetchSeries ──────────────────────────────────────────────
-// Usa fetch global (Node 18+). sort=desc + limit=N → N datos más recientes.
 async function fetchSeries(ids, limit = 5) {
   const idsStr = Array.isArray(ids) ? ids.join(',') : ids;
   const url = `${API_BASE}${API_PATH}?ids=${idsStr}&limit=${limit}&sort=desc&format=json&metadata=none`;
@@ -51,8 +42,6 @@ async function fetchSeries(ids, limit = 5) {
   }
 }
 
-// Extrae [{fecha, valor}] de una respuesta de serie única.
-// La API devuelve sort=desc → revertimos para orden cronológico ascendente.
 function extractHistory(apiData) {
   if (!apiData?.data?.length) return [];
   return apiData.data
@@ -61,8 +50,6 @@ function extractHistory(apiData) {
     .reverse();
 }
 
-// Calcula variación interanual mensual manualmente:
-// compara cada mes con el mismo mes del año anterior (12 períodos atrás).
 function calcInteranualMensual(history) {
   if (history.length < 13) return [];
   return history.slice(12).map((d, i) => ({
@@ -71,8 +58,6 @@ function calcInteranualMensual(history) {
   }));
 }
 
-// Calcula variación interanual trimestral manualmente:
-// compara cada trimestre con el mismo trimestre del año anterior (4 períodos atrás).
 function calcInteranualTrimestral(history) {
   if (history.length < 5) return [];
   return history.slice(4).map((d, i) => ({
@@ -81,39 +66,27 @@ function calcInteranualTrimestral(history) {
   }));
 }
 
-export const handler = async (event) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 'public, max-age=3600',
-  };
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Cache-Control': 'public, max-age=3600',
+};
+
+export default async function handler(req, res) {
+  Object.entries(HEADERS).forEach(([k, v]) => res.setHeader(k, v));
 
   try {
-    console.log('[indec] Fetching EMAE + PBI...');
-
-    // Fetch en paralelo: EMAE índice base 2004=100 (36 meses para calcular IA del primer año) + PBI índice base
     const [emaeIdxRes, pbiIdxRes] = await Promise.allSettled([
-      fetchSeries(EMAE_IDX_ID, 36), // 36 meses: 12 de margen + 24 de historia visible
-      fetchSeries(PBI_IDX_ID, 24),  // últimos 24 trimestres de índice (para calcular IA manual)
+      fetchSeries(EMAE_IDX_ID, 36),
+      fetchSeries(PBI_IDX_ID, 24),
     ]);
 
-    console.log('[indec] emaeIdx:', emaeIdxRes.status,
-      emaeIdxRes.status === 'fulfilled'
-        ? JSON.stringify(emaeIdxRes.value).slice(0, 250)
-        : emaeIdxRes.reason?.message);
-    console.log('[indec] pbiIdx:', pbiIdxRes.status,
-      pbiIdxRes.status === 'fulfilled'
-        ? JSON.stringify(pbiIdxRes.value).slice(0, 250)
-        : pbiIdxRes.reason?.message);
-
-    // ── Procesar EMAE general
-    // Calculamos la variación interanual mensual desde el índice base 2004=100
     const emaeIdxRaw  = emaeIdxRes.status === 'fulfilled' ? extractHistory(emaeIdxRes.value) : [];
     const emaeHistory = calcInteranualMensual(emaeIdxRaw)
       .map(d => ({ ...d, valor: Math.round(d.valor * 10) / 10 }));
 
-    const lastEmae   = emaeHistory.length ? emaeHistory[emaeHistory.length - 1] : null;
-    const prevEmae   = emaeHistory.length > 1 ? emaeHistory[emaeHistory.length - 2] : null;
+    const lastEmae = emaeHistory.length ? emaeHistory[emaeHistory.length - 1] : null;
+    const prevEmae = emaeHistory.length > 1 ? emaeHistory[emaeHistory.length - 2] : null;
 
     const yearNow    = new Date().getFullYear().toString();
     const thisYearIA = emaeHistory.filter(d => d.fecha.startsWith(yearNow));
@@ -121,59 +94,35 @@ export const handler = async (event) => {
       ? Math.round((thisYearIA.reduce((s, d) => s + d.valor, 0) / thisYearIA.length) * 10) / 10
       : null;
 
-    // ── Fetch sectores: de a 5 IDs por request para no saturar la API
-    const sectorNames  = Object.keys(SECTOR_IDS);
-    const sectorIds    = Object.values(SECTOR_IDS);
-    const BATCH        = 5;  // máx IDs por request
+    const sectorNames     = Object.keys(SECTOR_IDS);
+    const sectorIds       = Object.values(SECTOR_IDS);
+    const BATCH           = 5;
     const sectorHistories = new Array(sectorNames.length).fill(null);
 
     for (let b = 0; b < sectorIds.length; b += BATCH) {
-      const batchNames = sectorNames.slice(b, b + BATCH);
-      const batchIds   = sectorIds.slice(b, b + BATCH);
+      const batchIds = sectorIds.slice(b, b + BATCH);
+      const result   = await fetchSeries(batchIds, 26).catch(() => null);
+      if (!result?.data?.length) continue;
 
-      const res = await fetchSeries(batchIds, 26).catch(e => {
-        console.log(`[indec] sectores batch ${b} error:`, e.message);
-        return null;
-      });
-
-      console.log(`[indec] sectores batch ${b}:`, res ? 'ok' : 'error',
-        res ? JSON.stringify(res).slice(0, 300) : '');
-
-      if (!res?.data?.length) continue;
-
-      // Multiserie y serie única: data = [[fecha, val0, val1?, ...], ...]
-      // sort=desc → [0] = más reciente. NO filtramos nulls aquí para preservar
-      // la alineación temporal: cada fila representa un mes concreto.
       for (let i = 0; i < batchIds.length; i++) {
         const colIdx = i + 1;
-        // Guardamos solo las filas donde esta columna tiene valor real
-        const hist = res.data
+        const hist = result.data
           .filter(r => r[colIdx] != null)
           .map(r => ({ fecha: r[0], valor: parseFloat(r[colIdx]) }));
-        // hist ya viene sort=desc: hist[0] = dato más reciente con valor real
         sectorHistories[b + i] = hist;
       }
     }
 
-    // ── Calcular variación interanual por sector
     const sectors = [];
     for (let i = 0; i < sectorNames.length; i++) {
       const hist = sectorHistories[i];
-      if (!hist || hist.length === 0) {
-        console.log(`[indec] sector ${sectorNames[i]}: sin datos`);
-        continue;
-      }
+      if (!hist || hist.length === 0) continue;
 
-      // hist viene sort=desc: [0] = más reciente
       const fechaActual = hist[0].fecha;
       const valActual   = hist[0].valor;
-
-      // Buscar el mismo mes del año anterior por prefijo YYYY-MM
-      const [y, m] = fechaActual.split('-').map(Number);
-      const prefix12 = `${y - 1}-${String(m).padStart(2, '0')}`;
-      const row12    = hist.find(r => r.fecha.startsWith(prefix12));
-
-      console.log(`[indec] sector ${sectorNames[i]}: fecha=${fechaActual} val=${valActual} fecha12=${prefix12} row12=${row12?.valor ?? 'NOT FOUND'} histLen=${hist.length}`);
+      const [y, m]      = fechaActual.split('-').map(Number);
+      const prefix12    = `${y - 1}-${String(m).padStart(2, '0')}`;
+      const row12       = hist.find(r => r.fecha.startsWith(prefix12));
 
       if (!row12) continue;
 
@@ -181,9 +130,7 @@ export const handler = async (event) => {
       sectors.push({ nombre: sectorNames[i], fecha: fechaActual, valor: ia });
     }
     sectors.sort((a, b) => b.valor - a.valor);
-    console.log('[indec] sectores procesados:', sectors.length, sectors.map(s => s.nombre + ':' + s.valor));
 
-    // ── Procesar PBI
     const pbiIdxHistory = pbiIdxRes.status === 'fulfilled' ? extractHistory(pbiIdxRes.value) : [];
     const pbiIaHistory  = calcInteranualTrimestral(pbiIdxHistory);
 
@@ -214,16 +161,8 @@ export const handler = async (event) => {
       timestamp: new Date().toISOString(),
     };
 
-    console.log('[indec] ✓ EMAE:', result.emae.general, '| PBI:', result.pbi.lastIa, result.pbi.fecha, '| Sectores:', sectors.length);
-
-    return { statusCode: 200, headers, body: JSON.stringify(result) };
-
+    return res.status(200).json(result);
   } catch (error) {
-    console.error('[indec] Error general:', error.message);
-    return {
-      statusCode: 502,
-      headers,
-      body: JSON.stringify({ error: 'Error al consultar INDEC', message: error.message }),
-    };
+    return res.status(502).json({ error: 'Error al consultar INDEC', message: error.message });
   }
-};
+}

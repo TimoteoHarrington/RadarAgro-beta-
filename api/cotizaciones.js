@@ -1,6 +1,5 @@
-// netlify/functions/cotizaciones.js
+// api/cotizaciones.js — Vercel Serverless Function
 // Proxea: Dólar Oficial (Yahoo), CCL y MEP (data912), Riesgo País (ArgentinaDatos)
-// Adaptado de rendimientos-ar para RadarAgro
 
 import https from 'https';
 
@@ -21,12 +20,14 @@ function fetchJSON(url, maxRedirects = 3) {
   });
 }
 
-export const handler = async () => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 'public, max-age=60',
-  };
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Cache-Control': 'public, max-age=60',
+};
+
+export default async function handler(req, res) {
+  Object.entries(HEADERS).forEach(([k, v]) => res.setHeader(k, v));
 
   try {
     const [yahooData, bonds, riesgo] = await Promise.allSettled([
@@ -72,11 +73,8 @@ export const handler = async () => {
       if (val?.valor != null) riesgoPais = { value: val.valor };
     }
 
-    return {
-      statusCode: 200, headers,
-      body: JSON.stringify({ oficial, ccl, mep, riesgoPais, updated: new Date().toISOString() }),
-    };
+    return res.status(200).json({ oficial, ccl, mep, riesgoPais, updated: new Date().toISOString() });
   } catch (e) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
+    return res.status(500).json({ error: e.message });
   }
-};
+}

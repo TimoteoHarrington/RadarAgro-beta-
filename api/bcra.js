@@ -1,6 +1,5 @@
-// netlify/functions/bcra.js
+// api/bcra.js — Vercel Serverless Function
 // Proxea la API pública del BCRA (Estadísticas Monetarias v4.0)
-// Adaptado de rendimientos-ar para RadarAgro
 
 import https from 'https';
 
@@ -50,45 +49,44 @@ function fetchVar(idVariable) {
   });
 }
 
-export const handler = async (event) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 'public, max-age=300',
-  };
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Cache-Control': 'public, max-age=300',
+};
 
-  const params = event.queryStringParameters || {};
+export default async function handler(req, res) {
+  // Aplicar headers CORS
+  Object.entries(HEADERS).forEach(([k, v]) => res.setHeader(k, v));
+
+  const { variable, desde, hasta } = req.query;
 
   // Modo historial: /api/bcra?variable=27&desde=2024-01-01
-  if (params.variable) {
-    const id = parseInt(params.variable, 10);
+  if (variable) {
+    const id = parseInt(variable, 10);
     const varDef = VARIABLES.find(v => v.id === id);
     let url = `https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias/${id}?limit=3000`;
-    if (params.desde) url += `&desde=${params.desde}`;
-    if (params.hasta) url += `&hasta=${params.hasta}`;
+    if (desde) url += `&desde=${desde}`;
+    if (hasta) url += `&hasta=${hasta}`;
 
     try {
       const result = await new Promise((resolve, reject) => {
-        const req = https.get(url, { rejectUnauthorized: false }, res => {
+        const req2 = https.get(url, { rejectUnauthorized: false }, r => {
           let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => {
+          r.on('data', chunk => data += chunk);
+          r.on('end', () => {
             try { resolve(JSON.parse(data)); }
             catch (e) { reject(e); }
           });
         });
-        req.on('error', reject);
-        req.setTimeout(10000, () => { req.destroy(); reject(new Error('timeout')); });
+        req2.on('error', reject);
+        req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('timeout')); });
       });
 
-      // Normalizar a array de {fecha, valor}
       const raw = result.results?.[0]?.detalle || result.results || [];
-      return {
-        statusCode: 200, headers,
-        body: JSON.stringify({ variable: varDef || { id }, data: raw }),
-      };
+      return res.status(200).json({ variable: varDef || { id }, data: raw });
     } catch (err) {
-      return { statusCode: 502, headers, body: JSON.stringify({ error: err.message }) };
+      return res.status(502).json({ error: err.message });
     }
   }
 
@@ -117,14 +115,8 @@ export const handler = async (event) => {
       }
     }
 
-    return {
-      statusCode: 200, headers,
-      body: JSON.stringify({ data, timestamp: new Date().toISOString() }),
-    };
+    return res.status(200).json({ data, timestamp: new Date().toISOString() });
   } catch (error) {
-    return {
-      statusCode: 502, headers,
-      body: JSON.stringify({ error: 'Error al consultar BCRA', message: error.message }),
-    };
+    return res.status(502).json({ error: 'Error al consultar BCRA', message: error.message });
   }
-};
+}

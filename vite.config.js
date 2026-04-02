@@ -3,11 +3,11 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { pathToFileURL } from 'url';
 
-// Plugin que sirve las Netlify Functions localmente en /api/*
-// Evita depender de `netlify dev` para el desarrollo.
-function netlifyFunctionsPlugin() {
+// Plugin que sirve las Vercel Functions localmente en /api/*
+// Evita depender de `vercel dev` para el desarrollo.
+function vercelFunctionsPlugin() {
   return {
-    name: 'netlify-functions-local',
+    name: 'vercel-functions-local',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/')) return next();
@@ -16,10 +16,10 @@ function netlifyFunctionsPlugin() {
         const route = url.pathname.replace('/api/', '');
 
         const fnMap = {
-          mundo:        path.resolve('./netlify/functions/mundo.js'),
-          bcra:         path.resolve('./netlify/functions/bcra.js'),
-          cotizaciones: path.resolve('./netlify/functions/cotizaciones.js'),
-          indec:        path.resolve('./netlify/functions/indec.js'),
+          mundo:        path.resolve('./api/mundo.js'),
+          bcra:         path.resolve('./api/bcra.js'),
+          cotizaciones: path.resolve('./api/cotizaciones.js'),
+          indec:        path.resolve('./api/indec.js'),
         };
 
         const fnPath = fnMap[route];
@@ -29,27 +29,36 @@ function netlifyFunctionsPlugin() {
           const qs = {};
           url.searchParams.forEach((v, k) => { qs[k] = v; });
 
-          // import() dinamico con cache-bust para hot-reload
+          // import() dinámico con cache-bust para hot-reload
           const fileUrl = pathToFileURL(fnPath).href + '?t=' + Date.now();
           const fn = await import(fileUrl);
 
-          const event = {
-            httpMethod: req.method,
-            path: url.pathname,
-            queryStringParameters: qs,
+          // Adaptador: simula req/res de Vercel sobre el req/res de Node
+          const mockReq = {
+            method: req.method,
+            query: qs,
             headers: req.headers,
             body: null,
           };
 
-          const result = await fn.handler(event, {});
+          let statusCode = 200;
+          const resHeaders = {};
+          let responseBody = '';
 
-          res.writeHead(result.statusCode, result.headers || {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          });
-          res.end(result.body);
+          const mockRes = {
+            setHeader: (k, v) => { resHeaders[k] = v; },
+            status(code) { statusCode = code; return this; },
+            json(data) {
+              responseBody = JSON.stringify(data);
+              resHeaders['Content-Type'] = resHeaders['Content-Type'] || 'application/json';
+              res.writeHead(statusCode, resHeaders);
+              res.end(responseBody);
+            },
+          };
+
+          await fn.default(mockReq, mockRes);
         } catch (err) {
-          console.error('[netlify-fn] Error en /api/' + route + ':', err.message);
+          console.error('[vercel-fn] Error en /api/' + route + ':', err.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: err.message }));
         }
@@ -59,5 +68,5 @@ function netlifyFunctionsPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), netlifyFunctionsPlugin()],
+  plugins: [react(), vercelFunctionsPlugin()],
 });

@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect } from 'react';
 const STORAGE_KEY = 'ra-last-page';
 
 export const PAGE_IDS = [
-  'home', 'granos', 'hacienda', 'financiero', 'macro',
+  'home', 'granos', 'hacienda', 'financiero', 'macro', 'mundo',
   'insumos', 'indices', 'impuestos', 'feriados', 'ayuda',
 ];
 
@@ -18,6 +18,7 @@ const PAGE_TITLES = {
   hacienda:   'RadarAgro — Hacienda',
   financiero: 'RadarAgro — Financiero',
   macro:      'RadarAgro — Macroeconomía',
+  mundo:      'RadarAgro — Monitor Global',
   insumos:    'RadarAgro — Insumos',
   indices:    'RadarAgro — Índices',
   impuestos:  'RadarAgro — Impuestos',

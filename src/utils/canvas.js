@@ -120,7 +120,7 @@ export function makeCanvas(canvas, tooltipId, series, threshold, thresholdLabel,
         const y = py(s.data[hov]);
         ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fillStyle = rawColor; ctx.fill();
-        ctx.strokeStyle = isDark ? '#1a1e24' : '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = isDark ? '#181b22' : '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
       });
     }
   };

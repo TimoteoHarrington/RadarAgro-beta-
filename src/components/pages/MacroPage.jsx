@@ -1,5 +1,5 @@
 // MacroPage.jsx — matches reference HTML exactly
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_F = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -411,7 +411,7 @@ function RiesgoPaisChart({ history, range }) {
   );
 }
 
-export function MacroPage({ goPage, inflacion, riesgoPais }) {
+export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec, loadIndec }) {
   const [rpRange, setRpRange] = React.useState('1A');
   const rpVal      = riesgoPais?.valor ?? null;
   const rpDelta    = riesgoPais?.delta ?? null;
@@ -421,6 +421,9 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
     : '—';
   const rpDeltaCls  = rpDelta != null ? (rpDelta < 0 ? 'up' : 'dn') : 'fl';
   const rpVsBrasil  = rpVal != null ? (rpVal / 180).toFixed(1) + '×' : '—';
+
+  // Cargar INDEC bajo demanda al entrar a la página
+  useEffect(() => { if (!indec) loadIndec?.(); }, [indec, loadIndec]);
 
   // IPC KPIs derivados de datos reales
   const mensData = inflacion?.history ?? [];
@@ -441,6 +444,39 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
     return (thisYear.reduce((acc,d)=>acc*(1+parseFloat(d.valor||0)/100),1)-1)*100;
   })();
 
+  // ── EMAE derivados ─────────────────────────────────────────────
+  const emae        = indec?.emae;
+  const emaeVal     = emae?.general?.valor ?? null;
+  const emaeValPrev = emae?.general?.valorAnterior ?? null;
+  const emaeFecha   = emae?.general?.fecha ?? null;
+  const emaeMes     = (() => {
+    if (!emaeFecha) return '—';
+    const [y, m] = emaeFecha.split('-');
+    return (MESES_C[+m] || '') + ' ' + y;
+  })();
+  const emaeAccum   = emae?.acumAnio ?? null;
+  const emaeAnioAccum = emae?.anoAcum ?? new Date().getFullYear();
+  const fmtEmae = v => v != null ? (v >= 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%' : '—';
+
+  // Mejor y peor sector
+  const sectors     = emae?.sectors ?? [];
+  const bestSector  = sectors[0] ?? null;
+  const worstSector = sectors.length > 1 ? sectors[sectors.length - 1] : null;
+
+  // ── PBI derivados ──────────────────────────────────────────────
+  const pbi         = indec?.pbi;
+  const pbiVal      = pbi?.lastIa ?? null;
+  const pbiPrev     = pbi?.prevIa ?? null;
+  const pbiFecha    = pbi?.fecha ?? null;
+  const pbiTrim     = (() => {
+    if (!pbiFecha) return '—';
+    const [y, m] = pbiFecha.split('-');
+    const q = Math.ceil(+m / 3);
+    return `Q${q} ${y}`;
+  })();
+  const pbiHist     = pbi?.history ?? [];
+  const fmtPbi = v => v != null ? (v >= 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%' : '—';
+
   const fmt1 = v => v != null ? v.toFixed(1).replace('.',',')+'%' : '—';
   const fmtDiff = v => v != null ? (v>=0?'+':'')+v.toFixed(1).replace('.',',') + ' pp' : '—';
 
@@ -460,10 +496,15 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
       <div className="section">
         <div className="section-title">Indicadores clave · resumen</div>
         <div className="grid grid-4">
-          <div className="stat c-flat"><div className="stat-label">IPC General <span className="stat-badge fl">Ene 2026</span></div><div className="stat-val">2,4%</div><div className="stat-delta dn"> −0,4 pp vs dic · mínimo desde 2021</div><div className="stat-meta">Interanual: 74,3% · Núcleo: 2,1%</div></div>
-          <div className="stat c-flat"><div className="stat-label">EMAE General <span className="stat-badge fl">Nov 2025</span></div><div className="stat-val">+5,3%</div><div className="stat-delta up"> 6° mes consecutivo positivo</div><div className="stat-meta">Acumula +4,1% en 2025 · var. interanual</div></div>
+          <div className="stat c-flat">
+            <div className="stat-label">IPC Mensual <span className="stat-badge fl">{bcra?.byKey?.inflacion_mensual?.fecha?.slice(0,7) ?? '—'}</span></div>
+            <div className="stat-val">{bcra?.byKey?.inflacion_mensual?.valor != null ? parseFloat(bcra.byKey.inflacion_mensual.valor).toFixed(1).replace('.',',')+'%' : fmt1(ipcVal)}</div>
+            <div className="stat-delta fl">Interanual: {bcra?.byKey?.inflacion_interanual?.valor != null ? parseFloat(bcra.byKey.inflacion_interanual.valor).toFixed(1).replace('.',',')+'%' : fmt1(ipcIA)}</div>
+            <div className="stat-meta">Fuente: BCRA oficial · IPC INDEC</div>
+          </div>
+          <div className="stat c-flat"><div className="stat-label">EMAE General <span className="stat-badge fl">{emaeMes}</span></div><div className="stat-val">{fmtEmae(emaeVal)}</div><div className={`stat-delta ${emaeVal != null && emaeVal >= 0 ? 'up' : 'dn'}`}>{emaeAccum != null ? `Acumula ${fmtEmae(emaeAccum)} en ${emaeAnioAccum}` : 'cargando…'}</div><div className="stat-meta">Var. interanual · INDEC · datos.gob.ar</div></div>
           <div className="stat c-flat"><div className="stat-label">Riesgo País EMBI+ <span className="stat-badge fl">HOY</span></div><div className="stat-val">{rpDisp}</div><div className={`stat-delta ${rpDeltaCls}`}>{rpDeltaDisp}</div><div className="stat-meta">Mínimo desde 2017 · Brasil: 180 pb</div></div>
-          <div className="stat c-flat"><div className="stat-label">PBI Real <span className="stat-badge fl">2025</span></div><div className="stat-val">+5,5%</div><div className="stat-delta up"> Recuperación tras −1,6% en 2024</div><div className="stat-meta">PBI nominal est.: USD 640B · INDEC</div></div>
+          <div className="stat c-flat"><div className="stat-label">PBI Real <span className="stat-badge fl">{pbiTrim}</span></div><div className="stat-val">{fmtPbi(pbiVal)}</div><div className={`stat-delta ${pbiVal != null && pbiVal >= 0 ? 'up' : 'dn'}`}>{pbiPrev != null ? `Trim. anterior: ${fmtPbi(pbiPrev)}` : 'cargando…'}</div><div className="stat-meta">Var. interanual · precios constantes · INDEC</div></div>
         </div>
       </div>
 
@@ -472,10 +513,17 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
         <div className="section-title">Inflación — IPC mensual · INDEC</div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'20px'}}>
           {[
-            {lbl:'IPC General', badge:ipcMes, val:fmt1(ipcVal), delta:fmtDiff(ipcDiff), meta:`Interanual: ${fmt1(ipcIA)}`},
-            {lbl:'Interanual',  badge:'',    val:fmt1(ipcIA),  delta:'acumulado 12 meses', meta:'vs mismo mes año anterior'},
-            {lbl:'Acumulado año',badge:'',   val:fmt1(acumAnio),delta:ipcFp[0]||'—',      meta:'Desde enero del año en curso'},
-            {lbl:'Promedio 3 meses',badge:'',val:fmt1(prom3),  delta:'últimos 3 meses',   meta:'Media simple mensual'},
+            {lbl:'IPC Mensual',    badge: bcra?.byKey?.inflacion_mensual?.fecha?.slice(0,7) ?? ipcMes,
+             val:  bcra?.byKey?.inflacion_mensual?.valor  != null ? parseFloat(bcra.byKey.inflacion_mensual.valor).toFixed(1).replace('.',',')+'%'  : fmt1(ipcVal),
+             delta: fmtDiff(ipcDiff),
+             meta: `Fuente: BCRA oficial · IPC INDEC`},
+            {lbl:'Interanual',    badge:'',
+             val:  bcra?.byKey?.inflacion_interanual?.valor != null ? parseFloat(bcra.byKey.inflacion_interanual.valor).toFixed(1).replace('.',',')+'%' : fmt1(ipcIA),
+             delta:'acumulado 12 meses', meta:'vs mismo mes año anterior · BCRA'},
+            {lbl:'Inflación esperada',badge:'12 meses',
+             val:  bcra?.byKey?.inflacion_esperada?.valor  != null ? parseFloat(bcra.byKey.inflacion_esperada.valor).toFixed(1).replace('.',',')+'%'  : '—',
+             delta:'próximos 12 meses', meta:'Expectativa de mercado · BCRA'},
+            {lbl:'Acumulado año', badge:'',   val:fmt1(acumAnio), delta:ipcFp[0]||'—', meta:'Desde enero del año en curso'},
           ].map((k,i)=>(
             <div key={i} style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px',position:'relative',overflow:'hidden'}}>
               <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>{k.lbl}{k.badge&&<span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>{k.badge}</span>}</div>
@@ -529,91 +577,107 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
       <div className="section">
         <div className="section-title">Actividad económica — EMAE · INDEC</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'12px',marginBottom:'16px'}}>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>EMAE General <span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>Nov 2025</span></div><div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--green)',lineHeight:1}}>+5,3%</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--green)',marginTop:'6px'}}>6° mes consecutivo positivo</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Variación interanual</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Acum. 2025</div><div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>+4,1%</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>Ene–Nov 2025</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>vs mismo período 2024</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Mejor sector</div><div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--green)',lineHeight:1.2}}>Construcción</div><div style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:'var(--green)',marginTop:'4px'}}>+9,2%</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Interanual · Nov 2025</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>En contracción</div><div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--red)',lineHeight:1.2}}>Adm. Pública</div><div style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:'var(--red)',marginTop:'4px'}}>−1,8%</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Único sector negativo</div></div>
+          {/* KPI general */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>
+              EMAE General <span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>{emaeMes}</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>
+              {fmtEmae(emaeVal)}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)',marginTop:'6px'}}>
+              {emaeVal!=null ? (emaeVal>=0 ? 'crecimiento interanual' : 'contracción interanual') : 'cargando…'}
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Variación interanual</div>
+          </div>
+          {/* KPI acumulado */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Acum. {emaeAnioAccum}</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>
+              {emaeAccum != null ? fmtEmae(emaeAccum) : '—'}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>
+              {emae?.mesesAcum ? `${emae.mesesAcum} mes${emae.mesesAcum>1?'es':''} disponibles` : 'cargando…'}
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>promedio IA acum. año</div>
+          </div>
+          {/* Mejor sector */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Mejor sector</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'16px',fontWeight:700,color:'var(--green)',lineHeight:1.2}}>
+              {bestSector ? bestSector.nombre : '—'}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:'var(--green)',marginTop:'4px'}}>
+              {bestSector ? fmtEmae(bestSector.valor) : '—'}
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>
+              Interanual · {bestSector?.fecha ? (() => { const [y,m]=bestSector.fecha.split('-'); return (MESES_C[+m]||'')+' '+y; })() : '—'}
+            </div>
+          </div>
+          {/* Peor sector */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>
+              {worstSector?.valor < 0 ? 'En contracción' : 'Menor crecimiento'}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'16px',fontWeight:700,color:worstSector?.valor<0?'var(--red)':'var(--text2)',lineHeight:1.2}}>
+              {worstSector ? worstSector.nombre : '—'}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:worstSector?.valor<0?'var(--red)':'var(--text2)',marginTop:'4px'}}>
+              {worstSector ? fmtEmae(worstSector.valor) : '—'}
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>
+              {worstSector?.valor < 0 ? 'único o entre sectores negativos' : 'menor ritmo de expansión'}
+            </div>
+          </div>
         </div>
+
+        {/* Tabla de sectores — dinámica */}
         <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden'}}>
           <div style={{padding:'16px 24px',borderBottom:'1px solid var(--line)',display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
             <div>
               <div style={{fontSize:'15px',fontWeight:600,color:'var(--white)',marginBottom:'3px'}}>Variación interanual por sector</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Noviembre 2025 · INDEC</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>
+                {emaeMes} · INDEC · datos.gob.ar
+              </div>
             </div>
           </div>
-          {(()=>{
-            const sectors = [
-              {s:'Explotación de minas y canteras', v:9.8},
-              {s:'Construcción',                    v:9.2},
-              {s:'Intermediación financiera',        v:8.4},
-              {s:'Industria manufacturera',          v:6.8},
-              {s:'Comercio may. y minorista',        v:5.1},
-              {s:'Transporte y comunicaciones',      v:4.9},
-              {s:'Agro, ganadería y pesca',          v:4.7},
-              {s:'Salud',                            v:3.7},
-              {s:'Servicios inmobiliarios',          v:3.3},
-              {s:'Electricidad, gas y agua',         v:3.2},
-              {s:'Enseñanza',                        v:2.9},
-              {s:'Pesca',                            v:2.1},
-              {s:'Administración pública',           v:-1.8},
-            ].sort((a,b)=>b.v-a.v);
-            const maxPos = Math.max(...sectors.map(x=>x.v>0?x.v:0), 0.01);
-            const maxNeg = Math.max(...sectors.map(x=>x.v<0?Math.abs(x.v):0), 0.01);
-            // Total range for proportional zero placement
+          {sectors.length === 0 ? (
+            <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>
+              {indec ? 'Sin datos de sectores disponibles' : 'Cargando sectores…'}
+            </div>
+          ) : (() => {
+            const maxPos = Math.max(...sectors.map(x=>x.valor>0?x.valor:0), 0.01);
+            const maxNeg = Math.max(...sectors.map(x=>x.valor<0?Math.abs(x.valor):0), 0.01);
             const totalRange = maxPos + maxNeg;
             const negFr = maxNeg / totalRange;
             const posFr = maxPos / totalRange;
             return (
               <div style={{padding:'6px 24px'}}>
-                {sectors.map(({s,v},i,arr)=>{
-                  const neg = v < 0;
+                {sectors.map(({nombre,valor},i,arr)=>{
+                  const neg = valor < 0;
                   const color = neg ? 'var(--red)' : 'var(--green)';
                   const isTop = i===0;
-                  const posPct = !neg ? (v/maxPos)*100 : 0;
-                  const negPct = neg ? (Math.abs(v)/maxNeg)*100 : 0;
+                  const posPct = !neg ? (valor/maxPos)*100 : 0;
+                  const negPct = neg ? (Math.abs(valor)/maxNeg)*100 : 0;
                   return (
-                    <div key={s} style={{
-                      display:'flex',
-                      alignItems:'center',
-                      padding:'7px 0',
+                    <div key={nombre} style={{
+                      display:'flex',alignItems:'center',padding:'7px 0',
                       borderBottom: i<arr.length-1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
                       background: isTop ? 'rgba(86,201,122,0.04)' : neg ? 'rgba(240,112,112,0.03)' : 'transparent',
                       borderRadius:'4px',
                     }}>
-                      {/* Label — fixed 220px */}
-                      <div style={{
-                        width:'220px', flexShrink:0,
-                        fontSize:'12px',
-                        color: isTop ? 'var(--white)' : neg ? 'var(--red)' : 'var(--text2)',
-                        fontWeight: isTop ? 600 : 400,
-                        paddingRight:'12px',
-                        whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
-                      }}>{s}</div>
-                      {/* Bar area — flex, fills all remaining space */}
-                      <div style={{flex:1, display:'flex', alignItems:'center', minWidth:0}}>
-                        {/* Negative side — proportional fraction */}
-                        <div style={{flex:negFr, display:'flex', justifyContent:'flex-end', paddingRight:'3px'}}>
-                          {neg && (
-                            <div style={{height:'9px',width:`${negPct}%`,background:'var(--red)',borderRadius:'5px 0 0 5px',opacity:0.85}}/>
-                          )}
+                      <div style={{width:'220px',flexShrink:0,fontSize:'12px',color:isTop?'var(--white)':neg?'var(--red)':'var(--text2)',fontWeight:isTop?600:400,paddingRight:'12px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{nombre}</div>
+                      <div style={{flex:1,display:'flex',alignItems:'center',minWidth:0}}>
+                        <div style={{flex:negFr,display:'flex',justifyContent:'flex-end',paddingRight:'3px'}}>
+                          {neg && <div style={{height:'9px',width:`${negPct}%`,background:'var(--red)',borderRadius:'5px 0 0 5px',opacity:0.85}}/>}
                         </div>
-                        {/* Zero line */}
                         <div style={{width:'2px',height:'26px',background:'rgba(255,255,255,0.2)',borderRadius:'1px',flexShrink:0}}/>
-                        {/* Positive side — proportional fraction */}
-                        <div style={{flex:posFr, paddingLeft:'3px'}}>
-                          {!neg && (
-                            <div style={{
-                              height:'9px',width:`${posPct}%`,
-                              background: isTop ? 'var(--green)' : 'rgba(86,201,122,0.65)',
-                              borderRadius:'0 5px 5px 0',
-                              boxShadow: isTop ? '0 0 10px rgba(86,201,122,0.4)' : 'none',
-                            }}/>
-                          )}
+                        <div style={{flex:posFr,paddingLeft:'3px'}}>
+                          {!neg && <div style={{height:'9px',width:`${posPct}%`,background:isTop?'var(--green)':'rgba(86,201,122,0.65)',borderRadius:'0 5px 5px 0',boxShadow:isTop?'0 0 10px rgba(86,201,122,0.4)':'none'}}/>}
                         </div>
                       </div>
-                      {/* Value — fixed 68px */}
                       <div style={{width:'68px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'12px',fontWeight:700,color,textAlign:'right'}}>
-                        {neg?'−':'+'}{Math.abs(v).toFixed(1).replace('.',',')}%
+                        {neg?'−':'+'}{Math.abs(valor).toFixed(1).replace('.',',')}%
                       </div>
                     </div>
                   );
@@ -622,7 +686,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
             );
           })()}
           <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'flex-end'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · ArgentinaDatos.com · Frecuencia: mensual</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · API Series de Tiempo datos.gob.ar · Frecuencia: mensual</span>
           </div>
         </div>
       </div>
@@ -680,48 +744,188 @@ export function MacroPage({ goPage, inflacion, riesgoPais }) {
       <div className="section">
         <div className="section-title">Producto Bruto Interno — INDEC</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'12px',marginBottom:'16px'}}>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderTop:'2px solid var(--green)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Var. PBI real 2025 <span style={{background:'rgba(86,201,122,.15)',color:'var(--green)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>INDEC</span></div><div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--green)',lineHeight:1}}>+5,5%</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--green)',marginTop:'6px'}}>Recuperación tras −1,6% en 2024</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Var. interanual · precios constantes</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>PBI nominal 2025 est.</div><div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--white)',lineHeight:1}}>USD 640B</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>vs USD 545B en 2024</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>A tipo de cambio promedio</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>PBI per cápita est. 2025</div><div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--white)',lineHeight:1}}>USD 13.800</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--accent)',marginTop:'6px'}}>▲ +17% vs 2024</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>46,6M habitantes · estimado</div></div>
-          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Proyección 2026 — FMI</div><div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--accent)',lineHeight:1}}>+5,0%</div><div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>WEO Oct 2025 · sujeto a revisión</div><div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Consenso privado: +4,2%</div></div>
+          {/* KPI último trimestre */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderTop:`2px solid ${pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)'}`,borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>
+              Var. PBI real <span style={{background:'rgba(86,201,122,.15)',color:'var(--green)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>{pbiTrim}</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>
+              {fmtPbi(pbiVal)}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--text3)',marginTop:'6px'}}>
+              {pbiPrev != null ? `Trim. ant.: ${fmtPbi(pbiPrev)}` : 'cargando…'}
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Var. interanual · precios constantes</div>
+          </div>
+          {/* Promedio últimos 4 trimestres */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Promedio últimos 4 trim.</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--white)',lineHeight:1}}>
+              {pbiHist.length >= 4
+                ? fmtPbi(pbiHist.slice(-4).reduce((s,d)=>s+parseFloat(d.valor||0),0)/4)
+                : '—'}
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>
+              {pbiHist.length >= 4 ? `${pbiHist.slice(-4)[0]?.fecha?.slice(0,7)} – ${pbiHist[pbiHist.length-1]?.fecha?.slice(0,7)}` : 'cargando…'}
+            </div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>variación interanual media</div>
+          </div>
+          {/* Mejor trimestre reciente */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Mejor trim. reciente</div>
+            {(() => {
+              if (!pbiHist.length) return <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--white)',lineHeight:1}}>—</div>;
+              const best = pbiHist.reduce((b,d) => parseFloat(d.valor||0) > parseFloat(b.valor||0) ? d : b, pbiHist[0]);
+              const [y,m] = (best.fecha||'').split('-');
+              const q = Math.ceil(+m/3);
+              return <>
+                <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--green)',lineHeight:1}}>{fmtPbi(parseFloat(best.valor))}</div>
+                <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>Q{q} {y}</div>
+              </>;
+            })()}
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>en el período disponible</div>
+          </div>
+          {/* Proyección FMI — estimación externa, se mantiene manual */}
+          <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Proyección 2026 — FMI</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--accent)',lineHeight:1}}>+5,0%</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>WEO Oct 2025 · sujeto a revisión</div>
+            <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Consenso privado: +4,2%</div>
+          </div>
         </div>
+
+        {/* Historial trimestral dinámico */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px'}}>
           <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden'}}>
-            <div style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Variación real anual · 2019–2025</div></div>
-            <div style={{display:'grid',gridTemplateColumns:'60px 1fr 120px',padding:'7px 16px',borderBottom:'1px solid var(--line)',background:'var(--bg2)'}}>
-              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>AÑO</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>CONTEXTO</span>
+            <div style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>
+                Variación real interanual — últimos trimestres
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'80px 1fr 100px',padding:'7px 16px',borderBottom:'1px solid var(--line)',background:'var(--bg2)'}}>
+              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>PERÍODO</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>BARRA</span>
               <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',textAlign:'right'}}>VAR. REAL</span>
             </div>
-            {[['2019','Crisis cambiaria','−2,1%','var(--red)'],['2020','COVID-19','−9,9%','var(--red)'],['2021','Rebote post-pandemia','+10,4%','var(--green)'],['2022','Alta inflación','+5,0%','var(--green)'],['2023','Sequía + crisis','−1,6%','var(--red)'],['2024','Ajuste Milei','−1,6%','var(--red)'],['2025','Recuperación','+5,5%','var(--green)']].map(([yr,ctx,val,color])=>(
-              <div key={yr} style={{display:'grid',gridTemplateColumns:'60px 1fr 120px',padding:'9px 16px',borderBottom:'1px solid rgba(255,255,255,.04)',alignItems:'center',background:yr==='2025'?'rgba(86,201,122,.05)':'',borderTop:yr==='2025'?'1px solid rgba(86,201,122,.15)':''}}>
-                <span style={{fontFamily:'var(--mono)',fontSize:'12px',fontWeight:yr==='2025'?700:400,color:yr==='2025'?'var(--green)':'var(--text3)'}}>{yr}</span>
-                <span style={{fontSize:'11px',color:'var(--text2)'}}>{ctx}</span>
-                {yr==='2025'?<span style={{background:'rgba(86,201,122,.2)',color:'var(--green)',fontFamily:'var(--mono)',fontSize:'10px',fontWeight:700,padding:'2px 8px',borderRadius:'4px',textAlign:'center'}}>{val}</span>:<span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:600,color:color,textAlign:'right'}}>{val}</span>}
-              </div>
-            ))}
+            {pbiHist.length === 0 ? (
+              <div style={{padding:'20px 16px',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px',textAlign:'center'}}>cargando…</div>
+            ) : (
+              pbiHist.slice(-8).reverse().map((d, i) => {
+                const v   = parseFloat(d.valor || 0);
+                const pos = v >= 0;
+                const [y, m] = (d.fecha || '').split('-');
+                const q   = Math.ceil(+m / 3);
+                const lbl = `Q${q} ${y}`;
+                const isLast = i === 0;
+                const barW = Math.min(100, Math.abs(v) * 6);
+                return (
+                  <div key={d.fecha} style={{display:'grid',gridTemplateColumns:'80px 1fr 100px',padding:'9px 16px',borderBottom:'1px solid rgba(255,255,255,.04)',alignItems:'center',background:isLast?(pos?'rgba(86,201,122,.05)':'rgba(240,112,112,.05)'):''}} >
+                    <span style={{fontFamily:'var(--mono)',fontSize:'12px',fontWeight:isLast?700:400,color:isLast?(pos?'var(--green)':'var(--red)'):'var(--text3)'}}>{lbl}</span>
+                    <div style={{paddingRight:'12px'}}>
+                      <div style={{height:'4px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${barW}%`,background:pos?'rgba(86,201,122,0.6)':'rgba(240,112,112,0.6)',borderRadius:'3px'}}/>
+                      </div>
+                    </div>
+                    {isLast
+                      ? <span style={{background:pos?'rgba(86,201,122,.2)':'rgba(240,112,112,.2)',color:pos?'var(--green)':'var(--red)',fontFamily:'var(--mono)',fontSize:'10px',fontWeight:700,padding:'2px 8px',borderRadius:'4px',textAlign:'center'}}>{fmtPbi(v)}</span>
+                      : <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:600,color:pos?'var(--green)':'var(--red)',textAlign:'right'}}>{fmtPbi(v)}</span>
+                    }
+                  </div>
+                );
+              })
+            )}
           </div>
           <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden'}}>
-            <div style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}><div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Sectores clave · contribución al PBI 2025</div></div>
-            <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:'12px'}}>
+            <div style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Nota metodológica · INDEC</div>
+            </div>
+            <div style={{padding:'18px 20px',display:'flex',flexDirection:'column',gap:'14px'}}>
               {[
-                ['Agropecuario','+8,2%','var(--green)',68,'~5,5% del PBI total · rebote post-sequía 2023'],
-                ['Industria manufacturera','+6,8%','var(--accent)',56,'~17% del PBI · autos, alimentos, química'],
-                ['Construcción','−4,1%','var(--red)',22,'~3,5% del PBI · impacto del ajuste fiscal'],
-                ['Comercio y servicios','+4,3%','var(--gold)',45,'~28% del PBI · recuperación del consumo'],
-                ['Minería e hidrocarburos','+12,5%','var(--green)',80,'~5% del PBI · Vaca Muerta como motor'],
-              ].map(([sector,val,color,w,nota])=>(
-                <div key={sector}>
-                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'4px'}}><span style={{fontSize:'11px',color:'var(--text2)'}}>{sector}</span><span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:600,color:color}}>{val}</span></div>
-                  <div style={{height:'5px',background:'var(--bg3)',borderRadius:'3px'}}><div style={{height:'100%',width:`${w}%`,background:color,borderRadius:'3px'}}></div></div>
-                  <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginTop:'3px'}}>{nota}</div>
+                ['Frecuencia','Trimestral (T+3 meses aprox.)','var(--text2)'],
+                ['Base','Precios constantes de 2004','var(--text2)'],
+                ['Var. mostrada','Interanual (mismo trim. año anterior)','var(--text2)'],
+                ['Fuente primaria','INDEC · Cuentas Nacionales','var(--accent)'],
+                ['API','datos.gob.ar · Series de Tiempo','var(--accent)'],
+              ].map(([k,v,c])=>(
+                <div key={k}>
+                  <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginBottom:'3px'}}>{k}</div>
+                  <div style={{fontSize:'12px',color:c,fontWeight:500}}>{v}</div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-        <div className="source">Fuente: INDEC · Cuentas Nacionales · Frecuencia: trimestral · Valores 2025 estimados</div>
+        <div className="source">Fuente: INDEC · Cuentas Nacionales · API Series de Tiempo datos.gob.ar · Frecuencia: trimestral</div>
       </div>
+    <BcraMonetarioSection bcra={bcra} loadBcra={loadBcra} />
+    </div>
+  );
+}
+
+// ── Sección BCRA — Agregados Monetarios (Macro) ───────────────
+function BcraMonetarioSection({ bcra, loadBcra }) {
+  useEffect(() => { if (!bcra) loadBcra?.(); }, [bcra, loadBcra]);
+
+  const monetario = bcra?.byCat?.['Monetario'] ?? [];
+  const ts        = bcra?.timestamp ? new Date(bcra.timestamp) : null;
+  const tsStr     = ts ? ts.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs' : null;
+
+  const fmtValor = (item) => {
+    if (item.valor == null) return '—';
+    const v = parseFloat(item.valor);
+    if (item.unidad === 'MM $') return '$ ' + (v / 1000).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' B';
+    if (item.formato === 'pct') return v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+    return v.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  };
+
+  const fmtDelta = (item) => {
+    if (item.valor == null || item.valorAnterior == null) return null;
+    const d = parseFloat(item.valor) - parseFloat(item.valorAnterior);
+    if (Math.abs(d) < 0.001) return null;
+    if (item.unidad === 'MM $') {
+      const pct = (d / parseFloat(item.valorAnterior)) * 100;
+      return { txt: (pct > 0 ? '+' : '') + pct.toFixed(2).replace('.', ',') + '%', up: d > 0 };
+    }
+    return { txt: (d > 0 ? '+' : '') + d.toLocaleString('es-AR', { maximumFractionDigits: 2 }), up: d > 0 };
+  };
+
+  const fmtFecha = (f) => {
+    if (!f) return '';
+    const [y, m, d] = (f || '').split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  if (!bcra) {
+    return (
+      <div className="section">
+        <div className="section-title">Agregados monetarios — BCRA</div>
+        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: '11px' }}>Cargando datos del BCRA…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="section">
+      <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Agregados monetarios — BCRA</span>
+        {tsStr && <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>actualizado {tsStr}</span>}
+      </div>
+      <div className="grid grid-3">
+        {monetario.map(item => {
+          const delta = fmtDelta(item);
+          return (
+            <div key={item.key} className="stat c-flat">
+              <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
+              <div className="stat-val">{fmtValor(item)}</div>
+              {delta
+                ? <div className={`stat-delta ${delta.up ? 'up' : 'dn'}`}>{delta.txt} vs ant.</div>
+                : <div className="stat-delta fl">sin variación</div>}
+              <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="source">Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
     </div>
   );
 }

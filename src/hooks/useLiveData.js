@@ -1,19 +1,29 @@
-// hooks/useLiveData.js — corregido con parsing correcto de DolarApi
+// hooks/useLiveData.js
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchDolares, fetchInflacion, fetchInflacionInteranual, fetchRiesgoPais, fetchRiesgoPaisUltimo, fetchFeriados, fetchUVA, fetchTasasPlazoFijo, fetchTasasDepositos } from '../services/api';
+import {
+  fetchDolares, fetchInflacion, fetchInflacionInteranual,
+  fetchRiesgoPais, fetchRiesgoPaisUltimo, fetchFeriados,
+  fetchUVA, fetchTasasPlazoFijo, fetchTasasDepositos,
+  fetchMundoData, fetchBCRAData, fetchCotizaciones, fetchINDEC,
+} from '../services/api';
 
-const POLL_INTERVAL = 5 * 60 * 1000;
+const POLL_INTERVAL = 5 * 60 * 1000;  // 5 minutos
 
 export function useLiveData() {
-  const [dolares,    setDolares]    = useState(null);
-  const [inflacion,  setInflacion]  = useState(null);
-  const [riesgoPais, setRiesgoPais] = useState(null);
-  const [feriados,   setFeriados]   = useState(null);
-  const [uva,        setUva]        = useState(null);
-  const [tasas,      setTasas]      = useState(null);
-  const [apiStatus,  setApiStatus]  = useState({
+  const [dolares,     setDolares]     = useState(null);
+  const [inflacion,   setInflacion]   = useState(null);
+  const [riesgoPais,  setRiesgoPais]  = useState(null);
+  const [feriados,    setFeriados]    = useState(null);
+  const [uva,         setUva]         = useState(null);
+  const [tasas,       setTasas]       = useState(null);
+  const [mundo,       setMundo]       = useState(null);   // ← nuevo
+  const [bcra,        setBcra]        = useState(null);   // ← nuevo
+  const [cotizaciones,setCotizaciones]= useState(null);   // ← nuevo
+  const [indec,       setIndec]       = useState(null);   // ← nuevo
+  const [apiStatus,   setApiStatus]   = useState({
     dolares: 'loading', inflacion: 'loading', riesgoPais: 'loading',
     feriados: 'loading', uva: 'loading', tasas: 'loading',
+    mundo: 'idle', bcra: 'idle', cotizaciones: 'idle', indec: 'loading',
   });
   const [lastUpdate, setLastUpdate] = useState(null);
   const timerRef = useRef(null);
@@ -21,101 +31,78 @@ export function useLiveData() {
   const setStatus = (key, status) =>
     setApiStatus(prev => ({ ...prev, [key]: status }));
 
-  // ── Dólares (DolarApi.com) — array de casas ───────────────
+  // ── Dólares ──────────────────────────────────────────────────
   const loadDolares = useCallback(async () => {
     setStatus('dolares', 'loading');
     const { data, error } = await fetchDolares();
     if (error || !Array.isArray(data)) { setStatus('dolares', 'error'); return; }
 
-    // DolarApi devuelve [{casa:'oficial',nombre:'...',compra,venta}, ...]
     const by = {};
     data.forEach(d => {
-      const key = (d.casa || d.nombre || '').toLowerCase().replace(/\s+/g,'');
+      const key = (d.casa || d.nombre || '').toLowerCase().replace(/\s+/g, '');
       by[key] = d;
     });
-
     const getVenta = (...keys) => {
       for (const k of keys) {
         const d = by[k];
-        if (d) {
-          const v = parseFloat(d.venta ?? d.compra ?? 0);
-          if (v > 0) return v;
-        }
+        if (d) { const v = parseFloat(d.venta ?? d.compra ?? 0); if (v > 0) return v; }
       }
       return null;
     };
-
-    const pOf  = getVenta('oficial');
-    const pMep = getVenta('bolsa', 'mep');
-    const pCcl = getVenta('contadoconliqui', 'ccl', 'contado');
-    const pBlu = getVenta('blue');
-    const pMay = getVenta('mayorista');
-    const pCry = getVenta('cripto', 'usdt', 'crypto');
-    const pTar = getVenta('tarjeta');
+    const pOf    = getVenta('oficial');
+    const pMep   = getVenta('bolsa', 'mep');
+    const pCcl   = getVenta('contadoconliqui', 'ccl', 'contado');
+    const pBlu   = getVenta('blue');
+    const pMay   = getVenta('mayorista');
+    const pCry   = getVenta('cripto', 'usdt', 'crypto');
+    const pTar   = getVenta('tarjeta');
     const pBlend = pOf && pMep ? pOf * 0.8 + pMep * 0.2 : null;
+    const pct    = (a, b) => a && b ? ((b - a) / a * 100) : null;
 
-    const pct = (a, b) => a && b ? ((b - a) / a * 100) : null;
-    const bMep = pct(pOf, pMep);
-    const bCcl = pct(pOf, pCcl);
-    const bBlu = pct(pOf, pBlu);
-    const bCry = pct(pOf, pCry);
-
-    setDolares({ pOf, pMep, pCcl, pBlu, pCry, pMay, pTar, pBlend, bMep, bCcl, bBlu, bCry });
+    setDolares({ pOf, pMep, pCcl, pBlu, pCry, pMay, pTar, pBlend,
+      bMep: pct(pOf, pMep), bCcl: pct(pOf, pCcl),
+      bBlu: pct(pOf, pBlu), bCry: pct(pOf, pCry) });
     setStatus('dolares', 'ok');
     setLastUpdate(new Date());
   }, []);
 
-  // ── Inflación ─────────────────────────────────────────────
+  // ── Inflación ────────────────────────────────────────────────
   const loadInflacion = useCallback(async () => {
     setStatus('inflacion', 'loading');
     const [{ data: mens }, { data: ia }] = await Promise.all([
-      fetchInflacion(),
-      fetchInflacionInteranual(),
+      fetchInflacion(), fetchInflacionInteranual(),
     ]);
     if (!Array.isArray(mens) || mens.length === 0) { setStatus('inflacion', 'error'); return; }
     const last = mens[mens.length - 1];
-    // Interanual: usar endpoint si disponible, sino calcular rolling 12m
-    let valIA = null;
-    let iaHistory = [];
+    let valIA = null, iaHistory = [];
     if (Array.isArray(ia) && ia.length) {
-      const lastIA = ia[ia.length - 1];
-      valIA = parseFloat(lastIA?.valor ?? 0);
+      valIA = parseFloat(ia[ia.length - 1]?.valor ?? 0);
       iaHistory = ia;
     } else {
       const ult12 = mens.slice(-12);
       valIA = (ult12.reduce((acc, d) => acc * (1 + parseFloat(d.valor || 0) / 100), 1) - 1) * 100;
     }
-    setInflacion({
-      valor: valIA,
-      fecha: last?.fecha,
-      history: mens,
-      iaHistory,
-    });
+    setInflacion({ valor: valIA, fecha: last?.fecha, history: mens, iaHistory });
     setStatus('inflacion', 'ok');
   }, []);
 
-  // ── Riesgo País ───────────────────────────────────────────
+  // ── Riesgo País ──────────────────────────────────────────────
   const loadRiesgoPais = useCallback(async () => {
     setStatus('riesgoPais', 'loading');
     const [{ data: ultimo }, { data: historial }] = await Promise.all([
-      fetchRiesgoPaisUltimo(),
-      fetchRiesgoPais(),
+      fetchRiesgoPaisUltimo(), fetchRiesgoPais(),
     ]);
-    const hasData = ultimo || (Array.isArray(historial) && historial.length > 0);
-    if (!hasData) { setStatus('riesgoPais', 'error'); return; }
-
     const hist = Array.isArray(historial) ? historial : [];
     const last = ultimo || hist[hist.length - 1];
-    const prev = hist.length > 1 ? hist[hist.length - 2] : null;
-    const val  = parseFloat(last?.valor ?? 0);
-    const prvV = prev ? parseFloat(prev.valor ?? 0) : null;
-    const delta = prvV != null ? val - prvV : null;
-
-    setRiesgoPais({ valor: val, delta, fecha: last?.fecha, history: hist.slice(-365) });
+    if (!last) { setStatus('riesgoPais', 'error'); return; }
+    const prev  = hist.length > 1 ? hist[hist.length - 2] : null;
+    const val   = parseFloat(last?.valor ?? 0);
+    const prvV  = prev ? parseFloat(prev.valor ?? 0) : null;
+    setRiesgoPais({ valor: val, delta: prvV != null ? val - prvV : null, fecha: last?.fecha, history: hist.slice(-365) });
     setStatus('riesgoPais', 'ok');
   }, []);
 
-  // ── Feriados ─────────────────────────────────────────────
+  // ── Feriados ─────────────────────────────────────────────────
   const loadFeriados = useCallback(async () => {
     setStatus('feriados', 'loading');
     const { data, error } = await fetchFeriados(2026);
@@ -124,30 +111,22 @@ export function useLiveData() {
     setStatus('feriados', 'ok');
   }, []);
 
-  // ── UVA ──────────────────────────────────────────────────
+  // ── UVA ──────────────────────────────────────────────────────
   const loadUva = useCallback(async () => {
     setStatus('uva', 'loading');
     const { data, error } = await fetchUVA();
-    if (error || !Array.isArray(data) || data.length === 0) {
-      setStatus('uva', 'error'); return;
-    }
+    if (error || !Array.isArray(data) || data.length === 0) { setStatus('uva', 'error'); return; }
     const last = data[data.length - 1];
     const prev = data[data.length - 2];
-    setUva({
-      valor: parseFloat(last?.valor ?? 0),
-      prev:  parseFloat(prev?.valor ?? 0),
-      fecha: last?.fecha,
-      history: data.slice(-30),
-    });
+    setUva({ valor: parseFloat(last?.valor ?? 0), prev: parseFloat(prev?.valor ?? 0), fecha: last?.fecha, history: data.slice(-30) });
     setStatus('uva', 'ok');
   }, []);
 
-  // ── Tasas ────────────────────────────────────────────────
+  // ── Tasas ────────────────────────────────────────────────────
   const loadTasas = useCallback(async () => {
     setStatus('tasas', 'loading');
     const [{ data: pf }, { data: dep }] = await Promise.all([
-      fetchTasasPlazoFijo(),
-      fetchTasasDepositos(),
+      fetchTasasPlazoFijo(), fetchTasasDepositos(),
     ]);
     const hasPf  = Array.isArray(pf)  && pf.length > 0;
     const hasDep = Array.isArray(dep) && dep.length > 0;
@@ -156,18 +135,89 @@ export function useLiveData() {
     setStatus('tasas', 'ok');
   }, []);
 
+  // ── Precios Globales (Yahoo Finance via proxy) ────────────────
+  const loadMundo = useCallback(async () => {
+    setStatus('mundo', 'loading');
+    const { data, error } = await fetchMundoData();
+    if (error || !data?.data) { setStatus('mundo', 'error'); return; }
+    // Organizar por grupo para fácil consumo en el componente
+    const byGroup = {};
+    data.data.forEach(item => {
+      if (!byGroup[item.group]) byGroup[item.group] = [];
+      byGroup[item.group].push(item);
+    });
+    setMundo({ items: data.data, byGroup, updated: data.updated });
+    setStatus('mundo', 'ok');
+  }, []);
+
+  // ── Indicadores BCRA ─────────────────────────────────────────
+  const loadBcra = useCallback(async () => {
+    setStatus('bcra', 'loading');
+    const { data, error } = await fetchBCRAData();
+    if (error || !data?.data) { setStatus('bcra', 'error'); return; }
+    // Organizar por categoría y también por key para acceso rápido
+    const byCat = {};
+    const byKey = {};
+    data.data.forEach(item => {
+      if (!byCat[item.categoria]) byCat[item.categoria] = [];
+      byCat[item.categoria].push(item);
+      byKey[item.key] = item;
+    });
+    setBcra({ items: data.data, byCat, byKey, timestamp: data.timestamp });
+    setStatus('bcra', 'ok');
+  }, []);
+
+  // ── Cotizaciones (CCL, MEP) ───────────────────────────────────
+  const loadCotizaciones = useCallback(async () => {
+    setStatus('cotizaciones', 'loading');
+    const { data, error } = await fetchCotizaciones();
+    if (error || !data) { setStatus('cotizaciones', 'error'); return; }
+    setCotizaciones(data);
+    setStatus('cotizaciones', 'ok');
+  }, []);
+
+  // ── INDEC — EMAE + PBI (datos.gob.ar) ────────────────────────
+  const loadIndec = useCallback(async () => {
+    setStatus('indec', 'loading');
+    const { data, error } = await fetchINDEC();
+    if (error || !data?.emae) { setStatus('indec', 'error'); return; }
+    setIndec(data);
+    setStatus('indec', 'ok');
+  }, []);
+
+  // ── Carga inicial y polling ───────────────────────────────────
+  const loadCoreData = useCallback(() => {
+    Promise.allSettled([
+      loadDolares(), loadInflacion(), loadRiesgoPais(),
+      loadFeriados(), loadUva(), loadTasas(),
+      loadIndec(),  // EMAE + PBI — se actualiza con el mismo intervalo que el resto
+    ]);
+  }, [loadDolares, loadInflacion, loadRiesgoPais, loadFeriados, loadUva, loadTasas, loadIndec]);
+
+  // loadAll incluye también los nuevos endpoints (para reloadAll manual)
   const loadAll = useCallback(() => {
     Promise.allSettled([
       loadDolares(), loadInflacion(), loadRiesgoPais(),
       loadFeriados(), loadUva(), loadTasas(),
+      loadMundo(), loadBcra(), loadCotizaciones(), loadIndec(),
     ]);
-  }, [loadDolares, loadInflacion, loadRiesgoPais, loadFeriados, loadUva, loadTasas]);
+  }, [loadDolares, loadInflacion, loadRiesgoPais, loadFeriados, loadUva, loadTasas,
+      loadMundo, loadBcra, loadCotizaciones, loadIndec]);
 
   useEffect(() => {
-    loadAll();
-    timerRef.current = setInterval(loadAll, POLL_INTERVAL);
+    loadCoreData();
+    timerRef.current = setInterval(loadCoreData, POLL_INTERVAL);
     return () => clearInterval(timerRef.current);
-  }, [loadAll]);
+  }, [loadCoreData]);
 
-  return { dolares, inflacion, riesgoPais, feriados, uva, tasas, apiStatus, lastUpdate, reloadAll: loadAll };
+  return {
+    // Datos existentes
+    dolares, inflacion, riesgoPais, feriados, uva, tasas,
+    // Nuevos datos
+    mundo, bcra, cotizaciones, indec,
+    // Estado y control
+    apiStatus, lastUpdate, reloadAll: loadAll,
+    // Loaders individuales para carga bajo demanda
+    loadMundo, loadBcra, loadCotizaciones, loadIndec,
+  };
 }

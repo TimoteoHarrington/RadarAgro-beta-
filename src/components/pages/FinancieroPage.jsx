@@ -1,5 +1,5 @@
 // FinancieroPage.jsx
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 // ── UVA Mini Line Chart ──────────────────────────────────────
 function UvaLineChart({ history }) {
@@ -123,7 +123,7 @@ function UvaLineChart({ history }) {
   );
 }
 
-export function FinancieroPage({ goPage, dolares, uva, tasas }) {
+export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra }) {
   const f$ = v => v ? '$' + Math.round(v).toLocaleString('es-AR') : '…';
   const fP = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%' : '—';
   const fTNA = v => v != null ? v.toFixed(2).replace('.', ',') + '%' : '—';
@@ -338,12 +338,18 @@ export function FinancieroPage({ goPage, dolares, uva, tasas }) {
         <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'start' }}>
           {/* KPI Card */}
           <div className="stat c-flat">
-            <div className="stat-label">Valor UVA <span className="stat-badge fl">HOY</span></div>
-            <div className="stat-val">{uvaValor}</div>
-            <div className={`stat-delta ${uvaDelta != null ? (uvaDelta >= 0 ? 'up' : 'dn') : 'fl'}`}>
-              {uvaDeltaDisp}
+            <div className="stat-label">Valor UVA <span className="stat-badge fl">{bcra?.byKey?.uva?.fecha?.slice(0,10) ?? 'HOY'}</span></div>
+            <div className="stat-val">
+              {bcra?.byKey?.uva?.valor != null
+                ? '$ ' + parseFloat(bcra.byKey.uva.valor).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2})
+                : uvaValor}
             </div>
-            <div className="stat-meta">Actualización diaria por BCRA · base 1.000 = mar 2016</div>
+            <div className={`stat-delta ${uvaDelta != null ? (uvaDelta >= 0 ? 'up' : 'dn') : 'fl'}`}>
+              {bcra?.byKey?.uva?.valor != null && bcra?.byKey?.uva?.valorAnterior != null
+                ? (() => { const d = parseFloat(bcra.byKey.uva.valor) - parseFloat(bcra.byKey.uva.valorAnterior); return (d>=0?'+$∞':'−$∞').replace('∞', Math.abs(d).toFixed(2).replace('.',',')) + ' vs ayer'; })()
+                : uvaDeltaDisp}
+            </div>
+            <div className="stat-meta">Fuente: BCRA oficial · base 1.000 = mar 2016</div>
             {uvaVar30 != null && (
               <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--line)' }}>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: '8px', color: 'var(--text3)', marginBottom: '6px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
@@ -377,7 +383,28 @@ export function FinancieroPage({ goPage, dolares, uva, tasas }) {
 
       {/* TASAS */}
       <div className="section">
-        <div className="section-title">Tasas de referencia · Plazo Fijo por entidad · BCRA</div>
+        <div className="section-title">Tasas de referencia · BCRA oficial</div>
+        {bcra?.byCat?.['Tasas'] && (
+          <div className="grid grid-3" style={{marginBottom: '20px'}}>
+            {bcra.byCat['Tasas'].map(item => {
+              const v = item.valor != null ? parseFloat(item.valor) : null;
+              const vAnt = item.valorAnterior != null ? parseFloat(item.valorAnterior) : null;
+              const d = v != null && vAnt != null ? v - vAnt : null;
+              const [y, m, dd] = (item.fecha || '').split('-');
+              return (
+                <div key={item.key} className="stat c-flat">
+                  <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
+                  <div className="stat-val">{v != null ? v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%' : '—'}</div>
+                  {d != null && Math.abs(d) > 0.001
+                    ? <div className={`stat-delta ${d > 0 ? 'up' : 'dn'}`}>{(d>0?'+':'')+d.toFixed(2).replace('.',',')+' pp vs ant.'}</div>
+                    : <div className="stat-delta fl">sin variación</div>}
+                  <div className="stat-meta">BCRA · {dd}/{m}/{y}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="section-title" style={{marginTop: '8px'}}>Plazo Fijo por entidad · BCRA</div>
         <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
           {/* Header tabla */}
           <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 140px 140px', padding: '10px 18px', background: 'var(--bg2)', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
@@ -471,6 +498,125 @@ export function FinancieroPage({ goPage, dolares, uva, tasas }) {
           </div>
         </div>
       </div>
+    <BcraCambiarioSection bcra={bcra} loadBcra={loadBcra} />
+    </div>
+  );
+}
+
+// ── Sección BCRA Cambiario e Índices ─────────────────────────
+function BcraCambiarioSection({ bcra, loadBcra }) {
+  useEffect(() => { if (!bcra) loadBcra?.(); }, [bcra, loadBcra]);
+
+  const cambiario = bcra?.byCat?.['Cambiario'] ?? [];
+  const indices   = bcra?.byCat?.['Índices']   ?? [];
+  const ts        = bcra?.timestamp ? new Date(bcra.timestamp) : null;
+  const tsStr     = ts ? ts.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs' : null;
+
+  const fmtValor = (item) => {
+    if (item.valor == null) return '—';
+    const v = parseFloat(item.valor);
+    if (item.unidad === '$/USD') return '$\u00a0' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (item.unidad === 'MM USD') return 'USD\u00a0' + v.toLocaleString('es-AR') + ' MM';
+    if (item.formato === 'pct') return v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+    return v.toLocaleString('es-AR', { maximumFractionDigits: 4 });
+  };
+
+  const fmtDelta = (item) => {
+    if (item.valor == null || item.valorAnterior == null) return null;
+    const d = parseFloat(item.valor) - parseFloat(item.valorAnterior);
+    if (d === 0) return null;
+    const sign = d > 0 ? '+' : '';
+    return { txt: sign + d.toLocaleString('es-AR', { maximumFractionDigits: 2 }), up: d > 0 };
+  };
+
+  const fmtFecha = (f) => {
+    if (!f) return '';
+    const [y, m, d] = (f || '').split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  if (!bcra) {
+    return (
+      <div className="section">
+        <div className="section-title">Indicadores BCRA — Cambiario e Índices</div>
+        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
+          Cargando datos del BCRA…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="section">
+      <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Indicadores BCRA — Cambiario, Índices e Inflación</span>
+        {tsStr && <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>actualizado {tsStr}</span>}
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '10px' }}>Cambiario</div>
+        <div className="grid grid-3">
+          {cambiario.map(item => {
+            const delta = fmtDelta(item);
+            return (
+              <div key={item.key} className="stat c-flat">
+                <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
+                <div className="stat-val">{fmtValor(item)}</div>
+                {delta
+                  ? <div className={`stat-delta ${delta.up ? 'up' : 'dn'}`}>{delta.txt} vs ant.</div>
+                  : <div className="stat-delta fl">sin variación</div>}
+                <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '10px' }}>Índices de actualización</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          {indices.map(item => {
+            const delta = fmtDelta(item);
+            return (
+              <div key={item.key} className="stat c-flat">
+                <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
+                <div className="stat-val">{fmtValor(item)}</div>
+                {delta
+                  ? <div className={`stat-delta ${delta.up ? 'up' : 'dn'}`}>{delta.txt}</div>
+                  : <div className="stat-delta fl">—</div>}
+                <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Inflación esperada — útil en contexto financiero */}
+      {bcra?.byCat?.['Inflación'] && (
+        <div style={{ marginTop: '20px' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '10px' }}>Inflación — BCRA</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+            {bcra.byCat['Inflación'].map(item => {
+              const v = item.valor != null ? parseFloat(item.valor) : null;
+              const vAnt = item.valorAnterior != null ? parseFloat(item.valorAnterior) : null;
+              const d = v != null && vAnt != null ? v - vAnt : null;
+              const [y, m, dd] = (item.fecha || '').split('-');
+              const color = v != null ? (v > 5 ? 'var(--red)' : v > 2 ? 'var(--gold)' : 'var(--green)') : 'var(--white)';
+              return (
+                <div key={item.key} className="stat c-flat">
+                  <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
+                  <div className="stat-val" style={{ color }}>{v != null ? v.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'}</div>
+                  {d != null && Math.abs(d) > 0.001
+                    ? <div className={`stat-delta ${d > 0 ? 'dn' : 'up'}`}>{(d>0?'+':'')+d.toFixed(2).replace('.',',')+' pp vs ant.'}</div>
+                    : <div className="stat-delta fl">sin variación</div>}
+                  <div className="stat-meta">BCRA · {dd}/{m}/{y}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div className="source">Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { WidgetRenderer } from '../widgets/WidgetRenderer';
 
 const SIZE_LABELS = { normal: 'Pequeño', wide: 'Mediano', full: 'Grande' };
 
-export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
+export function HomePage({ goPage, dolares, feriados, lastUpdate, inflacion, riesgoPais, indec, tasas, bcra }) {
   const { dateStr, weekday, timeShort } = useClock();
   const { widgetState, orderedDefs, activateWidget, removeWidget, setWidgetSize, reorderWidgets } = useWidgets();
 
@@ -226,6 +226,11 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate }) {
                 goPage={goPage}
                 dolares={dolares}
                 feriados={feriados}
+                inflacion={inflacion}
+                riesgoPais={riesgoPais}
+                indec={indec}
+                tasas={tasas}
+                bcra={bcra}
               />
             </div>
           );

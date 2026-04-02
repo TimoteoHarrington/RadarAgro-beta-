@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { id: 'hacienda',   label: 'Hacienda' },
   { id: 'financiero', label: 'Financiero' },
   { id: 'macro',      label: 'Macro' },
+  { id: 'mundo',      label: 'Monitor Global' },
   { id: 'insumos',    label: 'Insumos' },
   { id: 'indices',    label: 'Índices' },
   { id: 'impuestos',  label: 'Impositivo' },

@@ -238,6 +238,47 @@ export function useLiveData() {
     return () => clearInterval(timerRef.current);
   }, [loadCoreData]);
 
+  // ── Enriquecimiento de inflacion con valores BCRA ───────────
+  // Cuando ambos estados cargan, resuelve la fuente primaria (BCRA)
+  // con fallback a ArgentinaDatos. Así los componentes consumen un
+  // objeto limpio sin lógica de fallback interna.
+  useEffect(() => {
+    if (!inflacion || !bcra?.byKey) return;
+
+    const byKey = bcra.byKey;
+
+    const mensual = byKey.inflacion_mensual?.valor != null
+      ? parseFloat(byKey.inflacion_mensual.valor)
+      : inflacion.valor ?? null;
+
+    const interanual = byKey.inflacion_interanual?.valor != null
+      ? parseFloat(byKey.inflacion_interanual.valor)
+      : inflacion.valor ?? null;
+
+    const esperada = byKey.inflacion_esperada?.valor != null
+      ? parseFloat(byKey.inflacion_esperada.valor)
+      : null;
+
+    const fechaMensual = byKey.inflacion_mensual?.fecha
+      ?? inflacion.fecha
+      ?? null;
+
+    // Solo actualizar si hay algo nuevo para agregar
+    if (
+      inflacion.ipcMensual    === mensual &&
+      inflacion.ipcInteranual === interanual &&
+      inflacion.ipcEsperado   === esperada
+    ) return;
+
+    setInflacion(prev => prev ? {
+      ...prev,
+      ipcMensual:    mensual,
+      ipcInteranual: interanual,
+      ipcEsperado:   esperada,
+      ipcFecha:      fechaMensual,
+    } : prev);
+  }, [inflacion, bcra]);
+
   return {
     // Datos existentes
     dolares, inflacion, riesgoPais, feriados, uva, tasas,

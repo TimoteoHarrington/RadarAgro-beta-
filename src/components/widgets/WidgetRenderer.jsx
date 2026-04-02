@@ -487,12 +487,16 @@ function CbotWidget({ size, goPage }) {
 function MacroWidget({ size, goPage, inflacion, riesgoPais, indec, bcra }) {
   const hdr = <WHeader title="Macroeconomía · INDEC / BCRA / JP Morgan" dotColor="var(--accent)" page="macro" goPage={goPage} />;
 
-  // Extraer valores reales de las APIs
-  const ipcVal    = inflacion?.valor != null ? fPct(inflacion.valor) : null;
-  const ipcFecha  = inflacion?.fecha ? inflacion.fecha.slice(0, 7) : '—';
-  const ipcIA     = inflacion?.iaHistory?.length
-    ? parseFloat(inflacion.iaHistory[inflacion.iaHistory.length - 1]?.valor ?? 0)
-    : null;
+  // Extraer valores resueltos (BCRA primary, ArgentinaDatos fallback — enriquecidos en useLiveData)
+  const ipcVal   = inflacion?.ipcMensual    != null ? fPct(inflacion.ipcMensual)    :
+                   inflacion?.valor          != null ? fPct(inflacion.valor)          : null;
+  const ipcFecha = inflacion?.ipcFecha ? inflacion.ipcFecha.slice(0, 7) :
+                   inflacion?.fecha    ? inflacion.fecha.slice(0, 7)    : '—';
+  const ipcIA    = inflacion?.ipcInteranual ?? (
+    inflacion?.iaHistory?.length
+      ? parseFloat(inflacion.iaHistory[inflacion.iaHistory.length - 1]?.valor ?? 0)
+      : null
+  );
 
   const rpVal     = riesgoPais?.valor != null ? fPb(riesgoPais.valor) : null;
   const rpDelta   = riesgoPais?.delta != null ? (riesgoPais.delta > 0 ? '+' : '') + Math.round(riesgoPais.delta) + ' pb' : null;

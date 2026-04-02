@@ -425,17 +425,22 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
   // Cargar INDEC bajo demanda al entrar a la página
   useEffect(() => { if (!indec) loadIndec?.(); }, [indec, loadIndec]);
 
-  // IPC KPIs derivados de datos reales
+  // IPC KPIs — usa campos enriquecidos por useLiveData (BCRA primary, ArgentinaDatos fallback)
   const mensData = inflacion?.history ?? [];
   const iaData   = inflacion?.iaHistory ?? [];
   const lastIPC  = mensData[mensData.length - 1];
   const prevIPC  = mensData[mensData.length - 2];
-  const ipcVal   = lastIPC ? parseFloat(lastIPC.valor || 0) : null;
-  const ipcPrev  = prevIPC ? parseFloat(prevIPC.valor || 0) : null;
-  const ipcDiff  = ipcVal != null && ipcPrev != null ? ipcVal - ipcPrev : null;
-  const ipcFp    = (lastIPC?.fecha || '').split('-');
-  const ipcMes   = ipcFp[1] ? MESES_C[+ipcFp[1]] + ' ' + ipcFp[0] : '—';
-  const ipcIA    = inflacion?.valor ?? null; // interanual si disponible
+  const ipcDiff  = (() => {
+    const curr = inflacion?.ipcMensual ?? (lastIPC ? parseFloat(lastIPC.valor || 0) : null);
+    const prev = prevIPC ? parseFloat(prevIPC.valor || 0) : null;
+    return curr != null && prev != null ? curr - prev : null;
+  })();
+  const ipcFp  = ((inflacion?.ipcFecha ?? lastIPC?.fecha) || '').split('-');
+  const ipcMes = ipcFp[1] ? MESES_C[+ipcFp[1]] + ' ' + ipcFp[0] : '—';
+  // Valores resueltos: BCRA cuando disponible, ArgentinaDatos como fallback
+  const ipcVal = inflacion?.ipcMensual    ?? (lastIPC ? parseFloat(lastIPC.valor || 0) : null);
+  const ipcIA  = inflacion?.ipcInteranual ?? inflacion?.valor ?? null;
+  const ipcExp = inflacion?.ipcEsperado   ?? null;
   const prom3    = mensData.length >= 3 ? (mensData.slice(-3).reduce((a,d)=>a+parseFloat(d.valor||0),0)/3) : null;
   const acumAnio = (() => {
     const yr = new Date().getFullYear().toString();
@@ -497,9 +502,9 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
         <div className="section-title">Indicadores clave · resumen</div>
         <div className="grid grid-4">
           <div className="stat c-flat">
-            <div className="stat-label">IPC Mensual <span className="stat-badge fl">{bcra?.byKey?.inflacion_mensual?.fecha?.slice(0,7) ?? '—'}</span></div>
-            <div className="stat-val">{bcra?.byKey?.inflacion_mensual?.valor != null ? parseFloat(bcra.byKey.inflacion_mensual.valor).toFixed(1).replace('.',',')+'%' : fmt1(ipcVal)}</div>
-            <div className="stat-delta fl">Interanual: {bcra?.byKey?.inflacion_interanual?.valor != null ? parseFloat(bcra.byKey.inflacion_interanual.valor).toFixed(1).replace('.',',')+'%' : fmt1(ipcIA)}</div>
+            <div className="stat-label">IPC Mensual <span className="stat-badge fl">{ipcFp[1] ? ipcFp[0].slice(2)+'/'+ipcFp[1] : '—'}</span></div>
+            <div className="stat-val">{fmt1(ipcVal)}</div>
+            <div className="stat-delta fl">Interanual: {fmt1(ipcIA)}</div>
             <div className="stat-meta">Fuente: BCRA oficial · IPC INDEC</div>
           </div>
           <div className="stat c-flat"><div className="stat-label">EMAE General <span className="stat-badge fl">{emaeMes}</span></div><div className="stat-val">{fmtEmae(emaeVal)}</div><div className={`stat-delta ${emaeVal != null && emaeVal >= 0 ? 'up' : 'dn'}`}>{emaeAccum != null ? `Acumula ${fmtEmae(emaeAccum)} en ${emaeAnioAccum}` : 'cargando…'}</div><div className="stat-meta">Var. interanual · INDEC · datos.gob.ar</div></div>
@@ -513,15 +518,15 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
         <div className="section-title">Inflación — IPC mensual · INDEC</div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'20px'}}>
           {[
-            {lbl:'IPC Mensual',    badge: bcra?.byKey?.inflacion_mensual?.fecha?.slice(0,7) ?? ipcMes,
-             val:  bcra?.byKey?.inflacion_mensual?.valor  != null ? parseFloat(bcra.byKey.inflacion_mensual.valor).toFixed(1).replace('.',',')+'%'  : fmt1(ipcVal),
+            {lbl:'IPC Mensual',    badge: ipcMes,
+             val:  fmt1(ipcVal),
              delta: fmtDiff(ipcDiff),
-             meta: `Fuente: BCRA oficial · IPC INDEC`},
+             meta: 'Fuente: BCRA oficial · IPC INDEC'},
             {lbl:'Interanual',    badge:'',
-             val:  bcra?.byKey?.inflacion_interanual?.valor != null ? parseFloat(bcra.byKey.inflacion_interanual.valor).toFixed(1).replace('.',',')+'%' : fmt1(ipcIA),
+             val:  fmt1(ipcIA),
              delta:'acumulado 12 meses', meta:'vs mismo mes año anterior · BCRA'},
             {lbl:'Inflación esperada',badge:'12 meses',
-             val:  bcra?.byKey?.inflacion_esperada?.valor  != null ? parseFloat(bcra.byKey.inflacion_esperada.valor).toFixed(1).replace('.',',')+'%'  : '—',
+             val:  ipcExp != null ? fmt1(ipcExp) : '—',
              delta:'próximos 12 meses', meta:'Expectativa de mercado · BCRA'},
             {lbl:'Acumulado año', badge:'',   val:fmt1(acumAnio), delta:ipcFp[0]||'—', meta:'Desde enero del año en curso'},
           ].map((k,i)=>(

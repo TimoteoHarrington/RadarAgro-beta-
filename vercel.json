@@ -1,5 +1,12 @@
 {
+  "functions": {
+    "api/bcra.js":         { "maxDuration": 30 },
+    "api/indec.js":        { "maxDuration": 30 },
+    "api/mundo.js":        { "maxDuration": 25 },
+    "api/cotizaciones.js": { "maxDuration": 20 }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)",     "destination": "/index.html" }
   ]
 }

@@ -29,7 +29,7 @@ async function fetchSeries(ids, limit = 5) {
   const idsStr = Array.isArray(ids) ? ids.join(',') : ids;
   const url = `${API_BASE}${API_PATH}?ids=${idsStr}&limit=${limit}&sort=desc&format=json&metadata=none`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = setTimeout(() => controller.abort(), 12000);
   try {
     const res = await fetch(url, {
       signal: controller.signal,

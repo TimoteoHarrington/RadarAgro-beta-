@@ -66,7 +66,7 @@ function fetchYahooRaw(symbolEncoded, interval, range) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.setTimeout(12000, () => { req.destroy(); reject(new Error('timeout')); });
   });
 }
 
@@ -99,7 +99,7 @@ function fetchYahooChart(symbolEncoded, interval, range) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.setTimeout(12000, () => { req.destroy(); reject(new Error('timeout')); });
   });
 }
 

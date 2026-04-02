@@ -45,7 +45,7 @@ function fetchVar(idVariable) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.setTimeout(12000, () => { req.destroy(); reject(new Error('timeout')); });
   });
 }
 
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
           });
         });
         req2.on('error', reject);
-        req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('timeout')); });
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error('timeout')); });
       });
 
       const raw = result.results?.[0]?.detalle || result.results || [];

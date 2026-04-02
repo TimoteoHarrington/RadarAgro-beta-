@@ -135,44 +135,40 @@ export async function fetchINDEC() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CBOT — Yahoo Finance directo (futuros agro para GranosPage)
+// CBOT — via proxy /api/mundo (mismo endpoint que MundoPage)
+// Los símbolos agro ya están incluidos en api/mundo.js con
+// conversión a USD/tn. Se filtran por group === 'Agro' y se
+// mapean a la forma { soja, maiz, trigo, aceite, harina }.
 // ─────────────────────────────────────────────────────────────
 
-const CBOT_SYMBOLS = {
-  soja:   'ZS%3DF',
-  trigo:  'ZW%3DF',
-  maiz:   'ZC%3DF',
-  aceite: 'ZL%3DF',
-  harina: 'ZM%3DF',
+// Mapeo entre el id de mundo.js y el nombre de grano local
+const MUNDO_ID_TO_GRANO = {
+  soy:     'soja',
+  corn:    'maiz',
+  wheat:   'trigo',
+  soyoil:  'aceite',
+  soymeal: 'harina',
 };
 
 /**
- * Precios de todos los futuros CBOT en paralelo.
- * Retorna { data: { soja, trigo, maiz, aceite, harina } — cada uno con {price, prevClose, change} }
+ * Precios de futuros CBOT via proxy /api/mundo.
+ * Retorna { data: { soja, maiz, trigo, aceite, harina } — cada uno con {price, prevClose, change} }
  */
 export async function fetchCBOTAll() {
-  const entries = Object.entries(CBOT_SYMBOLS);
-  const results = await Promise.allSettled(
-    entries.map(([, sym]) =>
-      get(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`)
-    )
-  );
+  const { data, error } = await get('/api/mundo');
+  if (error || !data?.data) return { data: null, error: error || 'sin datos' };
 
   const out = {};
-  entries.forEach(([grano], i) => {
-    const r = results[i];
-    if (r.status === 'fulfilled' && r.value.data) {
-      try {
-        const meta      = r.value.data.chart.result[0].meta;
-        const price     = meta.regularMarketPrice;
-        const prevClose = meta.chartPreviousClose || meta.previousClose || 0;
-        const change    = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
-        out[grano] = { price, prevClose, change: Math.round(change * 100) / 100 };
-      } catch { out[grano] = null; }
-    } else {
-      out[grano] = null;
-    }
-  });
+  data.data
+    .filter(item => item.group === 'Agro' && MUNDO_ID_TO_GRANO[item.id])
+    .forEach(item => {
+      const grano = MUNDO_ID_TO_GRANO[item.id];
+      out[grano] = {
+        price:     item.price     ?? null,
+        prevClose: item.prevClose ?? null,
+        change:    item.change    ?? null,
+      };
+    });
 
   return { data: out, error: null };
 }

@@ -10,40 +10,43 @@ const PBI_IDX_ID  = '4.2_OGP_2004_T_17';
 
 // IDs EMAE (índice mensual, para variación interanual por sector)
 const SECTOR_IDS = {
-  'Agro, ganadería y silvicultura': '11.3_ISOM_2004_M_39',
-  'Pesca':                          '11.3_VIPAA_2004_M_5',
-  'Explotación minera':             '11.3_ISD_2004_M_26',
-  'Industria manufacturera':        '11.3_VMASD_2004_M_23',
-  'Electricidad, gas y agua':       '11.3_ITC_2004_M_21',
-  'Construcción':                   '11.3_VMATC_2004_M_12',
-  'Comercio may. y minorista':      '11.3_AGCS_2004_M_41',
-  'Hoteles y restaurantes':         '11.3_P_2004_M_20',
-  'Transporte y comunicaciones':    '11.3_EMC_2004_M_25',
-  'Intermediación financiera':      '11.3_IM_2004_M_25',
-  'Servicios inmobiliarios':        '11.3_SEGA_2004_M_48',
-  'Administración pública':         '11.3_C_2004_M_60',
-  'Enseñanza':                      '11.3_CMMR_2004_M_10',
-  'Salud':                          '11.3_HR_2004_M_24',
+  'Agric., ganadería, caza y silvicultura': '11.3_ISOM_2004_M_39',
+  'Pesca':                                  '11.3_VIPAA_2004_M_5',
+  'Explotación de minas y canteras':        '11.3_ISD_2004_M_26',
+  'Industria manufacturera':                '11.3_VMASD_2004_M_23',
+  'Electricidad, gas y agua':               '11.3_ITC_2004_M_21',
+  'Construcción':                           '11.3_VMATC_2004_M_12',
+  'Comercio may., minorista y reparac.':    '11.3_AGCS_2004_M_41',
+  'Hoteles y restaurantes':                 '11.3_P_2004_M_20',
+  'Transporte y comunicaciones':            '11.3_EMC_2004_M_25',
+  'Intermediación financiera':              '11.3_IM_2004_M_25',
+  'Act. inmobiliarias, empres. y alquiler': '11.3_SEGA_2004_M_48',
+  'Adm. pública, defensa y seg. social':   '11.3_C_2004_M_60',
+  'Enseñanza':                              '11.3_CMMR_2004_M_10',
+  'Servicios sociales y de salud':          '11.3_HR_2004_M_24',
 };
 
-// IDs VAB por sector a precios corrientes trimestrales (307.2_*)
-// Fuente: datos.gob.ar dataset sspm_305, recurso 305.2
-const VAB_TOTAL_ID = '307.2_VALOR_AGRECOS_0_T_36';
+const VAB_TOTAL_ID = '305.2_VALOR_AGRECOS_0_36'; // VAB total a precios corrientes trimestrales · sspm_305.2
+// IDs VAB por sector a precios corrientes trimestrales
+// Fuente: datos.gob.ar · dataset sspm_305 · recurso 305.2
+// 17 sectores completos (A–P) según clasificación INDEC Cuentas Nacionales
 const VAB_SECTOR_IDS = {
-  'Agro, ganadería y silvicultura': '307.2_AGRICULTURTAL_0_T_45',
-  'Pesca':                          '307.2_PESCASCA_0_T_5',
-  'Explotación minera':             '307.2_EXPLOTACIOTAL_0_T_32',
-  'Industria manufacturera':        '307.2_INDUSTRIA_TAL_0_T_29',
-  'Electricidad, gas y agua':       '307.2_ELECTRICIDTAL_0_T_27',
-  'Construcción':                   '307.2_CONSTRUCCIION_0_T_12',
-  'Comercio may. y minorista':      '307.2_COMERCIO_MNES_0_T_41',
-  'Hoteles y restaurantes':         '307.2_HOTELES_RETAL_0_T_26',
-  'Transporte y comunicaciones':    '307.2_TRANSPORTETAL_0_T_46',
-  'Intermediación financiera':      '307.2_INTERMEDIATAL_0_T_31',
-  'Servicios inmobiliarios':        '307.2_ACTIVIDADETAL_0_T_54',
-  'Administración pública':         '307.2_ADMINISTRANSA_0_T_30',
-  'Enseñanza':                      '307.2_ENSENIANZATAL_0_T_16',
-  'Salud':                          '307.2_SERVICIOS_TAL_0_T_30',
+  'Agric., ganadería, caza y silvicultura': '305.2_AGRI_GANADTAL_0_27',
+  'Pesca':                                  '305.2_PESCASCA_0_5',
+  'Explotación de minas y canteras':        '305.2_EXPLO_MINATAL_0_22',
+  'Industria manufacturera':                '305.2_IND_MANUFATAL_0_17',
+  'Electricidad, gas y agua':               '305.2_ELEC_GAS_ATAL_0_19',
+  'Construcción':                           '305.2_CONSTRUCCIION_0_12',
+  'Comercio may., minorista y reparac.':    '305.2_COMERCIO_MNES_0_41',
+  'Hoteles y restaurantes':                 '305.2_HOTELES_RETAL_0_20',
+  'Transporte y comunicaciones':            '305.2_TRANSP_COMTAL_0_17',
+  'Intermediación financiera':              '305.2_INTERMEDIATAL_0_26',
+  'Act. inmobiliarias, empres. y alquiler': '305.2_ACT_INMOBITAL_0_36',
+  'Adm. pública, defensa y seg. social':   '305.2_ADM_PUB_DERIA_0_59',
+  'Enseñanza':                              '305.2_ENSENIANZATAL_0_16',
+  'Servicios sociales y de salud':          '305.2_SERV_SOC_STAL_0_20',
+  'Otras act. serv. comunit. y personales': '305.2_OTRAS_ACT_TAL_0_42',
+  'Hogares privados con serv. doméstico':   '305.2_HOGARES_PRICO_0_39',
 };
 
 async function fetchSeries(ids, limit = 5) {
@@ -202,14 +205,21 @@ export default async function handler(req, res) {
     }
 
     const vabTotal = vabValueMap[VAB_TOTAL_ID] ?? null;
-    const pbiSectors = vabSectorNames
-      .map(nombre => {
-        const id    = VAB_SECTOR_IDS[nombre];
-        const valor = vabValueMap[id] ?? null;
-        const share = (vabTotal && valor != null)
-          ? Math.round((valor / vabTotal) * 1000) / 10  // % con 1 decimal
+
+    // Calcular share sobre la suma de sectores (no sobre vabTotal que incluye impuestos netos)
+    // para que los porcentajes sumen 100%
+    const vabSectorValues = vabSectorNames.map(nombre => ({
+      nombre,
+      vab: vabValueMap[VAB_SECTOR_IDS[nombre]] ?? null,
+    }));
+    const vabSectoresSum = vabSectorValues.reduce((s, x) => s + (x.vab ?? 0), 0) || null;
+
+    const pbiSectors = vabSectorValues
+      .map(({ nombre, vab }) => {
+        const share = (vabSectoresSum && vab != null)
+          ? Math.round((vab / vabSectoresSum) * 1000) / 10
           : null;
-        return { nombre, share, vab: valor };
+        return { nombre, share, vab };
       })
       .filter(s => s.share != null)
       .sort((a, b) => b.share - a.share);

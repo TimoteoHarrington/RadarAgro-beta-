@@ -737,7 +737,11 @@ function TabPbi({ pbi, sectors }) {
         <div style={{padding:'14px 20px',borderBottom:'1px solid var(--line)',display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
           <div>
             <div style={{fontSize:'14px',fontWeight:600,color:'var(--white)'}}>Composición del PBI por sector</div>
-            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginTop:'3px',letterSpacing:'.04em'}}>PARTICIPACIÓN ESTIMADA · BASE 2004 · INDEC CUENTAS NACIONALES · hover sobre el donut</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginTop:'3px',letterSpacing:'.04em'}}>
+              {apiSectors.length
+                ? 'VAB A PRECIOS CORRIENTES · INDEC · TRIMESTRAL · hover sobre el donut'
+                : 'ESTIMADO · BASE 2004 · INDEC CUENTAS NACIONALES · hover sobre el donut'}
+            </div>
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'240px 1fr'}}>
@@ -745,19 +749,24 @@ function TabPbi({ pbi, sectors }) {
             <div style={{width:'100%',height:'236px'}}><PbiDonutChart items={donutItems}/></div>
           </div>
           <div style={{overflowY:'auto',maxHeight:'268px'}}>
-            <div style={{display:'grid',gridTemplateColumns:'10px 1fr 54px 66px',gap:'8px',padding:'8px 14px 6px',borderBottom:'1px solid rgba(255,255,255,.05)',position:'sticky',top:0,background:'var(--bg1)',zIndex:1}}>
+            <div style={{display:'grid',gridTemplateColumns:'10px 1fr 52px 90px',gap:'8px',padding:'8px 14px 6px',borderBottom:'1px solid rgba(255,255,255,.05)',position:'sticky',top:0,background:'var(--bg1)',zIndex:1}}>
               <div/>
               <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em'}}>Sector</span>
               <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>% PBI</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Var. EMAE</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>VAB (MM$)</span>
             </div>
             {donutItems.map((item,i) => {
-              const neg = item.valor!=null&&item.valor<0;
-              const pos = item.valor!=null&&item.valor>=0;
               const col = CHART_PALETTE[i % CHART_PALETTE.length];
+              // Formatear VAB: si viene de API está en MM$ corrientes
+              const fmtVab = v => {
+                if (v == null) return '—';
+                if (v >= 1_000_000) return '$ ' + (v / 1_000_000).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' B';
+                if (v >= 1_000)    return '$ ' + (v / 1_000).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' M';
+                return '$ ' + v.toLocaleString('es-AR', {maximumFractionDigits:0});
+              };
               return (
                 <div key={item.nombre}
-                  style={{display:'grid',gridTemplateColumns:'10px 1fr 54px 66px',gap:'8px',alignItems:'center',padding:'6px 14px',borderBottom:'1px solid rgba(255,255,255,.02)',cursor:'default'}}
+                  style={{display:'grid',gridTemplateColumns:'10px 1fr 52px 90px',gap:'8px',alignItems:'center',padding:'6px 14px',borderBottom:'1px solid rgba(255,255,255,.02)',cursor:'default'}}
                   onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.02)'}
                   onMouseLeave={e=>e.currentTarget.style.background='transparent'}
                 >
@@ -769,13 +778,7 @@ function TabPbi({ pbi, sectors }) {
                     </div>
                   </div>
                   <div style={{fontFamily:'var(--mono)',fontSize:'12px',fontWeight:700,color:'var(--white)',textAlign:'right'}}>{item.share.toFixed(1)}%</div>
-                  <div style={{textAlign:'right'}}>
-                    {item.valor!=null
-                      ? <span style={{fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,color:pos?'var(--green)':'var(--red)',background:pos?'var(--green-bg)':'var(--red-bg)',borderRadius:'3px',padding:'1px 5px'}}>
-                          {pos?'+':'−'}{Math.abs(item.valor).toFixed(1).replace('.',',')}%
-                        </span>
-                      : <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>—</span>}
-                  </div>
+                  <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text2)',textAlign:'right',whiteSpace:'nowrap'}}>{fmtVab(item.vab)}</div>
                 </div>
               );
             })}
@@ -788,10 +791,10 @@ function TabPbi({ pbi, sectors }) {
         <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'space-between'}}>
           <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
             {apiSectors.length
-              ? 'Participación: VAB a precios corrientes · INDEC · datos.gob.ar'
+              ? 'VAB a precios corrientes · INDEC · datos.gob.ar · trimestral'
               : 'Participación: INDEC Cuentas Nacionales · base 2004 (estático)'}
           </span>
-          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Var. EMAE: datos.gob.ar · mensual</span>
+          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>MM$ = millones de pesos corrientes</span>
         </div>
       </div>
 

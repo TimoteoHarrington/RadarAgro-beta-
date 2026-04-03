@@ -753,16 +753,16 @@ function TabPbi({ pbi, sectors }) {
               <div/>
               <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em'}}>Sector</span>
               <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>% PBI</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>VAB (MM$)</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>VAB trim.</span>
             </div>
             {donutItems.map((item,i) => {
               const col = CHART_PALETTE[i % CHART_PALETTE.length];
-              // Formatear VAB: si viene de API está en MM$ corrientes
+              // VAB viene en MM$ corrientes del trimestre (ej: 112761 = $112.761 MM)
+              // Mostramos en miles de MM$ (billones) cuando supera 1000, sino en MM$
               const fmtVab = v => {
                 if (v == null) return '—';
-                if (v >= 1_000_000) return '$ ' + (v / 1_000_000).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' B';
-                if (v >= 1_000)    return '$ ' + (v / 1_000).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' M';
-                return '$ ' + v.toLocaleString('es-AR', {maximumFractionDigits:0});
+                if (v >= 1000) return '$ ' + (v / 1000).toLocaleString('es-AR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' B';
+                return '$ ' + Math.round(v).toLocaleString('es-AR') + ' MM';
               };
               return (
                 <div key={item.nombre}
@@ -794,7 +794,9 @@ function TabPbi({ pbi, sectors }) {
               ? 'VAB a precios corrientes · INDEC · datos.gob.ar · trimestral'
               : 'Participación: INDEC Cuentas Nacionales · base 2004 (estático)'}
           </span>
-          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>MM$ = millones de pesos corrientes</span>
+          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
+            B = miles de MM$ corrientes del trimestre
+          </span>
         </div>
       </div>
 

@@ -236,18 +236,6 @@ export default async function handler(req, res) {
         history:       pbiIaHistory.map(d => ({ ...d, valor: Math.round(d.valor * 10) / 10 })),
         sectors:       pbiSectors,
         vabTotal,
-        // Debug: cuántos valores se resolvieron del VAB y estado de cada batch
-        _vabDebug: {
-          vabTotalFound: vabTotal != null,
-          sectorsResolved: pbiSectors.length,
-          batchStatuses: vabBatchResults.map((r, i) => ({
-            batch: i,
-            status: r.status,
-            rows: r.status === 'fulfilled' ? (r.value?.data?.length ?? 0) : 0,
-            error: r.status === 'rejected' ? String(r.reason) : null,
-          })),
-          keysFound: Object.keys(vabValueMap).length,
-        },
       },
       timestamp: new Date().toISOString(),
     };

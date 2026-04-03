@@ -1,129 +1,9 @@
 // FinancieroPage.jsx
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { ApiErrorBanner } from '../ui/StatCard';
+import { CanvasChart } from '../ui/CanvasChart';
 
 
-// ── UVA Mini Line Chart ──────────────────────────────────────
-function UvaLineChart({ history }) {
-  const canvasRef = useRef(null);
-  const [tooltip, setTooltip] = useState('');
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !history || history.length < 2) return;
-
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-      const W = rect.width, H = rect.height;
-      const pad = { t: 20, r: 16, b: 28, l: 72 };
-
-      const vals = history.map(d => parseFloat(d.valor ?? 0));
-      const vmin = Math.min(...vals) * 0.9995;
-      const vmax = Math.max(...vals) * 1.0005;
-      const n = history.length;
-      const xS = (W - pad.l - pad.r) / (n - 1 || 1);
-      const yS = (H - pad.t - pad.b) / (vmax - vmin || 1);
-      const px = i => pad.l + i * xS;
-      const py = v => H - pad.b - (v - vmin) * yS;
-
-      // Grid lines
-      for (let i = 0; i <= 3; i++) {
-        const v = vmin + (vmax - vmin) * i / 3;
-        const y = py(v);
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 5]);
-        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(154,176,196,0.7)';
-        ctx.font = '9px JetBrains Mono,monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText('$' + v.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }), pad.l - 6, y + 3);
-      }
-
-      // X labels
-      ctx.fillStyle = 'rgba(154,176,196,0.65)';
-      ctx.font = '8px JetBrains Mono,monospace';
-      ctx.textAlign = 'center';
-      history.forEach((d, i) => {
-        if (i === 0 || i === n - 1 || i % 7 === 0) {
-          const fp = (d.fecha || '').split('-');
-          const lbl = fp[2] + '/' + fp[1];
-          ctx.fillText(lbl, px(i), H - pad.b + 12);
-        }
-      });
-
-      // Fill gradient
-      const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      grad.addColorStop(0, 'rgba(77,158,240,0.30)');
-      grad.addColorStop(0.7, 'rgba(77,158,240,0.08)');
-      grad.addColorStop(1, 'rgba(77,158,240,0.01)');
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(vals[0]));
-      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
-      ctx.lineTo(px(n - 1), H - pad.b);
-      ctx.lineTo(px(0), H - pad.b);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Line
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(vals[0]));
-      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
-      ctx.strokeStyle = '#4d9ef0';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.stroke();
-
-      // Last dot
-      const lv = vals[n - 1];
-      ctx.shadowColor = '#4d9ef0';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(px(n - 1), py(lv), 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#4d9ef0';
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    };
-
-    draw();
-    const ro = new ResizeObserver(draw);
-    ro.observe(canvas);
-    return () => ro.disconnect();
-  }, [history]);
-
-  const handleMouseMove = (e) => {
-    if (!history || history.length < 2) return;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const pad = { l: 72, r: 16 };
-    const xS = (rect.width - pad.l - pad.r) / (history.length - 1);
-    const idx = Math.max(0, Math.min(history.length - 1, Math.round((mx - pad.l) / xS)));
-    const d = history[idx];
-    if (d) {
-      const v = parseFloat(d.valor ?? 0);
-      setTooltip(`${d.fecha}  ·  $${v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-  };
-
-  return (
-    <div>
-      <canvas ref={canvasRef}
-        style={{ width: '100%', height: '160px', display: 'block', cursor: 'crosshair' }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setTooltip('')} />
-      <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text2)', minHeight: '14px', marginTop: '6px', textAlign: 'center' }}>{tooltip}</div>
-    </div>
-  );
-}
 
 export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, apiStatus, reloadAll }) {
   const f$ = v => v ? '$' + Math.round(v).toLocaleString('es-AR') : '…';
@@ -163,6 +43,17 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
   const uvaHistory = uva?.history ?? [];
 
   // Variación 30 días UVA
+  // Datos para CanvasChart
+  const uvaChartSeries = uvaHistory.length >= 2 ? [{
+    label: 'UVA',
+    color: '#4d9ef0',
+    data:  uvaHistory.map(d => parseFloat(d.valor ?? 0)),
+  }] : null;
+  const uvaChartLabels = uvaHistory.map(d => {
+    const [, , dd, mm] = (d.fecha || '').match(/(\d{4})-(\d{2})-(\d{2})/) || [];
+    return dd && mm ? dd + '/' + mm : '';
+  });
+
   const uvaVar30 = uvaHistory.length >= 2 ? (() => {
     const oldest = parseFloat(uvaHistory[0]?.valor ?? 0);
     const newest = parseFloat(uvaHistory[uvaHistory.length - 1]?.valor ?? 0);
@@ -426,8 +317,13 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
             <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '14px' }}>
               Evolución UVA — últimos 30 días
             </div>
-            {uvaHistory.length >= 2
-              ? <UvaLineChart history={uvaHistory} />
+            {uvaChartSeries
+              ? <CanvasChart
+                  series={uvaChartSeries}
+                  labels={uvaChartLabels}
+                  height="160px"
+                  decimalPlaces={2}
+                />
               : <div style={{ height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: '11px' }}>Cargando…</div>
             }
             <div style={{ fontFamily: 'var(--mono)', fontSize: '8px', color: 'var(--text3)', marginTop: '4px', textAlign: 'right' }}>

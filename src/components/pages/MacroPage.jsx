@@ -1,6 +1,7 @@
 // MacroPage.jsx — matches reference HTML exactly
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { ApiErrorBanner } from '../ui/StatCard';
+import { CanvasChart } from '../ui/CanvasChart';
 
 
 const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -111,106 +112,6 @@ function IpcBarChart({ data }) {
 }
 
 // ── IPC Line Chart (interanual) ───────────────────────────────
-function IpcLineChart({ iaData, mensData }) {
-  const canvasRef = useRef(null);
-  const [tooltip, setTooltip] = useState('');
-
-  const getSeries = () => {
-    if (iaData && iaData.length) return iaData.slice(-24).map(d => ({ f: d.fecha, v: parseFloat(d.valor || 0) }));
-    if (mensData && mensData.length >= 12) {
-      const s = [];
-      for (let i = 11; i < mensData.length; i++) {
-        const chunk = mensData.slice(i - 11, i + 1);
-        const v = (chunk.reduce((acc, x) => acc * (1 + parseFloat(x.valor || 0) / 100), 1) - 1) * 100;
-        s.push({ f: mensData[i].fecha, v });
-      }
-      return s.slice(-24);
-    }
-    return [];
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const series = getSeries();
-    if (!series.length) return;
-
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
-      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
-      const W = rect.width, H = rect.height;
-      const pad = { t: 12, r: 16, b: 28, l: 42 };
-      const vals = series.map(p => p.v);
-      const vmin = Math.min(...vals) * 0.95, vmax = Math.max(...vals) * 1.05;
-      const xS = (W - pad.l - pad.r) / (series.length - 1 || 1);
-      const yS = (H - pad.t - pad.b) / (vmax - vmin || 1);
-      const px = i => pad.l + i * xS;
-      const py = v => H - pad.b - (v - vmin) * yS;
-
-      // Grid
-      for (let i = 0; i <= 4; i++) {
-        const v = vmin + (vmax - vmin) * i / 4;
-        const y = py(v);
-        ctx.strokeStyle = i === 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)';
-        ctx.lineWidth = 1; ctx.setLineDash(i === 0 ? [] : [3, 4]);
-        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(154,176,196,0.75)'; ctx.font = '8px JetBrains Mono,monospace';
-        ctx.textAlign = 'right'; ctx.fillText(v.toFixed(0) + '%', pad.l - 4, y + 3);
-      }
-      // X labels
-      ctx.fillStyle = 'rgba(154,176,196,0.8)'; ctx.font = '8px JetBrains Mono,monospace'; ctx.textAlign = 'center';
-      series.forEach((p, i) => { if (i % 4 === 0 || i === series.length - 1) { const fp = p.f.split('-'); ctx.fillText(MESES_C[+fp[1]] + (fp[1] === '01' ? ' \'' + fp[0].slice(-2) : ''), px(i), H - pad.b + 12); } });
-      // Fill
-      const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      grad.addColorStop(0, 'rgba(77,158,240,0.35)'); grad.addColorStop(0.6, 'rgba(77,158,240,0.12)'); grad.addColorStop(1, 'rgba(77,158,240,0.02)');
-      ctx.beginPath(); ctx.moveTo(px(0), py(series[0].v));
-      series.forEach((p, i) => ctx.lineTo(px(i), py(p.v)));
-      ctx.lineTo(px(series.length - 1), H - pad.b); ctx.lineTo(px(0), H - pad.b); ctx.closePath();
-      ctx.fillStyle = grad; ctx.fill();
-      // Line
-      ctx.beginPath(); ctx.moveTo(px(0), py(series[0].v));
-      series.forEach((p, i) => { if (i > 0) ctx.lineTo(px(i), py(p.v)); });
-      ctx.strokeStyle = '#4d9ef0'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
-      // Last dot
-      const lv = series[series.length - 1].v;
-      ctx.beginPath(); ctx.arc(px(series.length - 1), py(lv), 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#4d9ef0'; ctx.fill();
-      ctx.beginPath(); ctx.arc(px(series.length - 1), py(lv), 7, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(77,158,240,0.3)'; ctx.lineWidth = 2; ctx.stroke();
-    };
-
-    draw();
-    const ro = new ResizeObserver(draw);
-    ro.observe(canvas);
-    return () => ro.disconnect();
-  }, [iaData, mensData]);
-
-  const handleMouseMove = (e) => {
-    const series = getSeries();
-    if (!series.length) return;
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const pad = { l: 42, r: 16 };
-    const xS = (rect.width - pad.l - pad.r) / (series.length - 1 || 1);
-    const idx = Math.round((mx - pad.l) / xS);
-    const p = series[Math.max(0, Math.min(series.length - 1, idx))];
-    if (p) { const fp = p.f.split('-'); setTooltip(MESES_F[+fp[1]] + ' ' + fp[0] + ': ' + p.v.toFixed(1).replace('.', ',') + '%'); }
-  };
-
-  return (
-    <div>
-      <canvas ref={canvasRef} style={{width:'100%',height:'160px',display:'block',cursor:'crosshair'}}
-        onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip('')} />
-      <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text2)',minHeight:'14px',marginTop:'8px',textAlign:'center'}}>{tooltip}</div>
-    </div>
-  );
-}
-
-// ── IPC Heatmap ───────────────────────────────────────────────
 function IpcHeatmap({ data }) {
   const [tip, setTip] = useState('');
   if (!data || !data.length) return <div style={{color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'10px',textAlign:'center',padding:'20px'}}>Cargando…</div>;
@@ -443,6 +344,30 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
   const ipcVal = inflacion?.ipcMensual    ?? (lastIPC ? parseFloat(lastIPC.valor || 0) : null);
   const ipcIA  = inflacion?.ipcInteranual ?? inflacion?.valor ?? null;
   const ipcExp = inflacion?.ipcEsperado   ?? null;
+
+  // Datos para CanvasChart — inflacion interanual (24 meses)
+  const ipcLineData = (() => {
+    if (iaData.length) return iaData.slice(-24);
+    if (mensData.length >= 12) {
+      const s = [];
+      for (let i = 11; i < mensData.length; i++) {
+        const chunk = mensData.slice(i - 11, i + 1);
+        const v = (chunk.reduce((acc, x) => acc * (1 + parseFloat(x.valor || 0) / 100), 1) - 1) * 100;
+        s.push({ fecha: mensData[i].fecha, valor: v });
+      }
+      return s.slice(-24);
+    }
+    return [];
+  })();
+  const ipcLineSeries = ipcLineData.length ? [{
+    label: 'Interanual',
+    color: '#4d9ef0',
+    data:  ipcLineData.map(d => parseFloat(d.valor || 0)),
+  }] : null;
+  const ipcLineLabels = ipcLineData.map(d => {
+    const parts = (d.fecha || '').split('-');
+    return parts[1] ? MESES_C[+parts[1]] + (parts[1] === '01' ? " '" + (parts[0] || '').slice(-2) : '') : '';
+  });
   const prom3    = mensData.length >= 3 ? (mensData.slice(-3).reduce((a,d)=>a+parseFloat(d.valor||0),0)/3) : null;
   const acumAnio = (() => {
     const yr = new Date().getFullYear().toString();
@@ -566,8 +491,13 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
                 <div style={{fontSize:'10px',color:'var(--text2)',marginTop:'2px'}}>Variación % acumulada 12 meses</div>
               </div>
             </div>
-            {(mensData.length > 0 || iaData.length > 0)
-              ? <IpcLineChart iaData={iaData} mensData={mensData} />
+            {ipcLineSeries
+              ? <CanvasChart
+                  series={ipcLineSeries}
+                  labels={ipcLineLabels}
+                  height="160px"
+                  decimalPlaces={1}
+                />
               : <div style={{height:'160px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando…</div>}
             <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'6px',textAlign:'right'}}>Fuente: INDEC · ArgentinaDatos.com</div>
           </div>

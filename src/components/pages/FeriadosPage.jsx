@@ -60,7 +60,7 @@ export function FeriadosPage({ goPage, feriados }) {
         <div>
           <div className="ph-title">
             Feriados &amp; Calendario Agro{' '}
-            <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span>
+            <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-feriados')} title="Ayuda">?</span>
           </div>
           <div className="ph-sub">
             Feriados nacionales {yr} · Días hábiles · Calendario agrícola · ArgentinaDatos

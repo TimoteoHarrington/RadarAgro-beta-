@@ -96,7 +96,7 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
       />
       <div className="ph">
         <div>
-          <div className="ph-title">Financiero <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span></div>
+          <div className="ph-title">Financiero <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-financiero')} title="Ayuda">?</span></div>
           <div className="ph-sub">Dólares · UVA · Tasas · DolarApi · BCRA · ArgentinaDatos</div>
         </div>
         <div className="ph-right" style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--text3)' }}>

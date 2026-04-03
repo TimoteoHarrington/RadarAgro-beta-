@@ -92,7 +92,7 @@ export function ImpuestosPage({ goPage }) {
         <div className="ph">
           <div>
             <div className="ph-title">
-              Impositivo <span className="help-pip" onClick={() => goPage('ayuda')}>?</span>
+              Impositivo <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-impuestos')}>?</span>
             </div>
             <div className="ph-sub">
               Presión fiscal agropecuaria · Impuesto a impuesto · Vigente abril 2026 · Decreto 877/2025

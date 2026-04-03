@@ -51,11 +51,22 @@ export function useNavigation() {
   }, [activePage]);
 
   // goPage mantiene la misma firma que antes: goPage('granos')
-  const goPage = useCallback((pageId) => {
+  // Acepta opcionalmente un hash: goPage('ayuda', 'glosario-granos')
+  const goPage = useCallback((pageId, hash) => {
     if (!PAGE_IDS.includes(pageId)) return;
     const path = pageId === 'home' ? '/' : `/${pageId}`;
-    navigate(path);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (hash) {
+      navigate(path);
+      // Scroll al hash después de que React renderice la página destino
+      setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 150);
+    } else {
+      navigate(path);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, [navigate]);
 
   return { activePage, goPage };

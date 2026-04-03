@@ -432,7 +432,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
       />
       <div className="ph">
         <div>
-          <div className="ph-title">Macroeconomía Argentina <span className="help-pip" onClick={()=>goPage('ayuda')} title="Ayuda">?</span></div>
+          <div className="ph-title">Macroeconomía Argentina <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-macro')} title="Ayuda">?</span></div>
           <div className="ph-sub">IPC · EMAE · Riesgo País · PBI</div>
         </div>
         <div className="ph-right" style={{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--text3)'}}>

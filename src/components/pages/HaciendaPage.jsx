@@ -399,7 +399,7 @@ export function HaciendaPage({ goPage }) {
     <div className="page-enter">
       <div className="ph">
         <div>
-          <div className="ph-title">Hacienda <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span></div>
+          <div className="ph-title">Hacienda <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-hacienda')} title="Ayuda">?</span></div>
           <div className="ph-sub">Novillos · Novillitos · Vacas · Vaquillonas · Toros · Cañuelas INMAG/IGMAG · ROSGAN · 30/03/2026</div>
         </div>
       </div>

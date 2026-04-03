@@ -367,7 +367,7 @@ export function MundoPage({ goPage, mundo, loadMundo }) {
         <div>
           <div className="ph-title">
             Monitor Global
-            <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span>
+            <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-mundo')} title="Ayuda">?</span>
           </div>
           <div className="ph-sub">Índices · Energía · Metales · Agro · Crypto · Monedas · Yahoo Finance</div>
         </div>

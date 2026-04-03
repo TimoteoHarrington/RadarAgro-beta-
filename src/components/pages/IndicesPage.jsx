@@ -184,7 +184,7 @@ export function IndicesPage({ goPage }) {
         <div>
           <div className="ph-title">
             Indices &amp; Precios Relativos{' '}
-            <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span>
+            <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-indices')} title="Ayuda">?</span>
           </div>
           <div className="ph-sub">Relaciones de precios clave del sector · Rosario spot · Feb 2026</div>
         </div>

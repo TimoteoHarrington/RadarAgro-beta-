@@ -613,7 +613,7 @@ export function InsumosPage({ goPage }) {
         <div>
           <div className="ph-title">
             Insumos
-            <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span>
+            <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-insumos')} title="Ayuda">?</span>
           </div>
           <div className="ph-sub">Fertilizantes · Combustibles · Relaciones insumo/producto · Feb 2026</div>
         </div>

@@ -517,7 +517,7 @@ export function GranosPage({ goPage, apiStatus, reloadAll }) {
       {/* Page Header */}
       <div className="ph">
         <div>
-          <div className="ph-title">Granos <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span></div>
+          <div className="ph-title">Granos <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-granos')} title="Ayuda">?</span></div>
           <div className="ph-sub">BCR · Pizarras · FOB/FAS · Futuros Matba/CBOT · SIO · Subproductos · 30/03/2026</div>
         </div>
         <div className="ph-right">

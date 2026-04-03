@@ -1,245 +1,126 @@
-// ImpuestosPage.jsx — Presión fiscal agropecuaria argentina — Abril 2026
+// ImpuestosPage.jsx — Presión fiscal agropecuaria — Abril 2026
 import React, { useState } from 'react';
 
-/* ── Datos actualizados al Decreto 877/2025 (dic-2025) vigente abril 2026 ── */
+const TABS = [
+  { id: 'retenciones', label: 'Retenciones' },
+  { id: 'iva',         label: 'IVA' },
+  { id: 'ganancias',   label: 'Ganancias' },
+  { id: 'otros',       label: 'Otros tributos' },
+  { id: 'carga',       label: 'Carga total' },
+  { id: 'historia',    label: 'Histórico' },
+];
+
+// Datos al Decreto 877/2025 — vigente abril 2026
 const RETENCIONES = [
-  { producto: 'Soja (poroto)',       ali: 24,   decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja permanente desde 33% → 26% → 24%' },
-  { producto: 'Aceite de soja',      ali: 22.5, decreto: '877/2025', desde: 'Dic-2025', nota: 'Subproducto — baja de 24,5% a 22,5%' },
-  { producto: 'Harina de soja',      ali: 22.5, decreto: '877/2025', desde: 'Dic-2025', nota: 'Subproducto — baja de 24,5% a 22,5%' },
-  { producto: 'Maíz',               ali: 8.5,  decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja permanente de 12% → 9,5% → 8,5%' },
-  { producto: 'Sorgo',              ali: 8.5,  decreto: '877/2025', desde: 'Dic-2025', nota: 'Igual tratamiento que maíz' },
-  { producto: 'Trigo',              ali: 7.5,  decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja permanente de 12% → 9,5% → 7,5%' },
-  { producto: 'Cebada',             ali: 7.5,  decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja permanente de 12% → 9,5% → 7,5%' },
-  { producto: 'Girasol',            ali: 4.5,  decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja permanente de 7% → 5,5% → 4,5%' },
-  { producto: 'Colza / Canola',     ali: 4.5,  decreto: '877/2025', desde: 'Dic-2025', nota: 'Tratamiento similar al girasol' },
-  { producto: 'Carne vacuna',       ali: 5,    decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja del 6,75% al 5% — permanente' },
-  { producto: 'Carne aviar',        ali: 5,    decreto: '877/2025', desde: 'Dic-2025', nota: 'Baja del 6,75% al 5% — permanente' },
-  { producto: 'Economías regionales', ali: 0,  decreto: '38/2025',  desde: 'Ene-2025', nota: 'Eliminadas de forma permanente' },
+  { producto: 'Soja (poroto)',        ali: 24.0,  ant: 33.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Aceite de soja',       ali: 22.5,  ant: 31.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Harina de soja',       ali: 22.5,  ant: 31.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Maíz',                 ali: 8.5,   ant: 12.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Sorgo',                ali: 8.5,   ant: 12.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Trigo',                ali: 7.5,   ant: 12.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Cebada',               ali: 7.5,   ant: 12.0, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Girasol',              ali: 4.5,   ant: 7.0,  decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Colza / Canola',       ali: 4.5,   ant: 7.0,  decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Carne vacuna',         ali: 5.0,   ant: 6.75, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Carne aviar',          ali: 5.0,   ant: 6.75, decreto: '877/2025', tipo: 'permanente' },
+  { producto: 'Economías regionales', ali: 0.0,   ant: 2.5,  decreto: '38/2025',  tipo: 'eliminada' },
 ];
 
 const IVA_ITEMS = [
-  { concepto: 'Venta de cereales y oleaginosas', ali: '10,5%', tipo: 'reducida', obs: 'Entre responsables inscriptos. El productor genera saldo a favor técnico.' },
-  { concepto: 'Venta de hacienda vacuna y porcina', ali: '10,5%', tipo: 'reducida', obs: 'Op. entre inscriptos. Diferencia con tasa del 21% genera crédito fiscal.' },
-  { concepto: 'Arrendamientos rurales', ali: 'EXENTO', tipo: 'exento', obs: 'No están gravados según Ley 23.349. No genera IVA débito ni crédito.' },
-  { concepto: 'Servicios agrícolas (laboreos)', ali: '21%', tipo: 'general', obs: 'Siembra, cosecha, aplicaciones. Genera crédito fiscal para el productor.' },
-  { concepto: 'Agroquímicos y fertilizantes', ali: '21%', tipo: 'general', obs: 'Insumos críticos. El 21% pagado se computa como crédito fiscal.' },
-  { concepto: 'Maquinaria agrícola', ali: '21%', tipo: 'general', obs: 'Importante crédito fiscal. Admite recupero diferido contra saldo técnico.' },
-  { concepto: 'Semillas certificadas', ali: '10,5%', tipo: 'reducida', obs: 'Alícuota reducida. Genera crédito fiscal parcial para el productor.' },
-  { concepto: 'Combustibles (gasoil)', ali: '21%', tipo: 'general', obs: 'IVA no recuperable en gasoil campo. Impacto real en costos.' },
+  { concepto: 'Venta de cereales y oleaginosas',  ali: '10,5%', tipo: 'reducida', obs: 'Entre responsables inscriptos. Genera saldo técnico a favor.' },
+  { concepto: 'Venta de hacienda vacuna/porcina', ali: '10,5%', tipo: 'reducida', obs: 'Entre inscriptos. Diferencia con el 21% produce crédito fiscal.' },
+  { concepto: 'Semillas certificadas',            ali: '10,5%', tipo: 'reducida', obs: 'Alícuota reducida. Crédito fiscal parcial para el productor.' },
+  { concepto: 'Arrendamientos rurales',           ali: 'EXENTO', tipo: 'exento',  obs: 'No gravados según Ley 23.349. Sin débito ni crédito.' },
+  { concepto: 'Servicios agrícolas (laboreos)',   ali: '21%',   tipo: 'general',  obs: 'Siembra, cosecha, fumigación. Genera crédito fiscal importante.' },
+  { concepto: 'Agroquímicos y fertilizantes',     ali: '21%',   tipo: 'general',  obs: 'Insumos críticos. El 21% pagado computa como crédito fiscal.' },
+  { concepto: 'Maquinaria agrícola',              ali: '21%',   tipo: 'general',  obs: 'Admite crédito fiscal diferido contra saldo técnico acumulado.' },
+  { concepto: 'Combustibles (gasoil campo)',      ali: '21%',   tipo: 'general',  obs: 'IVA no recuperable en uso agropecuario. Costo real directo.' },
 ];
 
-const OTROS_IMPUESTOS = [
-  {
-    nombre: 'Derechos de Exportación (Retenciones)',
-    nivel: 'Nacional',
-    base: 'Precio FOB exportación',
-    alicuota: 'Soja 24% / Maíz 8,5% / Trigo 7,5%',
-    impacto: 'MUY ALTO',
-    obs: 'Se aplica sobre precio FAS, no sobre ganancia. El productor las absorbe vía precio pizarra. Históricamente el impuesto de mayor peso fiscal para el agro.',
-    normativa: 'Decreto 877/2025'
-  },
-  {
-    nombre: 'Impuesto a las Ganancias — Persona Humana',
-    nivel: 'Nacional',
-    base: 'Ganancia neta gravada',
-    alicuota: '5% a 35% (escala progresiva)',
-    impacto: 'ALTO',
-    obs: 'Productores en Cat. III (renta del suelo) o Cat. I (renta inmueble rural). Deducciones agropecuarias: amortizaciones, gastos directos, intereses. Escala actualizada ene-2026 (+14,29%). Tope 35% para rentas anuales >$60,7M.',
-    normativa: 'Ley 20.628 — Actualización ene-2026'
-  },
-  {
-    nombre: 'Impuesto a las Ganancias — Sociedades',
-    nivel: 'Nacional',
-    base: 'Resultado impositivo',
-    alicuota: '35%',
-    impacto: 'ALTO',
-    obs: 'Tasa fija para S.A., S.R.L., Fideicomiso agropecuario. Dividendos distribuidos tributan 7% adicional (Ley 27.630). Importante en estructuras societarias.',
-    normativa: 'Ley 20.628 art. 73'
-  },
-  {
-    nombre: 'IVA Agropecuario',
-    nivel: 'Nacional',
-    base: 'Precio de venta',
-    alicuota: '10,5% / 21% / Exento',
-    impacto: 'MEDIO',
-    obs: 'Los productores habitualmente acumulan saldo técnico a favor (compran al 21%, venden al 10,5%). El recupero puede demorar 6-18 meses. Impacto financiero real, no costo definitivo.',
-    normativa: 'Ley 23.349 y modif.'
-  },
-  {
-    nombre: 'Bienes Personales — Inmuebles Rurales',
-    nivel: 'Nacional',
-    base: 'Valuación fiscal al 31-dic',
-    alicuota: '0,50% a 1,50%',
-    impacto: 'MEDIO',
-    obs: 'Escala reducida post-reforma 2024. MNI: $384,7M (año fiscal 2025). REIBP: quienes adhirieron al blanqueo 2024 pagaron por anticipado hasta 2027, sin oblig. de DJ. La tierra rural valúa a costo fiscal histórico, generalmente subvaluada.',
-    normativa: 'Ley 23.966 — Reforma L. 27.743 (2024)'
-  },
-  {
-    nombre: 'Ingresos Brutos (IIBB)',
-    nivel: 'Provincial',
-    base: 'Ventas brutas',
-    alicuota: '0% a 3,5%',
-    impacto: 'MEDIO',
-    obs: 'Varía por provincia y tipo de actividad. Córdoba: venta primaria de granos exenta. Bs.As.: 0,5%-1,25%. Santa Fe: actividades primarias con alícuotas mínimas. Convenio Multilateral si opera en varias provincias. Efecto cascada sobre el precio.',
-    normativa: 'Código Fiscal provincial — Ley Impositiva 2026'
-  },
-  {
-    nombre: 'Impuesto al Cheque (Créditos y Débitos)',
-    nivel: 'Nacional',
-    base: 'Movimientos en cuenta bancaria',
-    alicuota: '0,6% acred. / 1,2% débito',
-    impacto: 'BAJO-MEDIO',
-    obs: 'En la práctica, el 33% del impuesto pagado por acreditaciones es computable como pago a cuenta de Ganancias o IVA. Afecta la operatoria diaria por el volumen de transferencias del agro. Impacto neto: 0,8% aprox. del monto operado.',
-    normativa: 'Ley 25.413'
-  },
-  {
-    nombre: 'Tasa Vial Provincial',
-    nivel: 'Provincial',
-    base: 'Tonelada transportada',
-    alicuota: 'Variable por provincia',
-    impacto: 'BAJO',
-    obs: 'Córdoba, Santa Fe, Bs.As. tienen tasas por Tn. En algunos casos computable como gasto deducible de Ganancias. Impacto en fletes rurales, estimado entre $800 y $2.500/tn según distancia y provincia.',
-    normativa: 'Leyes provinciales'
-  },
-  {
-    nombre: 'Contribuciones RENATRE / RENATEA',
-    nivel: 'Nacional',
-    base: 'Remuneraciones rurales',
-    alicuota: '1,5% a 2%',
-    impacto: 'BAJO',
-    obs: 'Personal temporario y permanente. Aportes patronales a organismos de trabajo rural. Deducibles como gasto en Ganancias.',
-    normativa: 'Ley 25.191'
-  },
-  {
-    nombre: 'Impuesto Inmobiliario Rural',
-    nivel: 'Provincial',
-    base: 'Valuación fiscal del campo',
-    alicuota: '0,1% a 1,2% anual',
-    impacto: 'BAJO',
-    obs: 'Varía fuertemente según provincia y valuación fiscal. Actualizable. Deducible de Ganancias como gasto. Bs.As. y Córdoba: sistemas de valuación distintos.',
-    normativa: 'Código Fiscal provincial'
-  },
-  {
-    nombre: 'Impuesto al Valor Agregado — Saldo Técnico',
-    nivel: 'Nacional',
-    base: 'Diferencia crédito/débito',
-    alicuota: 'Efecto financiero',
-    impacto: 'FINANCIERO',
-    obs: 'El productor vende al 10,5% y compra insumos al 21%. El saldo a favor puede tramitarse para compensación o acreditación, pero el proceso demora. En campañas grandes, el efecto financiero equivale a un costo real del 1-2% sobre ventas.',
-    normativa: 'RG ARCA 2000 y modif.'
-  },
+const OTROS = [
+  { nombre: 'Ingresos Brutos (IIBB)',        nivel: 'Provincial', ali: '0% – 3,5%',          base: 'Ventas brutas',            obs: 'Varía por provincia. Córdoba: primaria exenta. Bs.As.: 0,5%-1,25%. Convenio Multilateral si opera en varias provincias.' },
+  { nombre: 'Impuesto al Cheque',            nivel: 'Nacional',   ali: '0,6% / 1,2%',         base: 'Movimientos bancarios',    obs: 'Acreditación / débito. El 33% del impuesto sobre acreditaciones computa como pago a cuenta de Ganancias o IVA.' },
+  { nombre: 'Bienes Personales',             nivel: 'Nacional',   ali: '0,50% – 1,50%',       base: 'Valuación fiscal al 31-dic', obs: 'MNI: $384,7M (fiscal 2025). REIBP: quienes adhirieron al blanqueo 2024 están eximidos hasta 2027 sin DJ.' },
+  { nombre: 'Impuesto Inmobiliario Rural',   nivel: 'Provincial', ali: '0,1% – 1,2%',         base: 'Valuación fiscal del campo', obs: 'Varía por provincia. Deducible como gasto en Ganancias. Bs.As. y Córdoba tienen sistemas de valuación distintos.' },
+  { nombre: 'Tasa Vial Provincial',          nivel: 'Provincial', ali: 'Variable',             base: 'Tn transportada',          obs: 'Córdoba, Santa Fe, Bs.As. cobran por tonelada. Estimado: $800–$2.500/tn según distancia y provincia.' },
+  { nombre: 'Contribuciones RENATRE',        nivel: 'Nacional',   ali: '1,5% – 2%',           base: 'Remuneraciones rurales',   obs: 'Personal temporario y permanente. Aportes patronales a organismos de trabajo rural. Deducibles en Ganancias.' },
+];
+
+const CARGA_ESCENARIOS = [
+  { escenario: 'Sojero — Zona núcleo — Campo propio',       rango: '53–60%', nivel: 'dn' },
+  { escenario: 'Sojero — Zona núcleo — Arrendatario',       rango: '67–75%', nivel: 'dn' },
+  { escenario: 'Maicero — Zona pampeana — Campo propio',    rango: '38–45%', nivel: 'warn' },
+  { escenario: 'Triguero — Zona pampeana — Campo propio',   rango: '35–42%', nivel: 'warn' },
+  { escenario: 'Ganadero bovino — Ciclo completo',           rango: '28–35%', nivel: 'up' },
+  { escenario: 'Zona extrapampeana — Arrendatario',         rango: '80–120%+', nivel: 'dn' },
+];
+
+const COMPOSICION = [
+  { impuesto: 'Retención DEX (Soja 24%)', pctFob: '24,0%', pctRenta: '~30–35%', nivel: 'Nacional' },
+  { impuesto: 'Impuesto a las Ganancias', pctFob: 'Variable', pctRenta: '~8–12%', nivel: 'Nacional' },
+  { impuesto: 'Bienes Personales',        pctFob: '0,5–1,5% s/ tierra', pctRenta: '~2–4%', nivel: 'Nacional' },
+  { impuesto: 'Impuesto al Cheque',       pctFob: '0,6–1,2% s/ mov.', pctRenta: '~1–2%', nivel: 'Nacional' },
+  { impuesto: 'IIBB',                     pctFob: '0,5–1%', pctRenta: '~1–2%', nivel: 'Provincial' },
+  { impuesto: 'Inmobiliario Rural',       pctFob: '0,1–1% s/ val.', pctRenta: '~1–2%', nivel: 'Provincial' },
+  { impuesto: 'IVA (efecto financiero)',  pctFob: 'Saldo a favor', pctRenta: '~1–2%', nivel: 'Nacional' },
 ];
 
 const HISTORIA = [
-  { año: '2006-2007', soja: 27.5, maiz: 20, trigo: 23 },
-  { año: '2008-2019', soja: 35, maiz: 12, trigo: 12 },
-  { año: '2020-2024', soja: 33, maiz: 12, trigo: 12 },
-  { año: 'Ene-Jun 2025', soja: 26, maiz: 9.5, trigo: 9.5 },
-  { año: 'Jul-Sep 2025', soja: 33, maiz: 12, trigo: 9.5 },
-  { año: 'Dic 2025–hoy', soja: 24, maiz: 8.5, trigo: 7.5 },
+  { periodo: '2008–2019',    soja: 35,   maiz: 12,  trigo: 12,  girasol: 7   },
+  { periodo: '2020–2024',    soja: 33,   maiz: 12,  trigo: 12,  girasol: 7   },
+  { periodo: 'Ene–Jun 2025', soja: 26,   maiz: 9.5, trigo: 9.5, girasol: 5.5 },
+  { periodo: 'Jul–Sep 2025', soja: 33,   maiz: 12,  trigo: 9.5, girasol: 7   },
+  { periodo: 'Dic 2025–hoy', soja: 24,   maiz: 8.5, trigo: 7.5, girasol: 4.5 },
 ];
 
-const CARGA_TOTAL = [
-  { escenario: 'Productor sojero — Zona núcleo — Campo propio', carga: '53-60%', color: 'var(--red)' },
-  { escenario: 'Productor sojero — Zona núcleo — Arrendatario', carga: '67-75%', color: 'var(--red)' },
-  { escenario: 'Productor maicero — Zona pampeana — Campo propio', carga: '38-45%', color: 'var(--gold)' },
-  { escenario: 'Productor triguero — Zona pampeana — Campo propio', carga: '35-42%', color: 'var(--gold)' },
-  { escenario: 'Ganadero bovino — Ciclo completo — Campo propio', carga: '28-35%', color: 'var(--green)' },
-  { escenario: 'Productor zona extrapampeana — Arrendatario', carga: '80-120%+', color: 'var(--red)' },
+const CRONOLOGIA = [
+  { fecha: 'Ene 2025', decreto: '38/2025',  hito: 'Baja temporal. Soja 33%→26%, Maíz/Trigo 12%→9,5%, Girasol 7%→5,5%. Economías regionales: eliminadas en forma permanente.' },
+  { fecha: 'Jun 2025', decreto: '439/2025', hito: 'Prórroga solo para Trigo y Cebada hasta 31-mar-2026. Soja y Maíz vuelven a 33% y 12% desde el 1° de julio.' },
+  { fecha: 'Sep 2025', decreto: '682/2025', hito: 'Retenciones 0% hasta cupo de USD 7.000M. El cupo se agotó en 3 días hábiles. Liquidación récord del sector.' },
+  { fecha: 'Dic 2025', decreto: '877/2025', hito: 'Baja permanente. Soja 24%, subproductos 22,5%, Maíz/Sorgo 8,5%, Trigo/Cebada 7,5%, Girasol 4,5%, Carne 5%. Mínimo desde 2006.' },
 ];
-
-const impactoColor = {
-  'MUY ALTO':    { bg: 'rgba(224,92,92,.15)',    color: 'var(--red)',   border: 'rgba(224,92,92,.3)' },
-  'ALTO':        { bg: 'rgba(224,160,60,.12)',   color: '#e0a03c',      border: 'rgba(224,160,60,.3)' },
-  'MEDIO':       { bg: 'rgba(91,156,246,.10)',   color: 'var(--accent)', border: 'rgba(91,156,246,.25)' },
-  'BAJO-MEDIO':  { bg: 'rgba(74,191,120,.08)',   color: 'var(--green)', border: 'rgba(74,191,120,.2)' },
-  'BAJO':        { bg: 'rgba(74,191,120,.06)',   color: 'var(--green)', border: 'rgba(74,191,120,.15)' },
-  'FINANCIERO':  { bg: 'rgba(143,184,240,.08)',  color: 'var(--gold)',  border: 'rgba(143,184,240,.2)' },
-};
 
 export function ImpuestosPage({ goPage }) {
   const [tab, setTab] = useState('retenciones');
-
   const maxAli = Math.max(...RETENCIONES.map(r => r.ali));
 
   return (
     <div className="page-enter">
-      <div style={{ maxWidth: '1020px', margin: '0 auto' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
 
+        {/* Page header */}
         <div className="ph">
           <div>
             <div className="ph-title">
-              Presión Fiscal Agropecuaria{' '}
-              <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span>
+              Impositivo <span className="help-pip" onClick={() => goPage('ayuda')}>?</span>
             </div>
             <div className="ph-sub">
-              Análisis completo impuesto a impuesto · Vigente abril 2026 · Decreto 877/2025
+              Presión fiscal agropecuaria · Impuesto a impuesto · Vigente abril 2026 · Decreto 877/2025
             </div>
           </div>
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            <span style={{
-              fontFamily:'var(--mono)', fontSize:10, letterSpacing:'.07em',
-              background:'var(--green-bg)', color:'var(--green)',
-              border:'1px solid rgba(74,191,120,.2)', padding:'4px 12px', borderRadius:20
-            }}>⬇ Retenciones en baja desde dic-2025</span>
-            <span style={{
-              fontFamily:'var(--mono)', fontSize:10, letterSpacing:'.07em',
-              background:'var(--acc-bg)', color:'var(--accent)',
-              border:'1px solid rgba(91,156,246,.2)', padding:'4px 12px', borderRadius:20
-            }}>Decreto 877/2025 vigente</span>
-          </div>
+          <span className="pill up" style={{ fontSize: 11 }}>⬇ Mínimo desde 2006</span>
         </div>
 
-        <div style={{
-          background:'var(--bg1)', border:'1px solid var(--line2)',
-          borderLeft:'3px solid var(--gold)', borderRadius:10,
-          padding:'14px 18px', marginBottom:24,
-          display:'flex', gap:12, alignItems:'flex-start'
-        }}>
-          <span style={{ fontSize:18, flexShrink:0 }}>⚠️</span>
-          <div style={{ fontSize:12.5, lineHeight:1.65, color:'var(--text2)' }}>
-            <strong style={{ color:'var(--white)' }}>Contexto clave — Abril 2026:</strong> El Decreto 877/2025 (dic-2025) estableció la baja permanente de retenciones, la más baja desde 2006.{' '}
-            Sin embargo, <strong style={{ color:'var(--gold)' }}>el agro argentino sigue siendo uno de los sectores más gravados del mundo</strong>: la carga fiscal total{' '}
-            (retenciones + ganancias + IVA financiero + IIBB + inmobiliario + cheque) oscila entre el 35% y el 75%+ de la renta bruta según cultivo, zona y régimen de tenencia.
-          </div>
-        </div>
-
-        <div style={{
-          display:'flex', gap:4, marginBottom:24, flexWrap:'wrap',
-          borderBottom:'1px solid var(--line)', paddingBottom:0
-        }}>
-          {[
-            { id:'retenciones', label:'Retenciones (DEX)' },
-            { id:'iva',         label:'IVA Agropecuario' },
-            { id:'otros',       label:'Todos los impuestos' },
-            { id:'carga',       label:'Carga total estimada' },
-            { id:'historia',    label:'Evolución histórica' },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                background:'none', border:'none',
-                fontFamily:'var(--body)', fontSize:13, fontWeight:500,
-                color: tab === t.id ? 'var(--white)' : 'var(--text2)',
-                padding:'10px 16px', cursor:'pointer',
-                borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-                transition:'all .15s', whiteSpace:'nowrap'
-              }}
-            >{t.label}</button>
+        {/* Tabs */}
+        <div className="tabs">
+          {TABS.map(t => (
+            <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
           ))}
         </div>
 
-        {/* TAB: RETENCIONES */}
+        {/* ── RETENCIONES ── */}
         {tab === 'retenciones' && (
           <div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:8 }}>
-                Derechos de Exportación vigentes · Decreto 877/2025 · Diciembre 2025
-              </div>
-              <div style={{ fontSize:12.5, color:'var(--text2)', lineHeight:1.6, maxWidth:720, marginBottom:20 }}>
-                Las retenciones son el impuesto de mayor impacto para el productor agropecuario. A diferencia del IVA o Ganancias, <strong style={{ color:'var(--white)' }}>se aplican sobre el precio FAS (libre en campo) o el precio de pizarra, no sobre la ganancia</strong>. El productor las paga haya o no rentabilidad. Con el Decreto 877/2025, Argentina tiene las alícuotas más bajas desde 2006.
-              </div>
+            <div className="section-title">Derechos de Exportación vigentes — Decreto 877/2025</div>
+
+            <div className="alert-strip info" style={{ marginBottom: 20 }}>
+              <span className="alert-icon">ℹ</span>
+              <span className="alert-text">
+                Las retenciones se aplican sobre el <strong>precio FOB de exportación</strong>, no sobre la ganancia.
+                El productor las paga haya o no rentabilidad, y las absorbe vía precio pizarra (FAS). Con el Decreto 877/2025 rigen las alícuotas más bajas desde 2006.
+              </span>
             </div>
 
             <div className="tbl-wrap" style={{ marginBottom: 32 }}>
@@ -247,39 +128,32 @@ export function ImpuestosPage({ goPage }) {
                 <thead>
                   <tr>
                     <th>Producto</th>
-                    <th className="r">Alícuota vigente</th>
-                    <th>Nivel gráfico</th>
+                    <th className="r">Vigente</th>
+                    <th className="r">Anterior</th>
+                    <th className="r">Baja</th>
                     <th>Decreto</th>
-                    <th>Contexto</th>
+                    <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {RETENCIONES.map(r => {
-                    const w = Math.round((r.ali / maxAli) * 100);
-                    const isHigh = r.ali >= 20;
-                    const isMid  = r.ali >= 5 && r.ali < 20;
-                    const barColor = isHigh ? 'var(--red)' : isMid ? 'var(--gold)' : 'var(--green)';
+                    const diff = r.ant - r.ali;
+                    const isHigh = r.ali >= 15;
+                    const isMid  = r.ali >= 5 && r.ali < 15;
                     return (
                       <tr key={r.producto}>
                         <td className="bold">{r.producto}</td>
-                        <td className="r mono" style={{ color: r.ali === 0 ? 'var(--green)' : isHigh ? 'var(--red)' : 'var(--text)' }}>
-                          {r.ali === 0 ? '0% (eliminada)' : `${r.ali}%`}
+                        <td className="r w mono">{r.ali === 0 ? '0%' : `${r.ali}%`}</td>
+                        <td className="r dim mono">{r.ant}%</td>
+                        <td className="r">
+                          <span className="pill up">−{diff.toFixed(1)} pp</span>
                         </td>
-                        <td style={{ minWidth: 180 }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                            <div style={{
-                              height:8, width: r.ali === 0 ? 4 : `${w}%`, maxWidth:140,
-                              background: r.ali === 0 ? 'var(--green)' : barColor,
-                              borderRadius:4, transition:'width .3s',
-                              minWidth: r.ali === 0 ? 4 : 6
-                            }} />
-                            {r.ali === 0 && <span style={{ fontSize:10, color:'var(--green)', fontFamily:'var(--mono)' }}>CERO</span>}
-                          </div>
+                        <td className="dim" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>Dcto. {r.decreto}</td>
+                        <td>
+                          <span className={`pill ${r.tipo === 'eliminada' ? 'up' : 'info'}`}>
+                            {r.tipo}
+                          </span>
                         </td>
-                        <td style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--text3)' }}>
-                          Dcto. {r.decreto}
-                        </td>
-                        <td className="dim" style={{ fontSize:12 }}>{r.nota}</td>
                       </tr>
                     );
                   })}
@@ -287,241 +161,325 @@ export function ImpuestosPage({ goPage }) {
               </table>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:12 }}>
-              {[
-                { icon:'💡', title:'¿Qué es el precio FAS?', body:'El precio que recibe el productor en campo (Franco A Silo). Se obtiene restando al precio FOB: retenciones + flete + comisiones + gastos de puerto. Las retenciones se aplican sobre el FOB, pero el productor recibe el FAS.' },
-                { icon:'🏛️', title:'¿Sobre qué base se liquidan?', body:'Sobre el precio oficial de exportación (FAS teórico publicado por Secretaría de Agricultura). No sobre el precio real pactado. El exportador retiene el monto y lo deposita ante ARCA en nombre del productor.' },
-                { icon:'📉', title:'Impacto real en rentabilidad', body:'En soja, el 24% sobre precio FOB representa aprox. 28-32% del precio FAS. En maíz, el 8,5% sobre FOB equivale a 10-12% del precio campo. El impacto fiscal es siempre mayor al % nominal.' },
-                { icon:'📊', title:'Recaudación 2026 estimada', body:'La BCR estima US$ 4.809 millones de recaudación bajo el esquema del Decreto 877/2025, una caída del 10% respecto del esquema anterior. La reducción genera un alivio de US$ 511 millones para el sector.' },
-              ].map(c => (
-                <div key={c.title} className="stat c-flat" style={{ padding:'14px 16px' }}>
-                  <div style={{ fontSize:20, marginBottom:8 }}>{c.icon}</div>
-                  <div style={{ fontWeight:600, fontSize:13, color:'var(--white)', marginBottom:6 }}>{c.title}</div>
-                  <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.6 }}>{c.body}</div>
+            <div className="section-title">¿Cómo funcionan las retenciones?</div>
+            <div className="grid grid-2" style={{ marginBottom: 24 }}>
+              <div className="stat c-flat">
+                <div className="stat-label">Precio FAS (campo)</div>
+                <div className="stat-val sm">FOB − DEX − Flete − Comisión</div>
+                <div className="stat-meta">
+                  El FAS es lo que recibe el productor. La retención se aplica sobre el FOB,
+                  pero el impacto recae sobre el precio de pizarra. En soja, el 24% sobre FOB
+                  representa ~28–32% del precio campo efectivo.
                 </div>
-              ))}
+              </div>
+              <div className="stat c-flat">
+                <div className="stat-label">Recaudación estimada 2026</div>
+                <div className="stat-val sm">USD 4.809 M</div>
+                <div className="stat-meta">
+                  Estimación BCR con el esquema del Decreto 877/2025.
+                  Implica una caída de ~10% versus el esquema anterior (USD 5.320M),
+                  equivalente a un alivio fiscal de USD 511 millones para el sector.
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* TAB: IVA */}
+        {/* ── IVA ── */}
         {tab === 'iva' && (
           <div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:8 }}>
-                IVA Agropecuario · Ley 23.349 y modificaciones · Alícuotas vigentes 2026
+            <div className="section-title">IVA Agropecuario — Ley 23.349 — Vigente 2026</div>
+
+            <div className="alert-strip info" style={{ marginBottom: 20 }}>
+              <span className="alert-icon">ℹ</span>
+              <span className="alert-text">
+                El productor vende al <strong>10,5%</strong> y compra insumos al <strong>21%</strong>.
+                Esto genera un saldo técnico a favor permanente. El costo real no es el impuesto, sino
+                el <strong>efecto financiero de tener fondos inmovilizados 6–18 meses</strong> hasta recuperar el crédito.
+              </span>
+            </div>
+
+            <div className="tbl-wrap" style={{ marginBottom: 32 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Concepto / Operación</th>
+                    <th className="r">Alícuota</th>
+                    <th>Tipo</th>
+                    <th>Observación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {IVA_ITEMS.map(item => {
+                    const badge = item.tipo === 'reducida' ? 'warn'
+                                : item.tipo === 'exento'  ? 'up'
+                                                          : 'dn';
+                    return (
+                      <tr key={item.concepto}>
+                        <td className="bold">{item.concepto}</td>
+                        <td className="r w mono">{item.ali}</td>
+                        <td><span className={`pill ${badge}`}>{item.tipo}</span></td>
+                        <td className="dim" style={{ fontSize: 12 }}>{item.obs}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="section-title">Flujo típico — Productor de granos (Responsable Inscripto)</div>
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Operación</th>
+                    <th className="r">IVA</th>
+                    <th>Efecto</th>
+                    <th>Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Compra agroquímicos / fertilizantes</td><td className="r mono">21%</td><td><span className="pill up">crédito</span></td><td className="dim">Saldo a favor del productor</td></tr>
+                  <tr><td>Servicio de siembra / cosecha</td><td className="r mono">21%</td><td><span className="pill up">crédito</span></td><td className="dim">Saldo a favor del productor</td></tr>
+                  <tr><td>Compra de semillas</td><td className="r mono">10,5%</td><td><span className="pill up">crédito</span></td><td className="dim">Crédito parcial</td></tr>
+                  <tr><td>Venta de granos</td><td className="r mono">10,5%</td><td><span className="pill dn">débito</span></td><td className="dim">Cargo parcial al fisco</td></tr>
+                  <tr>
+                    <td className="bold">Saldo neto acumulado</td>
+                    <td className="r w mono">A favor</td>
+                    <td><span className="pill info">recuperable</span></td>
+                    <td className="dim">Compensación o acreditación ante ARCA · 3–18 meses</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="source">Efecto financiero estimado del saldo técnico: 1%–2% anual sobre ventas totales · Ley 23.349</div>
+          </div>
+        )}
+
+        {/* ── GANANCIAS ── */}
+        {tab === 'ganancias' && (
+          <div>
+            <div className="section-title">Impuesto a las Ganancias — Vigente 1° semestre 2026</div>
+
+            <div className="alert-strip info" style={{ marginBottom: 20 }}>
+              <span className="alert-icon">ℹ</span>
+              <span className="alert-text">
+                Escalas actualizadas <strong>+14,29%</strong> en enero 2026 (inflación jul–dic 2025). Aplica a productores, sociedades y fideicomisos agropecuarios.
+              </span>
+            </div>
+
+            <div className="grid grid-2" style={{ marginBottom: 28 }}>
+              <div>
+                <div className="section-title">Persona Humana — Escala progresiva</div>
+                <div className="tbl-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Ganancia neta anual acumulada</th>
+                        <th className="r">Alícuota</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td className="dim">Hasta $2.000.030</td><td className="r mono">5%</td></tr>
+                      <tr><td className="dim">$2.000.031 – $4.000.060</td><td className="r mono">9%</td></tr>
+                      <tr><td className="dim">$4.000.061 – $8.000.120</td><td className="r mono">12%</td></tr>
+                      <tr><td className="dim">$8.000.121 – $16.000.240</td><td className="r mono">15%</td></tr>
+                      <tr><td className="dim">$16.000.241 – $24.000.361</td><td className="r mono">19%</td></tr>
+                      <tr><td className="dim">$24.000.362 – $36.000.541</td><td className="r mono">23%</td></tr>
+                      <tr><td className="dim">$36.000.542 – $48.000.721</td><td className="r mono">27%</td></tr>
+                      <tr><td className="dim">$48.000.722 – $60.750.913</td><td className="r mono">31%</td></tr>
+                      <tr><td className="bold">Más de $60.750.913</td><td className="r w mono">35%</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="source">Art. 94 Ley 20.628 · ARCA — Actualización ene-2026</div>
               </div>
-              <div style={{ fontSize:12.5, color:'var(--text2)', lineHeight:1.6, maxWidth:760, marginBottom:24 }}>
-                El IVA agropecuario tiene una particularidad técnica clave: el productor vende al 10,5% y compra insumos al 21%.{' '}
-                Esto genera un <strong style={{ color:'var(--white)' }}>saldo técnico a favor permanente</strong>, que puede compensarse contra otros impuestos o solicitarse en acreditación.{' '}
-                El costo no es el impuesto en sí, sino <strong style={{ color:'var(--gold)' }}>el impacto financiero de tener fondos inmovilizados 6 a 18 meses</strong> hasta recuperar el crédito fiscal.
+
+              <div>
+                <div className="section-title">Pisos para tributar — 1° sem. 2026</div>
+                <div className="tbl-wrap" style={{ marginBottom: 16 }}>
+                  <table>
+                    <thead>
+                      <tr><th>Situación familiar</th><th className="r">Sueldo neto mínimo</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td className="dim">Soltero sin hijos</td><td className="r mono">$2.490.038</td></tr>
+                      <tr><td className="dim">Casado sin hijos</td><td className="r mono">$2.894.000</td></tr>
+                      <tr><td className="dim">Casado, 2 hijos</td><td className="r mono">$3.302.179</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="section-title">Personas Jurídicas</div>
+                <div className="tbl-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>Tipo societario</th><th className="r">Alícuota</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td className="dim">S.A. / S.R.L. / Fideicomiso</td><td className="r w mono">35%</td></tr>
+                      <tr><td className="dim">Dividendos distribuidos</td><td className="r mono">7%</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="source">Ley 20.628 art. 73 — Ley 27.630 (dividendos)</div>
               </div>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:12, marginBottom:28 }}>
-              {IVA_ITEMS.map(item => {
-                const colors = item.tipo === 'reducida' ? { bg:'var(--gold-bg)', c:'var(--gold)', border:'rgba(143,184,240,.2)' }
-                            : item.tipo === 'exento'   ? { bg:'var(--green-bg)', c:'var(--green)', border:'rgba(74,191,120,.2)' }
-                                                       : { bg:'var(--red-bg)', c:'var(--red)', border:'rgba(224,92,92,.2)' };
-                return (
-                  <div key={item.concepto} style={{
-                    background:'var(--bg1)', border:`1px solid ${colors.border}`,
-                    borderRadius:10, padding:'14px 16px'
-                  }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8, gap:8 }}>
-                      <div style={{ fontWeight:600, fontSize:13, color:'var(--white)', lineHeight:1.3 }}>{item.concepto}</div>
-                      <span style={{
-                        fontFamily:'var(--mono)', fontSize:13, fontWeight:700,
-                        color:colors.c, background:colors.bg,
-                        padding:'2px 10px', borderRadius:6, flexShrink:0
-                      }}>{item.ali}</span>
-                    </div>
-                    <div style={{ fontSize:11.5, color:'var(--text2)', lineHeight:1.6 }}>{item.obs}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, padding:'18px 20px', marginBottom:24 }}>
-              <div style={{ fontWeight:600, fontSize:13, color:'var(--white)', marginBottom:14 }}>
-                Flujo típico de IVA — Productor de granos (Responsable Inscripto)
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:10 }}>
-                {[
-                  { label:'Compra semillas', mov:'Crédito fiscal', ali:'10,5%', dir:'↑ a favor' },
-                  { label:'Compra agroquímicos', mov:'Crédito fiscal', ali:'21%', dir:'↑↑ a favor' },
-                  { label:'Servicio de cosecha', mov:'Crédito fiscal', ali:'21%', dir:'↑↑ a favor' },
-                  { label:'Venta de granos', mov:'Débito fiscal', ali:'10,5%', dir:'↓ cargo' },
-                  { label:'Saldo neto', mov:'Técnico a favor', ali:'~10-15%', dir:'✓ recuperable' },
-                ].map(f => (
-                  <div key={f.label} style={{
-                    background:'var(--bg2)', borderRadius:8, padding:'10px 12px',
-                    borderLeft:`3px solid ${f.dir.includes('↑') ? 'var(--green)' : f.dir.includes('↓') ? 'var(--red)' : 'var(--accent)'}`
-                  }}>
-                    <div style={{ fontSize:11.5, color:'var(--text2)', marginBottom:4 }}>{f.label}</div>
-                    <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--white)', fontWeight:600 }}>{f.ali}</div>
-                    <div style={{ fontSize:10.5, color:f.dir.includes('↑') ? 'var(--green)' : f.dir.includes('↓') ? 'var(--red)' : 'var(--accent)', marginTop:3 }}>{f.mov} · {f.dir}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop:14, fontSize:12, color:'var(--text3)', lineHeight:1.6 }}>
-                💡 El saldo acumulado puede tramitarse ante ARCA por acreditación, transferencia o compensación contra otros impuestos (Ganancias, Bienes Personales). El proceso demora 3 a 18 meses. En campañas intensivas, el efecto financiero equivale al <strong style={{ color:'var(--text2)' }}>1% a 2% anual sobre el total de ventas</strong>.
-              </div>
+            <div className="section-title">Particularidades agropecuarias</div>
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ítem</th>
+                    <th>Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td className="bold">Categoría del productor</td><td className="dim">Cat. I (renta del suelo — arrendador) o Cat. III (empresa unipersonal — explotación directa)</td></tr>
+                  <tr><td className="bold">Deducciones clave</td><td className="dim">Amortizaciones de mejoras rurales, gastos directos de explotación, intereses de créditos agropecuarios, IIBB e Inmobiliario rural pagados</td></tr>
+                  <tr><td className="bold">Computable a cuenta</td><td className="dim">33% del Impuesto al Cheque sobre acreditaciones · Percepciones ARCA por compras en exterior</td></tr>
+                  <tr><td className="bold">Anticipos</td><td className="dim">5 anticipos anuales del 20% c/u, sobre el impuesto del año anterior. Generan exposición financiera en años de baja rentabilidad</td></tr>
+                  <tr><td className="bold">Bienes de uso rural</td><td className="dim">Amortización acelerada disponible para maquinaria y mejoras. Impacto directo en la base imponible del primer año</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* TAB: TODOS LOS IMPUESTOS */}
+        {/* ── OTROS TRIBUTOS ── */}
         {tab === 'otros' && (
           <div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:8 }}>
-                Mapa completo de tributación · Todos los niveles · Abril 2026
-              </div>
-              <div style={{ fontSize:12.5, color:'var(--text2)', lineHeight:1.6, maxWidth:760, marginBottom:24 }}>
-                El productor agropecuario argentino está sujeto a impuestos de tres niveles: nacional, provincial y municipal. A continuación, el detalle de cada tributo,{' '}
-                su base imponible y su impacto real estimado sobre la rentabilidad.
-              </div>
+            <div className="section-title">Otros impuestos relevantes — Nacionales y provinciales</div>
+
+            <div className="tbl-wrap" style={{ marginBottom: 32 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Impuesto</th>
+                    <th>Nivel</th>
+                    <th className="r">Alícuota</th>
+                    <th>Base imponible</th>
+                    <th>Observaciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {OTROS.map(o => (
+                    <tr key={o.nombre}>
+                      <td className="bold">{o.nombre}</td>
+                      <td><span className={`pill ${o.nivel === 'Nacional' ? 'info' : 'warn'}`}>{o.nivel}</span></td>
+                      <td className="r mono">{o.ali}</td>
+                      <td className="dim" style={{ fontSize: 12 }}>{o.base}</td>
+                      <td className="dim" style={{ fontSize: 12 }}>{o.obs}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              {OTROS_IMPUESTOS.map(imp => {
-                const c = impactoColor[imp.impacto] || impactoColor['BAJO'];
-                return (
-                  <div key={imp.nombre} style={{
-                    background:'var(--bg1)', border:'1px solid var(--line)',
-                    borderRadius:12, padding:'16px 18px',
-                    borderLeft:`3px solid ${c.color}`
-                  }}>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:10, alignItems:'flex-start', marginBottom:10 }}>
-                      <div style={{ flex:1, minWidth:200 }}>
-                        <div style={{ fontWeight:700, fontSize:14, color:'var(--white)', marginBottom:3 }}>{imp.nombre}</div>
-                        <div style={{ fontFamily:'var(--mono)', fontSize:10.5, color:'var(--text3)', letterSpacing:'.04em' }}>
-                          {imp.normativa}
-                        </div>
-                      </div>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                        <span style={{
-                          fontFamily:'var(--mono)', fontSize:9.5, letterSpacing:'.07em',
-                          background:c.bg, color:c.color,
-                          border:`1px solid ${c.border}`, padding:'3px 10px', borderRadius:20
-                        }}>{imp.impacto}</span>
-                        <span style={{
-                          fontFamily:'var(--mono)', fontSize:9.5, letterSpacing:'.07em',
-                          background:'var(--bg2)', color:'var(--text2)',
-                          border:'1px solid var(--line)', padding:'3px 10px', borderRadius:20
-                        }}>{imp.nivel}</span>
-                      </div>
-                    </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'6px 16px', marginBottom:10 }}>
-                      <span style={{ fontSize:11, color:'var(--text3)', whiteSpace:'nowrap' }}>Base imponible</span>
-                      <span style={{ fontSize:11.5, color:'var(--text2)' }}>{imp.base}</span>
-                      <span style={{ fontSize:11, color:'var(--text3)', whiteSpace:'nowrap' }}>Alícuota</span>
-                      <span style={{ fontSize:12, fontFamily:'var(--mono)', color:'var(--white)', fontWeight:600 }}>{imp.alicuota}</span>
-                    </div>
-                    <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.65, borderTop:'1px solid var(--line)', paddingTop:10 }}>
-                      {imp.obs}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="section-title">IIBB por provincia — Actividad primaria agrícola</div>
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Provincia</th>
+                    <th className="r">Venta granos</th>
+                    <th className="r">Venta hacienda</th>
+                    <th>Observación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td className="bold">Córdoba</td><td className="r"><span className="pill up">Exenta</span></td><td className="r mono">0,5%</td><td className="dim">Actividad primaria agrícola exenta. Ley Impositiva 2026.</td></tr>
+                  <tr><td className="bold">Santa Fe</td><td className="r mono">0,5%</td><td className="r mono">0,5%</td><td className="dim">Alícuota mínima para actividad primaria.</td></tr>
+                  <tr><td className="bold">Buenos Aires</td><td className="r mono">1,0%</td><td className="r mono">1,0%</td><td className="dim">Convenio Multilateral para productores que operan en varias provincias.</td></tr>
+                  <tr><td className="bold">Entre Ríos</td><td className="r mono">1,0%</td><td className="r mono">1,25%</td><td className="dim">Escala según volumen de ventas.</td></tr>
+                  <tr><td className="bold">La Pampa</td><td className="r mono">1,5%</td><td className="r mono">1,5%</td><td className="dim">Sin diferenciación por tipo de actividad agropecuaria.</td></tr>
+                  <tr><td className="bold">Santiago del Estero</td><td className="r mono">3,0%</td><td className="r mono">3,0%</td><td className="dim">Alícuota general. No hay reducción sectorial.</td></tr>
+                </tbody>
+              </table>
             </div>
+            <div className="source">Fuente: Leyes Impositivas provinciales 2026 · ARCA</div>
           </div>
         )}
 
-        {/* TAB: CARGA TOTAL */}
+        {/* ── CARGA TOTAL ── */}
         {tab === 'carga' && (
           <div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:8 }}>
-                Carga tributaria total estimada · % sobre renta bruta · Campaña 2025/26
-              </div>
-              <div style={{ fontSize:12.5, color:'var(--text2)', lineHeight:1.6, maxWidth:760, marginBottom:24 }}>
-                Según análisis del IERAL-Fundación Mediterránea (dic-2025), incluso con las retenciones más bajas desde 2006,{' '}
-                <strong style={{ color:'var(--white)' }}>la carga fiscal total del productor sojero en zona núcleo con campo propio oscila entre 53% y 73% de la renta bruta</strong>.{' '}
-                En zonas extrapampeanas con arrendamiento, puede superar el 100% (margen negativo).
-              </div>
+            <div className="section-title">Carga fiscal total estimada — Campaña 2025/26</div>
+
+            <div className="alert-strip warn" style={{ marginBottom: 20 }}>
+              <span className="alert-icon">⚠</span>
+              <span className="alert-text">
+                Según análisis del IERAL-Fundación Mediterránea (dic-2025), con el esquema actual del Decreto 877/2025,
+                la carga total para el productor sojero en zona núcleo va del <strong>53% al 75%+</strong> de la renta bruta.
+                En zonas marginales con arrendamiento puede superar el 100%.
+              </span>
             </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:28 }}>
-              {CARGA_TOTAL.map(e => {
-                const num = parseFloat(e.carga.replace('%','').replace('+','').split('-')[1] || e.carga.replace('%','').replace('+',''));
-                const pct = Math.min((num / 120) * 100, 100);
-                return (
-                  <div key={e.escenario} style={{
-                    background:'var(--bg1)', border:'1px solid var(--line)',
-                    borderRadius:10, padding:'14px 16px'
-                  }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, gap:12, flexWrap:'wrap' }}>
-                      <div style={{ fontSize:13, color:'var(--text)', fontWeight:500 }}>{e.escenario}</div>
-                      <div style={{ fontFamily:'var(--mono)', fontSize:16, fontWeight:700, color:e.color, flexShrink:0 }}>{e.carga}</div>
-                    </div>
-                    <div style={{ background:'var(--bg3)', borderRadius:4, height:6, overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${pct}%`, background:e.color, borderRadius:4, transition:'width .5s' }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, padding:'18px 20px', marginBottom:20 }}>
-              <div style={{ fontWeight:600, fontSize:13, color:'var(--white)', marginBottom:14 }}>
-                Composición típica de la carga — Productor sojero zona núcleo, campo propio
-              </div>
-              <div className="tbl-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Impuesto</th>
-                      <th className="r">% sobre precio FOB</th>
-                      <th className="r">% sobre renta bruta</th>
-                      <th>Nivel</th>
+            <div className="tbl-wrap" style={{ marginBottom: 32 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Escenario productor</th>
+                    <th className="r">Carga total estimada</th>
+                    <th>Nivel de presión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CARGA_ESCENARIOS.map(e => (
+                    <tr key={e.escenario}>
+                      <td className="bold">{e.escenario}</td>
+                      <td className="r w mono">{e.rango}</td>
+                      <td><span className={`pill ${e.nivel}`}>{e.nivel === 'dn' ? 'ALTA' : e.nivel === 'warn' ? 'MEDIA' : 'MODERADA'}</span></td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    <tr><td className="bold">Retención DEX (Soja)</td><td className="r mono dn">24,0%</td><td className="r mono dn">~30-35%</td><td className="dim">Nacional</td></tr>
-                    <tr><td className="bold">Impuesto a las Ganancias</td><td className="r mono dn">Variable</td><td className="r mono dn">~8-12%</td><td className="dim">Nacional</td></tr>
-                    <tr><td className="bold">IIBB</td><td className="r mono dn">0,5-1%</td><td className="r mono dn">~1-2%</td><td className="dim">Provincial</td></tr>
-                    <tr><td className="bold">Bienes Personales</td><td className="r mono dn">0,5-1,5% s/ tierra</td><td className="r mono dn">~2-4%</td><td className="dim">Nacional</td></tr>
-                    <tr><td className="bold">Impuesto al Cheque</td><td className="r mono dn">0,6-1,2% s/ mov.</td><td className="r mono dn">~1-2%</td><td className="dim">Nacional</td></tr>
-                    <tr><td className="bold">Inmobiliario Rural</td><td className="r mono dn">0,1-1% s/ valuación</td><td className="r mono dn">~1-2%</td><td className="dim">Provincial</td></tr>
-                    <tr><td className="bold">IVA (efecto financiero)</td><td className="r mono">Saldo a favor</td><td className="r mono dn">~1-2%</td><td className="dim">Nacional</td></tr>
-                    <tr style={{ borderTop:'2px solid var(--line2)' }}>
-                      <td className="bold" style={{ color:'var(--white)' }}>TOTAL ESTIMADO</td>
-                      <td className="r mono" />
-                      <td className="r mono dn" style={{ fontWeight:700, fontSize:14 }}>53-60%</td>
-                      <td className="dim">Multijurisdiccional</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{
-              background:'var(--red-bg)', border:'1px solid rgba(224,92,92,.2)',
-              borderRadius:10, padding:'14px 18px', fontSize:12.5, color:'var(--text2)', lineHeight:1.65
-            }}>
-              <strong style={{ color:'var(--red)' }}>⚠ Nota metodológica:</strong> Los porcentajes de carga total varían según precio de los commodities, tipo de cambio, costos de producción y zona geográfica.{' '}
-              En años de precios bajos o costos altos, la carga fiscal <em>efectiva sobre la renta neta</em> puede superar el 100%, especialmente para productores arrendatarios en zonas marginales.{' '}
-              Fuente: IERAL-Fundación Mediterránea, Bolsa de Comercio de Rosario, datos propios.
+            <div className="section-title">Composición detallada — Sojero zona núcleo, campo propio</div>
+            <div className="tbl-wrap" style={{ marginBottom: 24 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Impuesto</th>
+                    <th className="r">% sobre FOB / base</th>
+                    <th className="r">% sobre renta bruta</th>
+                    <th>Jurisdicción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPOSICION.map(c => (
+                    <tr key={c.impuesto}>
+                      <td className="bold">{c.impuesto}</td>
+                      <td className="r dim mono">{c.pctFob}</td>
+                      <td className="r mono dn">{c.pctRenta}</td>
+                      <td className="dim">{c.nivel}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid var(--line2)' }}>
+                    <td className="bold">TOTAL ESTIMADO</td>
+                    <td className="r dim">—</td>
+                    <td className="r w mono">53–60%</td>
+                    <td className="dim">Multijurisdiccional</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="source">
+              Fuente: IERAL-Fundación Mediterránea · BCR · Datos propios · Campaña 2025/26 · Tipo de cambio y precios a abr-2026.
+              Los porcentajes varían según commodity, precio internacional, costos de producción y zona geográfica.
             </div>
           </div>
         )}
 
-        {/* TAB: HISTORIA */}
+        {/* ── HISTÓRICO ── */}
         {tab === 'historia' && (
           <div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:8 }}>
-                Evolución histórica de retenciones · Principales cultivos · 2006–2026
-              </div>
-              <div style={{ fontSize:12.5, color:'var(--text2)', lineHeight:1.6, maxWidth:760, marginBottom:24 }}>
-                Desde 1983 hubo más de 80 modificaciones en las alícuotas de derechos de exportación. El record histórico fue en 2008 con la Resolución 125 (retenciones móviles a soja, hasta 45%).{' '}
-                El nivel actual (24% soja, 8,5% maíz, 7,5% trigo) es el más bajo desde 2006.
-              </div>
-            </div>
+            <div className="section-title">Evolución de retenciones — Principales cultivos — 2008/2026</div>
 
-            <div className="tbl-wrap" style={{ marginBottom:28 }}>
+            <div className="tbl-wrap" style={{ marginBottom: 32 }}>
               <table>
                 <thead>
                   <tr>
@@ -529,25 +487,21 @@ export function ImpuestosPage({ goPage }) {
                     <th className="r">Soja (poroto)</th>
                     <th className="r">Maíz</th>
                     <th className="r">Trigo</th>
+                    <th className="r">Girasol</th>
                   </tr>
                 </thead>
                 <tbody>
                   {HISTORIA.map((h, i) => {
                     const isCurrent = i === HISTORIA.length - 1;
                     return (
-                      <tr key={h.año} style={isCurrent ? { background:'var(--acc-bg)' } : {}}>
-                        <td style={{ fontFamily:'var(--mono)', fontSize:12, fontWeight:isCurrent ? 700 : 400, color:isCurrent ? 'var(--accent)' : 'var(--text)' }}>
-                          {h.año} {isCurrent && '← VIGENTE'}
+                      <tr key={h.periodo} style={isCurrent ? { background: 'var(--acc-bg)' } : {}}>
+                        <td className={isCurrent ? 'bold' : 'dim'} style={isCurrent ? { fontFamily: 'var(--mono)', fontSize: 12 } : { fontFamily: 'var(--mono)', fontSize: 12 }}>
+                          {h.periodo}{isCurrent && <span className="pill info" style={{ marginLeft: 8, fontSize: 9 }}>VIGENTE</span>}
                         </td>
-                        <td className="r mono" style={{ color: h.soja > 25 ? 'var(--red)' : h.soja < 10 ? 'var(--green)' : 'var(--gold)' }}>
-                          {h.soja}%
-                        </td>
-                        <td className="r mono" style={{ color: h.maiz > 10 ? 'var(--red)' : h.maiz < 9 ? 'var(--green)' : 'var(--gold)' }}>
-                          {h.maiz}%
-                        </td>
-                        <td className="r mono" style={{ color: h.trigo > 10 ? 'var(--red)' : h.trigo < 9 ? 'var(--green)' : 'var(--gold)' }}>
-                          {h.trigo}%
-                        </td>
+                        <td className="r mono" style={{ color: h.soja > 28 ? 'var(--red)' : h.soja < 26 ? 'var(--green)' : 'var(--gold)' }}>{h.soja}%</td>
+                        <td className="r mono" style={{ color: h.maiz > 10 ? 'var(--red)' : h.maiz < 9 ? 'var(--green)' : 'var(--gold)' }}>{h.maiz}%</td>
+                        <td className="r mono" style={{ color: h.trigo > 10 ? 'var(--red)' : h.trigo < 9 ? 'var(--green)' : 'var(--gold)' }}>{h.trigo}%</td>
+                        <td className="r mono" style={{ color: h.girasol > 5.5 ? 'var(--red)' : 'var(--green)' }}>{h.girasol}%</td>
                       </tr>
                     );
                   })}
@@ -555,40 +509,40 @@ export function ImpuestosPage({ goPage }) {
               </table>
             </div>
 
-            <div style={{ fontWeight:600, fontSize:13, color:'var(--white)', marginBottom:12 }}>Cronología 2025–2026</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {[
-                { fecha:'Ene 2025', hito:'Decreto 38/2025 — Baja temporal. Soja: 33%→26%, Maíz: 12%→9,5%, Girasol: 7%→5,5%. Economías regionales: eliminadas permanentemente.' },
-                { fecha:'Jun 2025', hito:'Decreto 439/2025 — Prórroga solo para Trigo y Cebada hasta 31-mar-2026. Soja y Maíz vuelven a 33% y 12% desde jul-2025.' },
-                { fecha:'Sep 2025', hito:'Decreto 682/2025 — Retenciones 0% hasta cupo de US$ 7.000M. El cupo se agotó en 3 días. Boom histórico de liquidación agropecuaria.' },
-                { fecha:'Dic 2025', hito:'Decreto 877/2025 — Baja permanente. Soja: 24%, Subproductos: 22,5%, Maíz/Sorgo: 8,5%, Trigo/Cebada: 7,5%, Girasol: 4,5%, Carne: 5%. Mínimo desde 2006.' },
-                { fecha:'Abr 2026', hito:'Vigente: Decreto 877/2025. La BCR estima recaudación de US$ 4.809M (-10% vs esquema anterior). Carga total para el sector sigue siendo la más alta de la región.' },
-              ].map(e => (
-                <div key={e.fecha} style={{ display:'flex', gap:14, alignItems:'flex-start' }}>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:10.5, color:'var(--accent)', flexShrink:0, minWidth:70, paddingTop:2 }}>{e.fecha}</div>
-                  <div style={{ flex:1, padding:'10px 14px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8, fontSize:12.5, color:'var(--text2)', lineHeight:1.6 }}>
-                    {e.hito}
-                  </div>
-                </div>
-              ))}
+            <div className="section-title">Cronología 2025–2026</div>
+            <div className="tbl-wrap" style={{ marginBottom: 24 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Decreto</th>
+                    <th>Medida</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CRONOLOGIA.map(c => (
+                    <tr key={c.decreto}>
+                      <td className="dim" style={{ fontFamily: 'var(--mono)', fontSize: 11, whiteSpace: 'nowrap' }}>{c.fecha}</td>
+                      <td><span className="pill info" style={{ fontSize: 10 }}>{c.decreto}</span></td>
+                      <td className="dim" style={{ fontSize: 12 }}>{c.hito}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{
-              marginTop:24, background:'var(--acc-bg)', border:'1px solid rgba(91,156,246,.2)',
-              borderRadius:10, padding:'14px 18px', fontSize:12.5, color:'var(--text2)', lineHeight:1.65
-            }}>
-              <strong style={{ color:'var(--accent)' }}>📌 Perspectiva 2026:</strong> El Gobierno declaró como objetivo estratégico la eliminación gradual de los derechos de exportación.{' '}
-              Sin embargo, la recaudación por DEX representa aproximadamente el 6% de los ingresos tributarios nacionales, lo que hace difícil una eliminación abrupta sin compensación fiscal.{' '}
-              El sector agropecuario seguirá monitoreando el cumplimiento del superávit fiscal como condición para nuevas bajas.
+            <div className="stat c-flat">
+              <div className="stat-label">Perspectiva — Sector agropecuario 2026</div>
+              <div className="stat-meta" style={{ lineHeight: 1.7 }}>
+                El Gobierno declaró como objetivo estratégico la eliminación gradual de los derechos de exportación (Decreto 877/2025).
+                Sin embargo, la recaudación por DEX representa ~6% de los ingresos tributarios nacionales.
+                La BCR estima USD 4.809M de recaudación bajo el esquema vigente, una caída del 10% versus el esquema anterior,
+                y un alivio de USD 511M para el sector. Nuevas bajas están condicionadas al mantenimiento del superávit fiscal.
+              </div>
             </div>
+            <div className="source" style={{ marginTop: 8 }}>Fuente: Boletines Oficiales · Chequeado · BCR · IERAL · Secretaría de Agricultura</div>
           </div>
         )}
-
-        <div style={{ marginTop:36, paddingTop:16, borderTop:'1px solid var(--line)', fontSize:11, color:'var(--text3)', lineHeight:1.7 }}>
-          Fuentes: Decreto 877/2025 (BO dic-2025) · Decreto 38/2025 · Decreto 682/2025 · Ley 20.628 (Ganancias) · Ley 23.349 (IVA) ·
-          Ley 23.966 (Bienes Personales) · ARCA · BCR — Bolsa de Comercio de Rosario · IERAL-Fundación Mediterránea ·
-          Actualizado: abril 2026. Esta información es orientativa y no reemplaza el asesoramiento de un contador especializado en agro.
-        </div>
 
       </div>
     </div>

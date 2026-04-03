@@ -669,10 +669,10 @@ function TabPbi({ pbi, sectors }) {
     ? apiSectors.map(s => ({
         nombre: s.nombre,
         share:  s.share,
-        valor:  sectors.find(e => e.nombre === s.nombre)?.valor ?? null,
+        vab:    s.vab ?? null,
       }))
     : Object.entries(PBI_SECTOR_SHARE)
-        .map(([nombre, share]) => ({ nombre, share, valor: sectors.find(s=>s.nombre===nombre)?.valor ?? null }))
+        .map(([nombre, share]) => ({ nombre, share, vab: null }))
         .sort((a,b) => b.share - a.share);
   const maxShare = Math.max(...donutItems.map(x=>x.share), 1);
 

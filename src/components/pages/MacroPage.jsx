@@ -8,20 +8,20 @@ const MESES_F = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Ag
 
 // Paleta coherente con el sistema de diseño (--accent, --green, --gold, --red, variantes)
 const CHART_PALETTE = [
-  'rgba(91,156,246,0.82)',   // accent blue principal
-  'rgba(74,191,120,0.78)',   // green
-  'rgba(143,184,240,0.78)',  // blue pálido (gold del sistema)
-  'rgba(224,92,92,0.72)',    // red
-  'rgba(91,156,246,0.48)',   // accent dim
-  'rgba(74,191,120,0.48)',   // green dim
-  'rgba(143,184,240,0.52)',  // blue pálido dim
-  'rgba(160,180,220,0.68)',  // gris azulado
-  'rgba(100,175,195,0.68)',  // teal apagado
-  'rgba(180,160,210,0.65)',  // lavanda apagada
-  'rgba(130,190,160,0.65)',  // verde grisáceo
-  'rgba(155,175,205,0.65)',  // azul gris
-  'rgba(200,155,155,0.62)',  // rosa apagado
-  'rgba(160,205,195,0.62)',  // verde agua
+  'rgba(91,156,246,0.85)',   // accent blue
+  'rgba(74,191,120,0.82)',   // green
+  'rgba(143,184,240,0.80)',  // blue pálido / gold
+  'rgba(100,195,180,0.80)',  // teal
+  'rgba(130,160,235,0.80)',  // periwinkle
+  'rgba(74,191,140,0.72)',   // green-teal
+  'rgba(91,156,246,0.55)',   // accent dim
+  'rgba(160,200,245,0.75)',  // celeste
+  'rgba(110,185,160,0.72)',  // verde agua
+  'rgba(85,145,230,0.68)',   // blue mid
+  'rgba(60,175,145,0.70)',   // esmeralda
+  'rgba(170,210,245,0.72)',  // azul claro
+  'rgba(80,195,165,0.65)',   // menta
+  'rgba(115,165,240,0.68)',  // azul medio
 ];
 
 // Participación sectorial en el PBI (INDEC Cuentas Nacionales, base 2004)
@@ -218,9 +218,27 @@ function IpcHeatmap({ data }) {
   const getColor = (v) => {
     if (v == null) return null;
     const t = Math.min(1, Math.max(0, (v - p10) / (p90 - p10)));
+    // verde → amarillo → naranja → rojo
     let r, g, b;
-    if (t < 0.5) { const s = t/0.5; r=Math.round(44+s*60); g=Math.round(90+s*30); b=Math.round(150-s*30); }
-    else { const s=(t-0.5)/0.5; r=Math.round(104+s*110); g=Math.round(120-s*70); b=Math.round(120-s*80); }
+    if (t < 0.33) {
+      // verde puro → amarillo-verde
+      const s = t / 0.33;
+      r = Math.round(40 + s * 160);  // 40 → 200
+      g = Math.round(175 - s * 20);  // 175 → 155
+      b = Math.round(80  - s * 65);  // 80  → 15
+    } else if (t < 0.66) {
+      // amarillo-verde → naranja
+      const s = (t - 0.33) / 0.33;
+      r = Math.round(200 + s * 40);  // 200 → 240
+      g = Math.round(155 - s * 80);  // 155 → 75
+      b = Math.round(15  - s * 10);  // 15  → 5
+    } else {
+      // naranja → rojo
+      const s = (t - 0.66) / 0.34;
+      r = Math.round(240 - s * 20);  // 240 → 220
+      g = Math.round(75  - s * 65);  // 75  → 10
+      b = Math.round(5);             // 5   → 5
+    }
     return { rgb: `${r},${g},${b}`, t };
   };
 
@@ -622,9 +640,9 @@ function TabInflacion({ inflacion }) {
         <div style={{padding:'12px 18px',borderBottom:'1px solid var(--line)',display:'flex',alignItems:'center',gap:'14px'}}>
           <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Historial IPC — por año y mes</span>
           <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',display:'flex',alignItems:'center',gap:'6px'}}>
-            Frío
-            <span style={{display:'inline-block',width:'36px',height:'7px',background:'linear-gradient(90deg,rgba(44,90,150,.65),rgba(214,82,82,.65))',borderRadius:'2px'}}/>
-            Caliente
+            Bajo
+            <span style={{display:'inline-block',width:'56px',height:'7px',background:'linear-gradient(90deg,rgba(40,175,80,.72),rgba(200,155,15,.75),rgba(240,75,5,.76),rgba(220,10,5,.74))',borderRadius:'2px'}}/>
+            Alto
           </span>
         </div>
         <div style={{padding:'16px 18px'}}><IpcHeatmap data={mensData}/></div>
@@ -1032,17 +1050,14 @@ function BcraMonetarioSection({ bcra, loadBcra }) {
   const fmtFecha = f => { if(!f) return ''; const [y,m,d]=(f||'').split('-'); return `${d}/${m}/${y}`; };
 
   if (!bcra) return (
-    <div className="section">
-      <div className="section-title">Agregados monetarios — BCRA</div>
-      <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando datos del BCRA…</div>
-    </div>
+    <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando datos del BCRA…</div>
   );
 
   return (
-    <div className="section">
-      <div className="section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <span>Agregados monetarios — BCRA</span>
-        {tsStr&&<span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',fontWeight:400,textTransform:'none',letterSpacing:0}}>actualizado {tsStr}</span>}
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+        <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Agregados monetarios — BCRA</div>
+        {tsStr&&<span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>actualizado {tsStr}</span>}
       </div>
       <div className="grid grid-3">
         {monetario.map(item => {
@@ -1057,7 +1072,7 @@ function BcraMonetarioSection({ bcra, loadBcra }) {
           );
         })}
       </div>
-      <div className="source">Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
+      <div className="source" style={{marginTop:'12px'}}>Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
     </div>
   );
 }
@@ -1068,6 +1083,7 @@ const MACRO_TABS = [
   { id: 'pbi',       label: 'PBI'         },
   { id: 'emae',      label: 'EMAE'        },
   { id: 'riesgo',    label: 'Riesgo País' },
+  { id: 'monetario', label: 'Monetario'   },
 ];
 
 export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec, loadIndec, apiStatus, reloadAll }) {
@@ -1150,9 +1166,8 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
         {activeTab==='pbi'       && <TabPbi pbi={pbi} sectors={sectors}/>}
         {activeTab==='emae'      && <TabEmae emae={emae} indec={indec}/>}
         {activeTab==='riesgo'    && <TabRiesgoPais riesgoPais={riesgoPais}/>}
+        {activeTab==='monetario' && <BcraMonetarioSection bcra={bcra} loadBcra={loadBcra}/>}
       </div>
-
-      <BcraMonetarioSection bcra={bcra} loadBcra={loadBcra}/>
     </div>
   );
 }

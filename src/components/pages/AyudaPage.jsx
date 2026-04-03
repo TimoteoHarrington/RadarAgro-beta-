@@ -41,7 +41,6 @@ const GLOSARIOS = {
       { term: 'Dólar Blue', def: 'Tipo de cambio informal o "negro". Se opera fuera del sistema bancario, sin intervención del BCRA.' },
       { term: 'MEP / Dólar Bolsa', def: 'Tipo de cambio financiero implícito en la compra/venta de bonos en el mercado bursátil (AL30). Es legal.' },
       { term: 'CCL', def: 'Contado Con Liquidación — similar al MEP pero la operación liquida en el exterior, permitiendo sacar divisas.' },
-      { term: 'Dólar Blend 80/20', def: 'TC efectivo para exportaciones agropecuarias: 80% oficial + 20% MEP.' },
       { term: 'UVA', def: 'Unidad de Valor Adquisitivo — índice ajustado por inflación. Usada en créditos hipotecarios y plazos fijos.' },
       { term: 'Plazo Fijo', def: 'Depósito a término en entidad bancaria. La tasa publicada es la TNA (Tasa Nominal Anual).' },
       { term: 'TNA / TEA', def: 'Tasa Nominal Anual / Tasa Efectiva Anual. La TEA incorpora la capitalización de intereses.' },

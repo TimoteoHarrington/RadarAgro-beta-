@@ -1,4 +1,14 @@
-// MacroPage.jsx — matches reference HTML exactly
+// MacroPage.jsx
+// ─────────────────────────────────────────────────────────────
+// Secciones:
+//   1. KpiResumen         — IPC, EMAE, Riesgo País, PBI (cards)
+//   2. InflacionSection   — IPC mensual + gráficos + heatmap
+//   3. EmaeSection        — actividad económica + sectores
+//   4. RiesgoPaisSection  — EMBI+ con selector de rango
+//   5. PbiSection         — PBI real trimestral
+// Charts inline: IpcBarChart, IpcHeatmap, RiesgoPaisChart
+// Sub-componentes pendientes de extraer a /components/macro/
+// ─────────────────────────────────────────────────────────────
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { ApiErrorBanner } from '../ui/StatCard';
 import { CanvasChart } from '../ui/CanvasChart';

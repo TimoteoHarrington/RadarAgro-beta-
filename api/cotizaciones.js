@@ -3,6 +3,8 @@
 
 import https from 'https';
 
+const YAHOO_BASE = process.env.YAHOO_FINANCE ?? 'https://query1.finance.yahoo.com/v8/finance/chart';
+
 function fetchJSON(url, maxRedirects = 3) {
   return new Promise((resolve, reject) => {
     https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, res => {
@@ -31,7 +33,7 @@ export default async function handler(req, res) {
 
   try {
     const [yahooData, bonds, riesgo] = await Promise.allSettled([
-      fetchJSON('https://query1.finance.yahoo.com/v8/finance/chart/ARS%3DX?interval=1d&range=5d'),
+      fetchJSON(`${YAHOO_BASE}/ARS%3DX?interval=1d&range=5d`),
       fetchJSON('https://data912.com/live/arg_bonds'),
       fetchJSON('https://api.argentinadatos.com/v1/finanzas/indices/riesgo-pais/ultimo'),
     ]);

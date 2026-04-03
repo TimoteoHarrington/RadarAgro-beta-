@@ -2,7 +2,7 @@
 // Proxea la API de Series de Tiempo de datos.gob.ar
 // Fuente: INDEC — EMAE (mensual) y PBI (trimestral)
 
-const API_BASE = 'https://apis.datos.gob.ar';
+const API_BASE = process.env.INDEC_API ?? 'https://apis.datos.gob.ar';
 const API_PATH = '/series/api/series/';
 
 const EMAE_IDX_ID = '143.3_NO_PR_2004_A_21';

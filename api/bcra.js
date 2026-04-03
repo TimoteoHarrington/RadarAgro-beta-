@@ -1,7 +1,7 @@
 // api/bcra.js — Vercel Serverless Function
 // Proxea la API pública del BCRA (Estadísticas Monetarias v4.0)
 
-const BCRA_BASE = 'https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias';
+const BCRA_BASE = process.env.BCRA_API ?? 'https://api.bcra.gob.ar/estadisticas/v4.0/Monetarias';
 
 const VARIABLES = [
   // Cambiario

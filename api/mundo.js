@@ -3,6 +3,8 @@
 
 import https from 'https';
 
+const YAHOO_BASE = process.env.YAHOO_FINANCE ?? 'https://query1.finance.yahoo.com/v8/finance/chart';
+
 const SYMBOLS = [
   // ── Agro — futuros CBOT ──
   { id: 'soy',     symbol: 'ZS%3DF',     name: 'Soja',          icon: '🌱', group: 'Agro', toTon: 0.367437 },
@@ -46,7 +48,7 @@ const SYMBOLS = [
 
 function fetchYahooRaw(symbolEncoded, interval, range) {
   return new Promise((resolve, reject) => {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbolEncoded}?interval=${interval}&range=${range}`;
+    const url = `${YAHOO_BASE}/${symbolEncoded}?interval=${interval}&range=${range}`;
     const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, res => {
       let data = '';
       res.on('data', c => data += c);
@@ -80,7 +82,7 @@ async function fetchYahoo(symbolEncoded) {
 
 function fetchYahooChart(symbolEncoded, interval, range) {
   return new Promise((resolve, reject) => {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbolEncoded}?interval=${interval}&range=${range}`;
+    const url = `${YAHOO_BASE}/${symbolEncoded}?interval=${interval}&range=${range}`;
     const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, res => {
       let data = '';
       res.on('data', c => data += c);

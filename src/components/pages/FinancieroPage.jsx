@@ -1,4 +1,12 @@
 // FinancieroPage.jsx
+// ─────────────────────────────────────────────────────────────
+// Secciones:
+//   1. DolaresSection     — tipos de cambio + brecha cambiaria
+//   2. UvaSection         — valor UVA + gráfico 30 días
+//   3. TasasSection       — tasas BCRA + plazo fijo por entidad
+//   4. BcraCambiarioSection — cambiario e índices BCRA
+// Sub-componentes pendientes de extraer a /components/financiero/
+// ─────────────────────────────────────────────────────────────
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { ApiErrorBanner } from '../ui/StatCard';
 import { CanvasChart } from '../ui/CanvasChart';
@@ -96,7 +104,7 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
         </div>
       </div>
 
-      {/* DÓLARES */}
+      {/* ── 1. DÓLARES ─────────────────────────────────────────── */}
       <div className="section">
         <div className="section-title">Tipos de cambio · ARS/USD · BCRA / API Dolar</div>
         <div className="grid grid-3" style={{ marginBottom: '20px' }}>
@@ -279,7 +287,7 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
         <div className="source">Fuente: DolarApi.com · BCRA · ArgentinaDatos.com</div>
       </div>
 
-      {/* UVA */}
+      {/* ── 2. UVA ──────────────────────────────────────────────── */}
       <div className="section">
         <div className="section-title">UVA — Unidad de Valor Adquisitivo · BCRA</div>
         <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'start' }}>
@@ -333,7 +341,7 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
         </div>
       </div>
 
-      {/* TASAS */}
+      {/* ── 3. TASAS ────────────────────────────────────────────── */}
       <div className="section">
         <div className="section-title">Tasas de referencia · BCRA oficial</div>
         {bcra?.byCat?.['Tasas'] && (

@@ -1,11 +1,18 @@
 // ============================================================
-// hooks/useNavigation.js
-// Manages active page state with localStorage persistence
+// hooks/useNavigation.js  — MIGRADO A REACT ROUTER
+// ============================================================
+// ANTES: manejaba activePage con useState + localStorage.
+//        La URL nunca cambiaba → no se podían compartir links,
+//        el botón "atrás" no funcionaba y no había SEO.
+//
+// AHORA: usa useNavigate + useLocation de react-router-dom.
+//        Cada página tiene su propia URL (/granos, /financiero…).
+//        El hook mantiene la misma API pública { activePage, goPage }
+//        para que el resto del código no cambie.
 // ============================================================
 
-import { useState, useCallback, useEffect } from 'react';
-
-const STORAGE_KEY = 'ra-last-page';
+import { useCallback, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export const PAGE_IDS = [
   'home', 'granos', 'hacienda', 'financiero', 'macro', 'mundo',
@@ -26,29 +33,30 @@ const PAGE_TITLES = {
   ayuda:      'RadarAgro — Ayuda',
 };
 
-export function useNavigation() {
-  const [activePage, setActivePage] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return PAGE_IDS.includes(saved) ? saved : 'home';
-    } catch {
-      return 'home';
-    }
-  });
+// Convierte pathname ("/granos") a pageId ("granos")
+function pathnameToPage(pathname) {
+  const seg = pathname.replace(/^\//, '') || 'home';
+  return PAGE_IDS.includes(seg) ? seg : 'home';
+}
 
-  // Actualizar título de pestaña cuando cambia la página
+export function useNavigation() {
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  const activePage = pathnameToPage(location.pathname);
+
+  // Actualizar título de pestaña cuando cambia la ruta
   useEffect(() => {
     document.title = PAGE_TITLES[activePage] ?? 'RadarAgro';
   }, [activePage]);
 
+  // goPage mantiene la misma firma que antes: goPage('granos')
   const goPage = useCallback((pageId) => {
     if (!PAGE_IDS.includes(pageId)) return;
-    setActivePage(pageId);
-    try {
-      localStorage.setItem(STORAGE_KEY, pageId);
-    } catch {}
+    const path = pageId === 'home' ? '/' : `/${pageId}`;
+    navigate(path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [navigate]);
 
   return { activePage, goPage };
 }

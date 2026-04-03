@@ -5,7 +5,6 @@ import React, { useEffect } from 'react';
 const GLOSARIOS = {
   granos: {
     label: 'Granos',
-    icon: '🌾',
     terms: [
       { term: 'BCR', def: 'Bolsa de Cereales de Rosario — principal plaza de referencia de precios de granos en Argentina.' },
       { term: 'Pizarra disponible', def: 'Precio de contado para entrega inmediata en el mercado local. Distinto a futuros (precio a plazo).' },

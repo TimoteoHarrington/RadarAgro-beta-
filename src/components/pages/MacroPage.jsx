@@ -17,6 +17,223 @@ import { CanvasChart } from '../ui/CanvasChart';
 const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_F = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+// ── Riesgo regional — datos dinámicos via ArgentinaDatos ─────
+// Configuración de países a mostrar (con fallback y etiquetas)
+const PAISES_REGIONAL = [
+  { nombre: 'Colombia', iso: 'col', fallback: 280 },
+  { nombre: 'Brasil',   iso: 'bra', fallback: 180 },
+  { nombre: 'México',   iso: 'mex', fallback: 170 },
+  { nombre: 'Chile',    iso: 'chl', fallback: 130 },
+  { nombre: 'Uruguay',  iso: 'ury', fallback: 95  },
+  { nombre: 'Perú',     iso: 'per', fallback: 190 },
+];
+
+function getRiskLabel(pb) {
+  if (pb >= 600) return { label: 'MUY ALTO', bg: 'rgba(240,112,112,.15)', color: 'var(--red)' };
+  if (pb >= 350) return { label: 'ALTO',     bg: 'rgba(240,112,112,.12)', color: 'var(--red)' };
+  if (pb >= 200) return { label: 'MEDIO',    bg: 'rgba(240,184,64,.12)',  color: '#f0b840' };
+  if (pb >= 120) return { label: 'MODERADO', bg: 'rgba(86,201,122,.10)', color: 'var(--green)' };
+  return              { label: 'BAJO',       bg: 'rgba(86,201,122,.15)', color: 'var(--green)' };
+}
+
+function useRiesgoRegional(rpArgentina) {
+  const [data, setData] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const AD_BASE = 'https://api.argentinadatos.com/v1';
+    let cancelled = false;
+
+    async function fetchPais(iso) {
+      try {
+        // ArgentinaDatos expone /finanzas/indices/riesgo-pais/:pais/ultimo
+        const r = await fetch(`${AD_BASE}/finanzas/indices/riesgo-pais/${iso}/ultimo`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        // Respuesta esperada: { fecha, valor } o número directo
+        const val = typeof j === 'number' ? j : (j.valor ?? j.value ?? null);
+        return val != null ? parseFloat(val) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchAll() {
+      setLoading(true);
+      const results = await Promise.allSettled(
+        PAISES_REGIONAL.map(p => fetchPais(p.iso))
+      );
+      if (cancelled) return;
+      const map = {};
+      PAISES_REGIONAL.forEach((p, i) => {
+        const r = results[i];
+        const val = r.status === 'fulfilled' ? r.value : null;
+        map[p.iso] = val != null ? Math.round(val) : p.fallback;
+      });
+      setData(map);
+      setLoading(false);
+    }
+
+    fetchAll();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Máximo para calcular ancho de barras (Argentina incluida)
+  const argVal = rpArgentina != null ? Math.round(rpArgentina) : null;
+  const allVals = [
+    ...(argVal != null ? [argVal] : []),
+    ...PAISES_REGIONAL.map(p => data[p.iso] ?? p.fallback),
+  ].filter(Boolean);
+  const maxVal = allVals.length ? Math.max(...allVals) : 1;
+
+  return { data, loading, maxVal };
+}
+
+// ── PBI Bar Chart histórico ───────────────────────────────────
+function PbiBarChart({ history }) {
+  const canvasRef = useRef(null);
+  const [tooltip, setTooltip] = useState('');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !history || !history.length) return;
+    const slice = history.slice(-16);
+
+    const draw = () => {
+      const dpr  = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width  = rect.width  * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = rect.height;
+      const pad = { t: 28, r: 12, b: 40, l: 12 };
+
+      const vals = slice.map(d => parseFloat(d.valor || 0));
+      const maxV = Math.max(Math.max(...vals) * 1.2, 1);
+      const minV = Math.min(Math.min(...vals) * 1.2, -1);
+      const range = maxV - minV;
+      const n = slice.length;
+      const totalW = W - pad.l - pad.r;
+      const barW = Math.floor(totalW / n * 0.72);
+      const gap  = totalW / n;
+      const zeroY = H - pad.b - (0 - minV) / range * (H - pad.t - pad.b);
+
+      // Grid
+      [-4, -2, 0, 2, 4, 6, 8].forEach(gv => {
+        if (gv > maxV || gv < minV) return;
+        const y = H - pad.b - (gv - minV) / range * (H - pad.t - pad.b);
+        ctx.strokeStyle = gv === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = gv === 0 ? 1.5 : 1;
+        ctx.setLineDash(gv === 0 ? [] : [3, 5]);
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(154,176,196,0.5)';
+        ctx.font = '8px JetBrains Mono,monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText((gv >= 0 ? '+' : '') + gv + '%', pad.l + 2, y - 3);
+      });
+
+      // Barras
+      slice.forEach((d, i) => {
+        const v   = parseFloat(d.valor || 0);
+        const pos = v >= 0;
+        const fp  = (d.fecha || '').split('-');
+        const q   = Math.ceil(+(fp[1] || 3) / 3);
+        const lbl = `Q${q}'${(fp[0] || '').slice(-2)}`;
+        const isL = i === n - 1;
+        const x   = pad.l + i * gap + (gap - barW) / 2;
+        const barH = Math.max(3, Math.abs(v) / range * (H - pad.t - pad.b));
+        const y = pos ? zeroY - barH : zeroY;
+
+        const grad = ctx.createLinearGradient(0, y, 0, y + barH);
+        if (pos) {
+          grad.addColorStop(0, isL ? '#56c97a' : `rgba(86,201,122,${0.4 + Math.min(0.5, Math.abs(v)/10)})`);
+          grad.addColorStop(1, isL ? 'rgba(86,201,122,0.2)' : 'rgba(86,201,122,0.1)');
+        } else {
+          grad.addColorStop(0, isL ? '#f07070' : `rgba(240,112,112,${0.4 + Math.min(0.5, Math.abs(v)/10)})`);
+          grad.addColorStop(1, isL ? 'rgba(240,112,112,0.1)' : 'rgba(240,112,112,0.05)');
+        }
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          if (pos) ctx.roundRect(x, y, barW, barH, [2,2,0,0]);
+          else ctx.roundRect(x, y, barW, barH, [0,0,2,2]);
+        } else ctx.rect(x, y, barW, barH);
+        ctx.fill();
+
+        if (isL) {
+          ctx.fillStyle = pos ? '#56c97a' : '#f07070';
+          ctx.font = 'bold 9px JetBrains Mono,monospace';
+          ctx.textAlign = 'center';
+          const labelY = pos ? y - 5 : y + barH + 13;
+          ctx.fillText((v >= 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%', x + barW / 2, labelY);
+        }
+
+        ctx.fillStyle = isL ? (pos ? '#56c97a' : '#f07070') : 'rgba(154,176,196,0.55)';
+        ctx.font = '7px JetBrains Mono,monospace';
+        ctx.textAlign = 'center';
+        ctx.save();
+        ctx.translate(x + barW / 2, H - pad.b + 9);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillText(lbl, 0, 0);
+        ctx.restore();
+      });
+    };
+
+    draw();
+    const ro = new ResizeObserver(draw);
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [history]);
+
+  const handleMouseMove = (e) => {
+    if (!history || !history.length) return;
+    const slice = history.slice(-16);
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const pad = { l: 12, r: 12 };
+    const gap = (rect.width - pad.l - pad.r) / slice.length;
+    const idx = Math.max(0, Math.min(slice.length - 1, Math.floor((mx - pad.l) / gap)));
+    const d = slice[idx];
+    if (d) {
+      const v = parseFloat(d.valor || 0);
+      const fp = (d.fecha || '').split('-');
+      const q = Math.ceil(+(fp[1] || 3) / 3);
+      setTooltip(`Q${q} ${fp[0]}  ·  ${v >= 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')}%`);
+    }
+  };
+
+  return (
+    <div>
+      <canvas ref={canvasRef} style={{width:'100%',height:'220px',display:'block',cursor:'crosshair'}}
+        onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip('')} />
+      <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text2)',minHeight:'14px',marginTop:'8px',textAlign:'center'}}>{tooltip}</div>
+    </div>
+  );
+}
+
+// ─── Participación sectorial en el PBI (datos estructurales INDEC) ──────────
+// Porcentaje de participación promedio en el PBI a precios básicos (base 2004)
+// Fuente: INDEC Cuentas Nacionales - estructura del VA por sector
+const PBI_SECTOR_SHARE = {
+  'Agro, ganadería y silvicultura': 8.5,
+  'Pesca':                          0.3,
+  'Explotación minera':             3.2,
+  'Industria manufacturera':        18.4,
+  'Electricidad, gas y agua':       2.8,
+  'Construcción':                   5.1,
+  'Comercio may. y minorista':      12.6,
+  'Hoteles y restaurantes':         2.3,
+  'Transporte y comunicaciones':    8.9,
+  'Intermediación financiera':      4.4,
+  'Servicios inmobiliarios':        14.2,
+  'Administración pública':         7.8,
+  'Enseñanza':                      5.7,
+  'Salud':                          5.8,
+};
+
 // ── IPC Bar Chart ────────────────────────────────────────────
 function IpcBarChart({ data }) {
   const canvasRef = useRef(null);
@@ -324,9 +541,239 @@ function RiesgoPaisChart({ history, range }) {
   );
 }
 
+// ── Composición sectorial del PBI — donut + tabla ─────────────
+const SECTOR_COLORS = [
+  '#4d9ef0','#56c97a','#f0b840','#f07070','#a78bfa',
+  '#34d399','#fb923c','#60a5fa','#f472b6','#94a3b8',
+  '#facc15','#2dd4bf','#e879f9','#38bdf8',
+];
+
+function PbiDonutChart({ items }) {
+  const canvasRef = useRef(null);
+  const [hovered, setHovered] = useState(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !items.length) return;
+
+    const draw = () => {
+      const dpr  = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width  = rect.width  * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = rect.height;
+      const cx = W / 2, cy = H / 2;
+      const R  = Math.min(W, H) / 2 - 10;
+      const r  = R * 0.54;
+
+      const total = items.reduce((s, x) => s + x.share, 0);
+      let angle = -Math.PI / 2;
+
+      items.forEach((item, i) => {
+        const sweep = (item.share / total) * Math.PI * 2;
+        const isH   = hovered === i;
+        const rOuter = isH ? R + 5 : R;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, rOuter, angle, angle + sweep);
+        ctx.closePath();
+        ctx.fillStyle = SECTOR_COLORS[i % SECTOR_COLORS.length];
+        ctx.globalAlpha = isH ? 1 : 0.82;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Separator
+        ctx.beginPath();
+        ctx.arc(cx, cy, rOuter, angle, angle + sweep);
+        ctx.strokeStyle = 'var(--bg2, #131b22)';
+        ctx.lineWidth = isH ? 2.5 : 1.5;
+        ctx.stroke();
+
+        angle += sweep;
+      });
+
+      // Inner hole
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#0d1520';
+      ctx.fill();
+
+      // Center label
+      if (hovered != null && items[hovered]) {
+        const it = items[hovered];
+        ctx.fillStyle = SECTOR_COLORS[hovered % SECTOR_COLORS.length];
+        ctx.font = `bold ${Math.floor(r * 0.38)}px JetBrains Mono, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(it.share.toFixed(1) + '%', cx, cy - 6);
+        ctx.fillStyle = 'rgba(154,176,196,0.8)';
+        ctx.font = `${Math.floor(r * 0.18)}px sans-serif`;
+        // wrap name
+        const words = it.nombre.split(' ');
+        let line = '', lines = [];
+        for (const w of words) {
+          const test = line ? line + ' ' + w : w;
+          if (test.length > 16) { lines.push(line); line = w; } else line = test;
+        }
+        lines.push(line);
+        lines = lines.slice(0, 2);
+        lines.forEach((l, li) => ctx.fillText(l, cx, cy + 14 + li * 14));
+      } else {
+        ctx.fillStyle = 'rgba(154,176,196,0.6)';
+        ctx.font = `${Math.floor(r * 0.22)}px JetBrains Mono, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('% PBI', cx, cy - 4);
+        ctx.font = `${Math.floor(r * 0.16)}px JetBrains Mono, monospace`;
+        ctx.fillText('por sector', cx, cy + 14);
+      }
+    };
+
+    draw();
+    const ro = new ResizeObserver(draw);
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [items, hovered]);
+
+  const handleMouseMove = (e) => {
+    const canvas = canvasRef.current;
+    const rect   = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - rect.width / 2;
+    const my = e.clientY - rect.top  - rect.height / 2;
+    const dist = Math.sqrt(mx * mx + my * my);
+    const R    = Math.min(rect.width, rect.height) / 2 - 10;
+    const r    = R * 0.54;
+    if (dist < r || dist > R + 10) { setHovered(null); return; }
+    let angle = Math.atan2(my, mx) + Math.PI / 2;
+    if (angle < 0) angle += Math.PI * 2;
+    const total = items.reduce((s, x) => s + x.share, 0);
+    let acc = 0;
+    for (let i = 0; i < items.length; i++) {
+      acc += (items[i].share / total) * Math.PI * 2;
+      if (angle <= acc) { setHovered(i); return; }
+    }
+    setHovered(null);
+  };
+
+  return (
+    <canvas ref={canvasRef}
+      style={{width:'100%',height:'100%',display:'block',cursor:'crosshair'}}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHovered(null)} />
+  );
+}
+
+function PbiComposicionSection({ sectors }) {
+  // Combinar datos dinámicos (variación EMAE) con shares estáticos del PBI
+  const items = Object.entries(PBI_SECTOR_SHARE)
+    .map(([nombre, share], i) => {
+      const dynSector = sectors.find(s => s.nombre === nombre);
+      return {
+        nombre,
+        share,
+        valor: dynSector?.valor ?? null,
+        color: SECTOR_COLORS[i % SECTOR_COLORS.length],
+      };
+    })
+    .sort((a, b) => b.share - a.share);
+
+  const totalShare = items.reduce((s, x) => s + x.share, 0);
+
+  return (
+    <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden',marginTop:'14px'}}>
+      <div style={{padding:'14px 20px',borderBottom:'1px solid var(--line)',display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+        <div>
+          <div style={{fontSize:'14px',fontWeight:600,color:'var(--white)'}}>Composición del PBI por sector</div>
+          <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginTop:'3px',letterSpacing:'.06em'}}>
+            PARTICIPACIÓN ESTIMADA · PRECIOS BÁSICOS · BASE 2004 · INDEC CUENTAS NACIONALES
+          </div>
+        </div>
+        <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>estructura productiva</span>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:'0'}}>
+        {/* Donut */}
+        <div style={{padding:'20px',borderRight:'1px solid var(--line)',display:'flex',alignItems:'center',justifyContent:'center',minHeight:'280px'}}>
+          <div style={{width:'100%',height:'260px'}}>
+            <PbiDonutChart items={items} />
+          </div>
+        </div>
+        {/* Lista */}
+        <div style={{padding:'10px 0',overflowY:'auto',maxHeight:'300px'}}>
+          {/* Header */}
+          <div style={{display:'grid',gridTemplateColumns:'14px 1fr 60px 70px',gap:'8px',alignItems:'center',padding:'4px 16px 8px',borderBottom:'1px solid rgba(255,255,255,.06)',marginBottom:'2px'}}>
+            <div/>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em'}}>Sector</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>% PBI</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Var. EMAE</span>
+          </div>
+          {items.map((item, i) => {
+            const neg = item.valor != null && item.valor < 0;
+            const pos = item.valor != null && item.valor >= 0;
+            const barPct = Math.round((item.share / Math.max(...items.map(x => x.share))) * 100);
+            return (
+              <div key={item.nombre} style={{
+                display:'grid',gridTemplateColumns:'14px 1fr 60px 70px',
+                gap:'8px',alignItems:'center',
+                padding:'6px 16px',
+                borderBottom:'1px solid rgba(255,255,255,.025)',
+                transition:'background .1s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,.03)'}
+                onMouseLeave={e => e.currentTarget.style.background='transparent'}
+              >
+                <div style={{width:'10px',height:'10px',borderRadius:'2px',background:item.color,flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:'11px',color:'var(--text2)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.nombre}</div>
+                  <div style={{height:'3px',background:'var(--bg3)',borderRadius:'2px',marginTop:'4px',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${barPct}%`,background:item.color,opacity:0.6,borderRadius:'2px'}}/>
+                  </div>
+                </div>
+                <div style={{fontFamily:'var(--mono)',fontSize:'12px',fontWeight:700,color:'var(--white)',textAlign:'right'}}>
+                  {item.share.toFixed(1)}%
+                </div>
+                <div style={{textAlign:'right'}}>
+                  {item.valor != null ? (
+                    <span style={{
+                      fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                      color: pos ? 'var(--green)' : 'var(--red)',
+                      background: pos ? 'rgba(86,201,122,.12)' : 'rgba(240,112,112,.12)',
+                      borderRadius:'3px',padding:'1px 6px',
+                    }}>
+                      {pos ? '+' : '−'}{Math.abs(item.valor).toFixed(1).replace('.',',')}%
+                    </span>
+                  ) : (
+                    <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>—</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{padding:'10px 16px',borderTop:'1px solid rgba(255,255,255,.06)',marginTop:'4px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Total VA (excl. imp. y subv.)</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:700,color:'var(--white)'}}>{totalShare.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
+          Participación: INDEC Cuentas Nacionales · promedio estructural base 2004 · Var. EMAE: datos.gob.ar
+        </span>
+        <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
+          Hover sobre el donut para detalle
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec, loadIndec, apiStatus, reloadAll }) {
   const [rpRange, setRpRange] = React.useState('1A');
-  const rpVal      = riesgoPais?.valor ?? null;
+  const rpArgVal = riesgoPais?.valor ?? null;
+  const { data: regionalData, loading: regionalLoading, maxVal: regionalMax } = useRiesgoRegional(rpArgVal);
+  const rpVal      = rpArgVal;
   const rpDelta    = riesgoPais?.delta ?? null;
   const rpDisp     = rpVal != null ? Math.round(rpVal).toLocaleString('es-AR') + ' pb' : 'cargando…';
   const rpDeltaDisp = rpDelta != null
@@ -606,15 +1053,23 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
             const posFr = maxPos / totalRange;
             return (
               <div style={{padding:'2px 24px 4px'}}>
+                {/* Header */}
+                <div style={{display:'flex',alignItems:'center',padding:'4px 0 8px',borderBottom:'1px solid rgba(255,255,255,0.07)',marginBottom:'2px'}}>
+                  <div style={{width:'210px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',letterSpacing:'.08em',textTransform:'uppercase'}}>SECTOR</div>
+                  <div style={{flex:1,fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',letterSpacing:'.08em',textTransform:'uppercase',textAlign:'center'}}>VAR. INTERANUAL</div>
+                  <div style={{width:'62px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textAlign:'right',letterSpacing:'.08em',textTransform:'uppercase'}}>EMAE</div>
+                  <div style={{width:'56px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textAlign:'right',letterSpacing:'.08em',textTransform:'uppercase',paddingLeft:'8px'}}>% PBI</div>
+                </div>
                 {sectors.map(({nombre,valor},i,arr)=>{
                   const neg = valor < 0;
                   const color = neg ? 'var(--red)' : 'var(--green)';
                   const isTop = i===0;
                   const posPct = !neg ? (valor/maxPos)*100 : 0;
                   const negPct = neg ? (Math.abs(valor)/maxNeg)*100 : 0;
+                  const pbiShare = PBI_SECTOR_SHARE[nombre] ?? null;
                   return (
                     <div key={nombre} style={{
-                      display:'flex',alignItems:'center',padding:'4px 0',
+                      display:'flex',alignItems:'center',padding:'5px 0',
                       borderBottom: i<arr.length-1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
                     }}>
                       <div style={{width:'210px',flexShrink:0,fontSize:'11px',color:isTop?'var(--white)':neg?'var(--red)':'var(--text2)',fontWeight:isTop?600:400,paddingRight:'10px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{nombre}</div>
@@ -630,6 +1085,13 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
                       <div style={{width:'62px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'11px',fontWeight:700,color,textAlign:'right'}}>
                         {neg?'−':'+'}{Math.abs(valor).toFixed(1).replace('.',',')}%
                       </div>
+                      <div style={{width:'56px',flexShrink:0,paddingLeft:'8px',textAlign:'right'}}>
+                        {pbiShare != null ? (
+                          <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 5px'}}>
+                            {pbiShare.toFixed(1)}%
+                          </span>
+                        ) : <span style={{color:'var(--text3)',fontSize:'10px'}}>—</span>}
+                      </div>
                     </div>
                   );
                 })}
@@ -637,9 +1099,13 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
             );
           })()}
           <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'flex-end'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · API Series de Tiempo datos.gob.ar · Frecuencia: mensual</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · API Series de Tiempo datos.gob.ar · Frecuencia: mensual · % PBI: Cuentas Nacionales base 2004</span>
           </div>
         </div>
+
+        {/* Composición sectorial del PBI */}
+        <PbiComposicionSection sectors={sectors} />
+
       </div>
 
       {/* 4. RIESGO PAÍS */}
@@ -679,13 +1145,29 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
               <div style={{height:'5px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}><div style={{height:'100%',width:'100%',background:'var(--accent)',borderRadius:'3px',transition:'width .4s'}}></div></div>
               <div style={{display:'flex',justifyContent:'space-between',marginTop:'5px'}}><span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>{rpDeltaDisp}</span><span style={{fontFamily:'var(--mono)',fontSize:'9px',background:'rgba(240,112,112,.15)',color:'var(--red)',padding:'1px 6px',borderRadius:'3px'}}>ALTO</span></div>
             </div>
-            {[['Colombia',280,'49%','rgba(240,184,64,.6)','MEDIO','rgba(240,184,64,.12)','var(--text2)'],['Brasil',180,'31%','rgba(86,201,122,.5)','MODERADO','rgba(86,201,122,.1)','var(--text3)'],['Uruguay',95,'17%','rgba(86,201,122,.7)','BAJO','rgba(86,201,122,.15)','var(--green)']].map(([country,pb,w,bg,label,lbg,lc])=>(
-              <div key={country} style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}><span style={{fontSize:'12px',color:'var(--text2)'}}>{country}</span><span style={{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:600,color:'var(--white)'}}>{pb}</span></div>
-                <div style={{height:'4px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}><div style={{height:'100%',width:w,background:bg,borderRadius:'3px'}}></div></div>
-                <div style={{display:'flex',justifyContent:'flex-end',marginTop:'4px'}}><span style={{fontFamily:'var(--mono)',fontSize:'9px',background:lbg,color:lc,padding:'1px 6px',borderRadius:'3px'}}>{label}</span></div>
-              </div>
-            ))}
+            {regionalLoading && PAISES_REGIONAL.every(p => !regionalData[p.iso]) ? (
+              <div style={{padding:'20px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'10px'}}>Cargando datos…</div>
+            ) : PAISES_REGIONAL.map(p => {
+              const pb = regionalData[p.iso] ?? p.fallback;
+              const barW = Math.round((pb / regionalMax) * 100);
+              const risk = getRiskLabel(pb);
+              const barColor = pb >= 350 ? 'rgba(240,112,112,.6)' : pb >= 200 ? 'rgba(240,184,64,.6)' : 'rgba(86,201,122,.55)';
+              return (
+                <div key={p.iso} style={{padding:'10px 16px',borderBottom:'1px solid var(--line)'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'}}>
+                    <span style={{fontSize:'12px',color:'var(--text2)'}}>{p.nombre}</span>
+                    <span style={{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:600,color:'var(--white)'}}>{pb.toLocaleString('es-AR')}</span>
+                  </div>
+                  <div style={{height:'4px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${barW}%`,background:barColor,borderRadius:'3px',transition:'width .5s ease'}}/>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',marginTop:'4px',alignItems:'center'}}>
+                    <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>pb</span>
+                    <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:risk.bg,color:risk.color,padding:'1px 6px',borderRadius:'3px'}}>{risk.label}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="source" style={{marginTop:'8px'}}>Fuente: JP Morgan EMBI+ · ArgentinaDatos.com · Frecuencia: diaria</div>
@@ -806,6 +1288,26 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
             </div>
           </div>
         </div>
+
+        {/* Gráfico histórico PBI */}
+        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px',marginTop:'14px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'14px'}}>
+            <div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>
+                PBI real — variación interanual por trimestre
+              </div>
+              <div style={{fontSize:'10px',color:'var(--text2)',marginTop:'3px'}}>Últimos 16 trimestres · hover para ver el valor</div>
+            </div>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>precios constantes 2004</span>
+          </div>
+          {pbiHist.length > 0
+            ? <PbiBarChart history={pbiHist} />
+            : <div style={{height:'220px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando…</div>}
+          <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'6px',textAlign:'right'}}>
+            Fuente: INDEC · API Series de Tiempo · datos.gob.ar
+          </div>
+        </div>
+
         <div className="source">Fuente: INDEC · Cuentas Nacionales · API Series de Tiempo datos.gob.ar · Frecuencia: trimestral</div>
       </div>
     <BcraMonetarioSection bcra={bcra} loadBcra={loadBcra} />

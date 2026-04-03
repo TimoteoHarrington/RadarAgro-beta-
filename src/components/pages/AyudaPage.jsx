@@ -20,7 +20,6 @@ const GLOSARIOS = {
   },
   hacienda: {
     label: 'Hacienda',
-    icon: '🐄',
     terms: [
       { term: 'Invernada', def: 'Compra de animales jóvenes (terneros o novillitos) para engordar. Los precios se expresan en ARS/kg vivo.' },
       { term: 'Feedlot', def: 'Sistema de engorde intensivo a corral con ración balanceada. Alternativa al engorde a pasto (ciclo completo).' },
@@ -34,7 +33,6 @@ const GLOSARIOS = {
   },
   financiero: {
     label: 'Financiero',
-    icon: '💵',
     terms: [
       { term: 'Dólar Oficial', def: 'Tipo de cambio regulado por el BCRA. Es el precio de referencia para operaciones comerciales y bancarias.' },
       { term: 'Dólar Blue', def: 'Tipo de cambio informal o "negro". Se opera fuera del sistema bancario, sin intervención del BCRA.' },
@@ -48,9 +46,8 @@ const GLOSARIOS = {
   },
   macro: {
     label: 'Macroeconomía',
-    icon: '📊',
     terms: [
-      { term: 'IPC / INDEC', def: 'Índice de Precios al Consumidor publicado mensualmente por el Instituto Nacional de Estadística y Censos.' },
+      { term: 'IPC', def: 'Índice de Precios al Consumidor publicado mensualmente por el Instituto Nacional de Estadística y Censos.' },
       { term: 'EMAE', def: 'Estimador Mensual de Actividad Económica — indicador adelantado del PBI publicado por INDEC.' },
       { term: 'PBI', def: 'Producto Bruto Interno — valor total de bienes y servicios producidos en el país en un período.' },
       { term: 'Reservas BCRA', def: 'Reservas internacionales del Banco Central. Incluye oro, divisas y DEGs del FMI. Indicador clave de solvencia.' },
@@ -62,7 +59,6 @@ const GLOSARIOS = {
   },
   mundo: {
     label: 'Monitor Global',
-    icon: '🌐',
     terms: [
       { term: 'S&P 500', def: 'Índice bursátil de las 500 principales empresas de EEUU. Principal referencia del mercado accionario global.' },
       { term: 'WTI', def: 'West Texas Intermediate — referencia del precio internacional del petróleo crudo de EEUU.' },
@@ -76,7 +72,6 @@ const GLOSARIOS = {
   },
   insumos: {
     label: 'Insumos',
-    icon: '🧪',
     terms: [
       { term: 'Urea', def: 'Fertilizante nitrogenado más usado en Argentina. Se expresa en ARS/tn o USD/tn.' },
       { term: 'MAP', def: 'Fosfato Monoamónico — fertilizante fosforado muy utilizado en cultivos de verano e invierno.' },
@@ -89,7 +84,6 @@ const GLOSARIOS = {
   },
   indices: {
     label: 'Índices',
-    icon: '📈',
     terms: [
       { term: 'Índice Feedlot', def: 'kg novillo / tn maíz. Umbral de rentabilidad: 15. Mide si el engorde a corral es negocio.' },
       { term: 'Índice Cría', def: 'Ratio ternero / novillo. Umbral: 1,30. Por encima, criar es más rentable que engordar.' },
@@ -102,7 +96,6 @@ const GLOSARIOS = {
   },
   impuestos: {
     label: 'Impositivo',
-    icon: '🏛️',
     terms: [
       { term: 'Retención / DE', def: 'Derechos de Exportación — alícuota aplicada sobre el precio FOB exportado. Reduce el precio que recibe el productor.' },
       { term: 'IVA Agropecuario', def: 'El IVA en productos agropecuarios primarios es del 10,5% (tasa reducida). El IVA general es 21%.' },
@@ -115,7 +108,6 @@ const GLOSARIOS = {
   },
   feriados: {
     label: 'Feriados',
-    icon: '📅',
     terms: [
       { term: 'Feriado nacional', def: 'Día no laborable para todo el país, definido por ley o decreto del Poder Ejecutivo Nacional.' },
       { term: 'Día no laborable', def: 'Día optativo para los empleadores. Distinto al feriado nacional, donde el descanso es obligatorio.' },

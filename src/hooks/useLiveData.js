@@ -1,5 +1,5 @@
 // hooks/useLiveData.js
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   fetchDolares, fetchInflacion, fetchInflacionInteranual,
   fetchRiesgoPais, fetchRiesgoPaisUltimo, fetchFeriados,
@@ -7,7 +7,22 @@ import {
   fetchMundoData, fetchBCRAData, fetchCotizaciones, fetchINDEC,
 } from '../services/api';
 
-const POLL_INTERVAL = 5 * 60 * 1000;  // 5 minutos
+// Intervalos de polling por tipo de dato
+const POLL_FAST  =  5 * 60 * 1000;  //  5 min — dólares (cambian cada hora)
+const POLL_SLOW  = 60 * 60 * 1000;  // 60 min — UVA, tasas, riesgo país (diarios)
+const POLL_DAILY = 24 * 60 * 60 * 1000; // 24 hs — BCRA, INDEC, inflación, feriados
+
+// Devuelve true si han pasado más de `ms` desde el último fetch guardado en sessionStorage
+function isStale(key, ms) {
+  try {
+    const last = parseInt(sessionStorage.getItem('ra-fetch-' + key) || '0', 10);
+    return Date.now() - last > ms;
+  } catch { return true; }
+}
+
+function markFresh(key) {
+  try { sessionStorage.setItem('ra-fetch-' + key, String(Date.now())); } catch {}
+}
 
 export function useLiveData() {
   const [dolares,     setDolares]     = useState(null);
@@ -26,8 +41,6 @@ export function useLiveData() {
     mundo: 'idle', bcra: 'idle', cotizaciones: 'idle', indec: 'loading',
   });
   const [lastUpdate, setLastUpdate] = useState(null);
-  const timerRef = useRef(null);
-
   const setStatus = (key, status) =>
     setApiStatus(prev => ({ ...prev, [key]: status }));
 
@@ -213,16 +226,34 @@ export function useLiveData() {
     setStatus('indec', 'ok');
   }, []);
 
-  // ── Carga inicial y polling ───────────────────────────────────
-  const loadCoreData = useCallback(() => {
-    Promise.allSettled([
-      loadDolares(), loadInflacion(), loadRiesgoPais(),
-      loadFeriados(), loadUva(), loadTasas(),
-      loadIndec(),  // EMAE + PBI — se actualiza con el mismo intervalo que el resto
-    ]);
-  }, [loadDolares, loadInflacion, loadRiesgoPais, loadFeriados, loadUva, loadTasas, loadIndec]);
+  // ── Carga inicial y polling con TTL por fuente ───────────────
+  //
+  // Rápido  (5 min):  dólares — cambian durante el día
+  // Lento   (60 min): UVA, tasas, riesgo país — datos diarios
+  // Diario  (24 hs):  BCRA, INDEC, inflación, feriados — no cambian en el día
+  //
+  // sessionStorage guarda el timestamp del último fetch para que
+  // recargar la pestaña no repida datos que ya están frescos.
 
-  // loadAll incluye también los nuevos endpoints (para reloadAll manual)
+  const loadFast = useCallback(() => {
+    // Dólares siempre — son el dato más dinámico
+    loadDolares();
+  }, [loadDolares]);
+
+  const loadSlow = useCallback(() => {
+    if (isStale('uva',        POLL_SLOW))  { loadUva();        markFresh('uva'); }
+    if (isStale('tasas',      POLL_SLOW))  { loadTasas();      markFresh('tasas'); }
+    if (isStale('riesgoPais', POLL_SLOW))  { loadRiesgoPais(); markFresh('riesgoPais'); }
+  }, [loadUva, loadTasas, loadRiesgoPais]);
+
+  const loadDaily = useCallback(() => {
+    if (isStale('bcra',      POLL_DAILY)) { loadBcra();      markFresh('bcra'); }
+    if (isStale('inflacion', POLL_DAILY)) { loadInflacion(); markFresh('inflacion'); }
+    if (isStale('indec',     POLL_DAILY)) { loadIndec();     markFresh('indec'); }
+    if (isStale('feriados',  POLL_DAILY)) { loadFeriados();  markFresh('feriados'); }
+  }, [loadBcra, loadInflacion, loadIndec, loadFeriados]);
+
+  // loadAll forzado — ignora TTL, para el botón Reintentar
   const loadAll = useCallback(() => {
     Promise.allSettled([
       loadDolares(), loadInflacion(), loadRiesgoPais(),
@@ -233,10 +264,22 @@ export function useLiveData() {
       loadMundo, loadBcra, loadCotizaciones, loadIndec]);
 
   useEffect(() => {
-    loadCoreData();
-    timerRef.current = setInterval(loadCoreData, POLL_INTERVAL);
-    return () => clearInterval(timerRef.current);
-  }, [loadCoreData]);
+    // Carga inicial — todos los grupos
+    loadFast();
+    loadSlow();
+    loadDaily();
+
+    // Polling diferenciado
+    const fastTimer  = setInterval(loadFast,  POLL_FAST);
+    const slowTimer  = setInterval(loadSlow,  POLL_SLOW);
+    const dailyTimer = setInterval(loadDaily, POLL_DAILY);
+
+    return () => {
+      clearInterval(fastTimer);
+      clearInterval(slowTimer);
+      clearInterval(dailyTimer);
+    };
+  }, [loadFast, loadSlow, loadDaily]);
 
   // ── Enriquecimiento de inflacion con valores BCRA ───────────
   // Cuando ambos estados cargan, resuelve la fuente primaria (BCRA)

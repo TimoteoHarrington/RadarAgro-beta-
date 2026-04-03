@@ -24,23 +24,6 @@ const CHART_PALETTE = [
   'rgba(110,180,255,0.80)',  // sky blue
 ];
 
-// Participación sectorial en el PBI (INDEC Cuentas Nacionales, base 2004)
-const PBI_SECTOR_SHARE = {
-  'Agro, ganadería y silvicultura': 8.5,
-  'Pesca':                          0.3,
-  'Explotación minera':             3.2,
-  'Industria manufacturera':        18.4,
-  'Electricidad, gas y agua':       2.8,
-  'Construcción':                   5.1,
-  'Comercio may. y minorista':      12.6,
-  'Hoteles y restaurantes':         2.3,
-  'Transporte y comunicaciones':    8.9,
-  'Intermediación financiera':      4.4,
-  'Servicios inmobiliarios':        14.2,
-  'Administración pública':         7.8,
-  'Enseñanza':                      5.7,
-  'Salud':                          5.8,
-};
 
 // Países para comparativa regional
 const PAISES_REGIONAL = [
@@ -663,17 +646,13 @@ function TabPbi({ pbi, sectors }) {
   const pbiHist  = pbi?.history ?? [];
   const fmtPbi   = v => v!=null?(v>=0?'+':'')+v.toFixed(1).replace('.',',')+'%':'—';
 
-  // Usar participaciones reales de la API (pbi.sectors); fallback a hardcode si no llegaron aún
+  // Usar participaciones reales de la API (pbi.sectors) — sin fallback hardcodeado
   const apiSectors = pbi?.sectors ?? [];
-  const donutItems = apiSectors.length
-    ? apiSectors.map(s => ({
-        nombre: s.nombre,
-        share:  s.share,
-        vab:    s.vab ?? null,
-      }))
-    : Object.entries(PBI_SECTOR_SHARE)
-        .map(([nombre, share]) => ({ nombre, share, vab: null }))
-        .sort((a,b) => b.share - a.share);
+  const donutItems = apiSectors.map(s => ({
+    nombre: s.nombre,
+    share:  s.share,
+    vab:    s.vab ?? null,
+  }));
   const maxShare = Math.max(...donutItems.map(x=>x.share), 1);
 
   return (
@@ -738,15 +717,18 @@ function TabPbi({ pbi, sectors }) {
           <div>
             <div style={{fontSize:'14px',fontWeight:600,color:'var(--white)'}}>Composición del PBI por sector</div>
             <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginTop:'3px',letterSpacing:'.04em'}}>
-              {apiSectors.length
-                ? 'VAB A PRECIOS CORRIENTES · INDEC · TRIMESTRAL · hover sobre el donut'
-                : 'ESTIMADO · BASE 2004 · INDEC CUENTAS NACIONALES · hover sobre el donut'}
+              VAB A PRECIOS CORRIENTES · INDEC · TRIMESTRAL · hover sobre el donut
             </div>
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'240px 1fr'}}>
           <div style={{padding:'16px',borderRight:'1px solid var(--line)',display:'flex',alignItems:'center',justifyContent:'center',minHeight:'268px'}}>
-            <div style={{width:'100%',height:'236px'}}><PbiDonutChart items={donutItems}/></div>
+            <div style={{width:'100%',height:'236px'}}>
+              {donutItems.length
+                ? <PbiDonutChart items={donutItems}/>
+                : <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>cargando…</div>
+              }
+            </div>
           </div>
           <div style={{overflowY:'auto',maxHeight:'268px'}}>
             <div style={{display:'grid',gridTemplateColumns:'10px 1fr 52px 90px',gap:'8px',padding:'8px 14px 6px',borderBottom:'1px solid rgba(255,255,255,.05)',position:'sticky',top:0,background:'var(--bg1)',zIndex:1}}>
@@ -755,7 +737,9 @@ function TabPbi({ pbi, sectors }) {
               <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>% PBI</span>
               <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>VAB trim.</span>
             </div>
-            {donutItems.map((item,i) => {
+            {donutItems.length === 0
+              ? <div style={{padding:'32px 16px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>cargando sectores…</div>
+              : donutItems.map((item,i) => {
               const col = CHART_PALETTE[i % CHART_PALETTE.length];
               // VAB viene en MM$ corrientes del trimestre (ej: 112761 = $112.761 MM)
               // Mostramos en miles de MM$ (billones) cuando supera 1000, sino en MM$
@@ -782,17 +766,15 @@ function TabPbi({ pbi, sectors }) {
                 </div>
               );
             })}
-            <div style={{padding:'7px 14px',borderTop:'1px solid rgba(255,255,255,.05)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            {donutItems.length > 0 && <div style={{padding:'7px 14px',borderTop:'1px solid rgba(255,255,255,.05)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Total VA (excl. imp. y subv.)</span>
               <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:700,color:'var(--white)'}}>{donutItems.reduce((s,v)=>s+v.share,0).toFixed(1)}%</span>
-            </div>
+            </div>}
           </div>
         </div>
         <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'space-between'}}>
           <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
-            {apiSectors.length
-              ? 'VAB a precios corrientes · INDEC · datos.gob.ar · trimestral'
-              : 'Participación: INDEC Cuentas Nacionales · base 2004 (estático)'}
+            VAB a precios corrientes · INDEC · datos.gob.ar · trimestral
           </span>
           <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
             B = miles de MM$ corrientes del trimestre
@@ -908,7 +890,7 @@ function TabEmae({ emae, indec }) {
                 const color=neg?'var(--red)':'var(--green)';
                 const posPct=!neg?(valor/maxPos)*100:0;
                 const negPct=neg?(Math.abs(valor)/maxNeg)*100:0;
-                const pbiShare=PBI_SECTOR_SHARE[nombre]??null;
+                const pbiShare=indec?.pbi?.sectors?.find(s=>s.nombre===nombre)?.share??null;
                 return (
                   <div key={nombre} style={{display:'flex',alignItems:'center',padding:'5px 0',borderBottom:i<arr.length-1?'1px solid rgba(255,255,255,0.025)':'none'}}>
                     <div style={{width:'200px',flexShrink:0,fontSize:'11px',color:isTop?'var(--white)':neg?'var(--red)':'var(--text2)',fontWeight:isTop?600:400,paddingRight:'10px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{nombre}</div>
@@ -934,7 +916,7 @@ function TabEmae({ emae, indec }) {
           );
         })()}
         <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'flex-end'}}>
-          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · API Series de Tiempo datos.gob.ar · % PBI: Cuentas Nacionales base 2004</span>
+          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Fuente: INDEC · API Series de Tiempo · datos.gob.ar · % PBI: VAB a precios corrientes</span>
         </div>
       </div>
     </div>

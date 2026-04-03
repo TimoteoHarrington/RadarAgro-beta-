@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     const [emaeIdxRes, pbiIdxRes, ...vabBatchResults] = await Promise.allSettled([
       fetchSeries(EMAE_IDX_ID, 36),
       fetchSeries(PBI_IDX_ID, 24),
-      ...vabBatches.map(ids => fetchSeries(ids, 4)),
+      ...vabBatches.map(ids => fetchSeries(ids, 8)),  // 8 filas = margen para nulls por lag
     ]);
 
     const emaeIdxRaw  = emaeIdxRes.status === 'fulfilled' ? extractHistory(emaeIdxRes.value) : [];
@@ -180,22 +180,25 @@ export default async function handler(req, res) {
     const prevPbi = pbiIaHistory.length > 1 ? pbiIaHistory[pbiIaHistory.length - 2] : null;
 
     // ── VAB sectorial: calcular participación % desde la API ─────────────
-    // Reconstruir mapa de valores: { id → último valor }
+    // Para cada batch, buscar el primer valor no-null por columna (las series
+    // pueden tener distinto lag y data[0] puede ser null para algunas)
     const vabValueMap = {};
-    let batchOffset = 0;
     for (let bi = 0; bi < vabBatches.length; bi++) {
       const batchIds  = vabBatches[bi];
       const batchRes  = vabBatchResults[bi];
       const batchData = batchRes?.status === 'fulfilled' ? batchRes.value : null;
-      if (batchData?.data?.length) {
-        // La API devuelve columnas: [fecha, col1, col2, ...] por cada id en orden
-        const lastRow = batchData.data[0]; // sort=desc → primer registro = más reciente
-        batchIds.forEach((id, colIdx) => {
-          const val = lastRow[colIdx + 1];
-          if (val != null) vabValueMap[id] = parseFloat(val);
-        });
-      }
-      batchOffset += batchIds.length;
+      if (!batchData?.data?.length) continue;
+
+      batchIds.forEach((id, colIdx) => {
+        // Buscar primera fila donde esta columna no sea null
+        for (const row of batchData.data) {
+          const val = row[colIdx + 1];
+          if (val != null) {
+            vabValueMap[id] = parseFloat(val);
+            break;
+          }
+        }
+      });
     }
 
     const vabTotal = vabValueMap[VAB_TOTAL_ID] ?? null;
@@ -231,8 +234,20 @@ export default async function handler(req, res) {
         fecha:         lastPbi?.fecha ?? null,
         fechaAnterior: prevPbi?.fecha ?? null,
         history:       pbiIaHistory.map(d => ({ ...d, valor: Math.round(d.valor * 10) / 10 })),
-        sectors:       pbiSectors,   // ← participación % real desde API
-        vabTotal,                    // ← total VAB en MM$ corrientes
+        sectors:       pbiSectors,
+        vabTotal,
+        // Debug: cuántos valores se resolvieron del VAB y estado de cada batch
+        _vabDebug: {
+          vabTotalFound: vabTotal != null,
+          sectorsResolved: pbiSectors.length,
+          batchStatuses: vabBatchResults.map((r, i) => ({
+            batch: i,
+            status: r.status,
+            rows: r.status === 'fulfilled' ? (r.value?.data?.length ?? 0) : 0,
+            error: r.status === 'rejected' ? String(r.reason) : null,
+          })),
+          keysFound: Object.keys(vabValueMap).length,
+        },
       },
       timestamp: new Date().toISOString(),
     };

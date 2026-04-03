@@ -8,6 +8,7 @@ const API_PATH = '/series/api/series/';
 const EMAE_IDX_ID = '143.3_NO_PR_2004_A_21';
 const PBI_IDX_ID  = '4.2_OGP_2004_T_17';
 
+// IDs EMAE (índice mensual, para variación interanual por sector)
 const SECTOR_IDS = {
   'Agro, ganadería y silvicultura': '11.3_ISOM_2004_M_39',
   'Pesca':                          '11.3_VIPAA_2004_M_5',
@@ -23,6 +24,26 @@ const SECTOR_IDS = {
   'Administración pública':         '11.3_C_2004_M_60',
   'Enseñanza':                      '11.3_CMMR_2004_M_10',
   'Salud':                          '11.3_HR_2004_M_24',
+};
+
+// IDs VAB por sector a precios corrientes trimestrales (307.2_*)
+// Fuente: datos.gob.ar dataset sspm_305, recurso 305.2
+const VAB_TOTAL_ID = '307.2_VALOR_AGRECOS_0_T_36';
+const VAB_SECTOR_IDS = {
+  'Agro, ganadería y silvicultura': '307.2_AGRICULTURTAL_0_T_45',
+  'Pesca':                          '307.2_PESCASCA_0_T_5',
+  'Explotación minera':             '307.2_EXPLOTACIOTAL_0_T_32',
+  'Industria manufacturera':        '307.2_INDUSTRIA_TAL_0_T_29',
+  'Electricidad, gas y agua':       '307.2_ELECTRICIDTAL_0_T_27',
+  'Construcción':                   '307.2_CONSTRUCCIION_0_T_12',
+  'Comercio may. y minorista':      '307.2_COMERCIO_MNES_0_T_41',
+  'Hoteles y restaurantes':         '307.2_HOTELES_RETAL_0_T_26',
+  'Transporte y comunicaciones':    '307.2_TRANSPORTETAL_0_T_46',
+  'Intermediación financiera':      '307.2_INTERMEDIATAL_0_T_31',
+  'Servicios inmobiliarios':        '307.2_ACTIVIDADETAL_0_T_54',
+  'Administración pública':         '307.2_ADMINISTRANSA_0_T_30',
+  'Enseñanza':                      '307.2_ENSENIANZATAL_0_T_16',
+  'Salud':                          '307.2_SERVICIOS_TAL_0_T_30',
 };
 
 async function fetchSeries(ids, limit = 5) {
@@ -76,9 +97,19 @@ export default async function handler(req, res) {
   Object.entries(HEADERS).forEach(([k, v]) => res.setHeader(k, v));
 
   try {
-    const [emaeIdxRes, pbiIdxRes] = await Promise.allSettled([
+    // VAB sectorial: total + 14 sectores en batches de 5
+    const vabSectorNames  = Object.keys(VAB_SECTOR_IDS);
+    const vabSectorIdList = Object.values(VAB_SECTOR_IDS);
+    const vabAllIds       = [VAB_TOTAL_ID, ...vabSectorIdList];
+    const vabBatches      = Array.from(
+      { length: Math.ceil(vabAllIds.length / 5) },
+      (_, b) => vabAllIds.slice(b * 5, b * 5 + 5)
+    );
+
+    const [emaeIdxRes, pbiIdxRes, ...vabBatchResults] = await Promise.allSettled([
       fetchSeries(EMAE_IDX_ID, 36),
       fetchSeries(PBI_IDX_ID, 24),
+      ...vabBatches.map(ids => fetchSeries(ids, 4)),
     ]);
 
     const emaeIdxRaw  = emaeIdxRes.status === 'fulfilled' ? extractHistory(emaeIdxRes.value) : [];
@@ -148,6 +179,38 @@ export default async function handler(req, res) {
     const lastPbi = pbiIaHistory.length ? pbiIaHistory[pbiIaHistory.length - 1] : null;
     const prevPbi = pbiIaHistory.length > 1 ? pbiIaHistory[pbiIaHistory.length - 2] : null;
 
+    // ── VAB sectorial: calcular participación % desde la API ─────────────
+    // Reconstruir mapa de valores: { id → último valor }
+    const vabValueMap = {};
+    let batchOffset = 0;
+    for (let bi = 0; bi < vabBatches.length; bi++) {
+      const batchIds  = vabBatches[bi];
+      const batchRes  = vabBatchResults[bi];
+      const batchData = batchRes?.status === 'fulfilled' ? batchRes.value : null;
+      if (batchData?.data?.length) {
+        // La API devuelve columnas: [fecha, col1, col2, ...] por cada id en orden
+        const lastRow = batchData.data[0]; // sort=desc → primer registro = más reciente
+        batchIds.forEach((id, colIdx) => {
+          const val = lastRow[colIdx + 1];
+          if (val != null) vabValueMap[id] = parseFloat(val);
+        });
+      }
+      batchOffset += batchIds.length;
+    }
+
+    const vabTotal = vabValueMap[VAB_TOTAL_ID] ?? null;
+    const pbiSectors = vabSectorNames
+      .map(nombre => {
+        const id    = VAB_SECTOR_IDS[nombre];
+        const valor = vabValueMap[id] ?? null;
+        const share = (vabTotal && valor != null)
+          ? Math.round((valor / vabTotal) * 1000) / 10  // % con 1 decimal
+          : null;
+        return { nombre, share, vab: valor };
+      })
+      .filter(s => s.share != null)
+      .sort((a, b) => b.share - a.share);
+
     const result = {
       emae: {
         general: {
@@ -168,6 +231,8 @@ export default async function handler(req, res) {
         fecha:         lastPbi?.fecha ?? null,
         fechaAnterior: prevPbi?.fecha ?? null,
         history:       pbiIaHistory.map(d => ({ ...d, valor: Math.round(d.valor * 10) / 10 })),
+        sectors:       pbiSectors,   // ← participación % real desde API
+        vabTotal,                    // ← total VAB en MM$ corrientes
       },
       timestamp: new Date().toISOString(),
     };

@@ -663,10 +663,18 @@ function TabPbi({ pbi, sectors }) {
   const pbiHist  = pbi?.history ?? [];
   const fmtPbi   = v => v!=null?(v>=0?'+':'')+v.toFixed(1).replace('.',',')+'%':'—';
 
-  const donutItems = Object.entries(PBI_SECTOR_SHARE)
-    .map(([nombre, share], i) => ({ nombre, share, valor: sectors.find(s=>s.nombre===nombre)?.valor ?? null }))
-    .sort((a,b) => b.share - a.share);
-  const maxShare = Math.max(...donutItems.map(x=>x.share));
+  // Usar participaciones reales de la API (pbi.sectors); fallback a hardcode si no llegaron aún
+  const apiSectors = pbi?.sectors ?? [];
+  const donutItems = apiSectors.length
+    ? apiSectors.map(s => ({
+        nombre: s.nombre,
+        share:  s.share,
+        valor:  sectors.find(e => e.nombre === s.nombre)?.valor ?? null,
+      }))
+    : Object.entries(PBI_SECTOR_SHARE)
+        .map(([nombre, share]) => ({ nombre, share, valor: sectors.find(s=>s.nombre===nombre)?.valor ?? null }))
+        .sort((a,b) => b.share - a.share);
+  const maxShare = Math.max(...donutItems.map(x=>x.share), 1);
 
   return (
     <div>
@@ -773,12 +781,16 @@ function TabPbi({ pbi, sectors }) {
             })}
             <div style={{padding:'7px 14px',borderTop:'1px solid rgba(255,255,255,.05)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Total VA (excl. imp. y subv.)</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:700,color:'var(--white)'}}>{Object.values(PBI_SECTOR_SHARE).reduce((s,v)=>s+v,0).toFixed(1)}%</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:700,color:'var(--white)'}}>{donutItems.reduce((s,v)=>s+v.share,0).toFixed(1)}%</span>
             </div>
           </div>
         </div>
         <div style={{padding:'8px 20px',borderTop:'1px solid var(--line)',display:'flex',justifyContent:'space-between'}}>
-          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Participación: INDEC Cuentas Nacionales · base 2004</span>
+          <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>
+            {apiSectors.length
+              ? 'Participación: VAB a precios corrientes · INDEC · datos.gob.ar'
+              : 'Participación: INDEC Cuentas Nacionales · base 2004 (estático)'}
+          </span>
           <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Var. EMAE: datos.gob.ar · mensual</span>
         </div>
       </div>

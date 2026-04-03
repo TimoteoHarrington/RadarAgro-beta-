@@ -8,20 +8,20 @@ const MESES_F = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Ag
 
 // Paleta coherente con el sistema de diseño (--accent, --green, --gold, --red, variantes)
 const CHART_PALETTE = [
-  'rgba(91,156,246,0.85)',   // accent blue
-  'rgba(74,191,120,0.82)',   // green
-  'rgba(143,184,240,0.80)',  // blue pálido / gold
-  'rgba(100,195,180,0.80)',  // teal
-  'rgba(130,160,235,0.80)',  // periwinkle
-  'rgba(74,191,140,0.72)',   // green-teal
-  'rgba(91,156,246,0.55)',   // accent dim
-  'rgba(160,200,245,0.75)',  // celeste
-  'rgba(110,185,160,0.72)',  // verde agua
-  'rgba(85,145,230,0.68)',   // blue mid
-  'rgba(60,175,145,0.70)',   // esmeralda
-  'rgba(170,210,245,0.72)',  // azul claro
-  'rgba(80,195,165,0.65)',   // menta
-  'rgba(115,165,240,0.68)',  // azul medio
+  'rgba(91,156,246,0.92)',   // accent blue
+  'rgba(74,191,120,0.90)',   // green
+  'rgba(250,185,50,0.88)',   // gold/amber
+  'rgba(100,210,195,0.88)',  // teal
+  'rgba(170,120,240,0.86)',  // violet
+  'rgba(240,130,70,0.86)',   // orange
+  'rgba(60,190,230,0.85)',   // cyan
+  'rgba(230,90,130,0.82)',   // pink-red
+  'rgba(130,210,90,0.84)',   // lime
+  'rgba(80,140,230,0.82)',   // periwinkle
+  'rgba(240,200,60,0.80)',   // yellow
+  'rgba(50,200,165,0.82)',   // emerald
+  'rgba(200,100,200,0.78)',  // magenta
+  'rgba(110,180,255,0.80)',  // sky blue
 ];
 
 // Participación sectorial en el PBI (INDEC Cuentas Nacionales, base 2004)
@@ -218,26 +218,26 @@ function IpcHeatmap({ data }) {
   const getColor = (v) => {
     if (v == null) return null;
     const t = Math.min(1, Math.max(0, (v - p10) / (p90 - p10)));
-    // verde → amarillo → naranja → rojo
+    // verde vivo → amarillo → naranja → rojo vivo
     let r, g, b;
     if (t < 0.33) {
-      // verde puro → amarillo-verde
+      // verde saturado → amarillo
       const s = t / 0.33;
-      r = Math.round(40 + s * 160);  // 40 → 200
-      g = Math.round(175 - s * 20);  // 175 → 155
-      b = Math.round(80  - s * 65);  // 80  → 15
+      r = Math.round(30  + s * 215);  // 30  → 245
+      g = Math.round(200 - s * 40);   // 200 → 160
+      b = Math.round(60  - s * 55);   // 60  → 5
     } else if (t < 0.66) {
-      // amarillo-verde → naranja
+      // amarillo → naranja
       const s = (t - 0.33) / 0.33;
-      r = Math.round(200 + s * 40);  // 200 → 240
-      g = Math.round(155 - s * 80);  // 155 → 75
-      b = Math.round(15  - s * 10);  // 15  → 5
+      r = Math.round(245);             // 245 fijo
+      g = Math.round(160 - s * 110);  // 160 → 50
+      b = Math.round(5);              // 5   fijo
     } else {
-      // naranja → rojo
+      // naranja → rojo saturado
       const s = (t - 0.66) / 0.34;
-      r = Math.round(240 - s * 20);  // 240 → 220
-      g = Math.round(75  - s * 65);  // 75  → 10
-      b = Math.round(5);             // 5   → 5
+      r = Math.round(245 - s * 15);   // 245 → 230
+      g = Math.round(50  - s * 45);   // 50  → 5
+      b = Math.round(5   + s * 10);   // 5   → 15
     }
     return { rgb: `${r},${g},${b}`, t };
   };
@@ -253,7 +253,7 @@ function IpcHeatmap({ data }) {
             {byYear[yr].map((v, m) => {
               const c = getColor(v);
               if (!c) return <div key={m} style={{background:'var(--bg3)',borderRadius:'4px',height:'34px',opacity:0.3}}/>;
-              const alpha = 0.18 + c.t * 0.65;
+              const alpha = 0.30 + c.t * 0.62;
               const vStr = v.toFixed(1).replace('.', ',');
               const label = `${MESES_C[m+1]} ${yr}: ${vStr}%`;
               return (
@@ -701,7 +701,10 @@ function TabPbi({ pbi, sectors }) {
           <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>en el período disponible</div>
         </div>
         <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Proyección 2026 — FMI</div>
+          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px',display:'flex',alignItems:'center',gap:'6px'}}>
+            Proyección 2026 — FMI
+            <span style={{background:'rgba(250,185,50,0.15)',color:'rgba(250,185,50,0.85)',border:'1px solid rgba(250,185,50,0.3)',borderRadius:'3px',padding:'1px 5px',fontSize:'7px',letterSpacing:'.05em'}}>ESTÁTICO</span>
+          </div>
           <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--accent)',lineHeight:1}}>+5,0%</div>
           <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>WEO Oct 2025 · sujeto a revisión</div>
           <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Consenso privado: +4,2%</div>
@@ -958,9 +961,16 @@ function TabRiesgoPais({ riesgoPais }) {
         </div>
         <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
           <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>vs Brasil</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{rpVal!=null?(rpVal/180).toFixed(1)+'×':'—'}</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',marginTop:'6px',color:'var(--text3)'}}>veces el riesgo de Brasil</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Brasil referencia: 180 pb</div>
+          {(() => {
+            const braVal = regionalData['bra'] ?? null;
+            const ratio = rpVal != null && braVal ? (rpVal / braVal).toFixed(1) + '×' : '—';
+            const braDisp = braVal ? braVal.toLocaleString('es-AR') + ' pb' : 'cargando…';
+            return (<>
+              <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{ratio}</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'10px',marginTop:'6px',color:'var(--text3)'}}>veces el riesgo de Brasil</div>
+              <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Brasil: {braDisp} · EMBI+</div>
+            </>);
+          })()}
         </div>
       </div>
 

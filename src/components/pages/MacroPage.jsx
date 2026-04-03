@@ -1,5 +1,7 @@
 // MacroPage.jsx — matches reference HTML exactly
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { ApiErrorBanner } from '../ui/StatCard';
+
 
 const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_F = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -411,7 +413,7 @@ function RiesgoPaisChart({ history, range }) {
   );
 }
 
-export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec, loadIndec }) {
+export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec, loadIndec, apiStatus, reloadAll }) {
   const [rpRange, setRpRange] = React.useState('1A');
   const rpVal      = riesgoPais?.valor ?? null;
   const rpDelta    = riesgoPais?.delta ?? null;
@@ -487,6 +489,12 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
 
   return (
     <div className="page-enter">
+      <ApiErrorBanner
+        keys={['inflacion', 'riesgoPais', 'bcra', 'indec']}
+        apiStatus={apiStatus}
+        labels={{ inflacion: 'IPC/Inflación', riesgoPais: 'Riesgo País', bcra: 'BCRA', indec: 'INDEC/EMAE' }}
+        onRetry={reloadAll}
+      />
       <div className="ph">
         <div>
           <div className="ph-title">Macroeconomía Argentina <span className="help-pip" onClick={()=>goPage('ayuda')} title="Ayuda">?</span></div>

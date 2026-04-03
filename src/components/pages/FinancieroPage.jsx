@@ -1,5 +1,7 @@
 // FinancieroPage.jsx
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { ApiErrorBanner } from '../ui/StatCard';
+
 
 // ── UVA Mini Line Chart ──────────────────────────────────────
 function UvaLineChart({ history }) {
@@ -123,7 +125,7 @@ function UvaLineChart({ history }) {
   );
 }
 
-export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra }) {
+export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, apiStatus, reloadAll }) {
   const f$ = v => v ? '$' + Math.round(v).toLocaleString('es-AR') : '…';
   const fP = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%' : '—';
   const fTNA = v => v != null ? v.toFixed(2).replace('.', ',') + '%' : '—';
@@ -187,6 +189,12 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra }) 
 
   return (
     <div className="page-enter">
+      <ApiErrorBanner
+        keys={['dolares', 'uva', 'tasas', 'bcra']}
+        apiStatus={apiStatus}
+        labels={{ dolares: 'Dólares', uva: 'UVA', tasas: 'Tasas', bcra: 'BCRA' }}
+        onRetry={reloadAll}
+      />
       <div className="ph">
         <div>
           <div className="ph-title">Financiero <span className="help-pip" onClick={() => goPage('ayuda')} title="Ayuda">?</span></div>

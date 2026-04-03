@@ -1039,3 +1039,7 @@ footer {
   color: #fff;
   font-weight: 600;
 }
+.alert-strip.error { background: rgba(240,112,112,.08); border-color: rgba(240,112,112,.2); color: var(--text); }
+.alert-strip.error .alert-text strong { color: var(--red); }
+.alert-strip-retry { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--accent); cursor: pointer; background: none; border: 1px solid rgba(77,158,240,.3); border-radius: 4px; padding: 3px 10px; flex-shrink: 0; }
+.alert-strip-retry:hover { background: rgba(77,158,240,.08); }

@@ -30,10 +30,10 @@ export default function App() {
       <Navbar activePage={activePage} goPage={goPage} />
       <div className="main">
         {activePage === 'home'       && <HomePage      goPage={goPage} dolares={dolares} feriados={feriados} lastUpdate={lastUpdate} inflacion={inflacion} riesgoPais={riesgoPais} indec={indec} bcra={bcra} tasas={tasas} />}
-        {activePage === 'granos'     && <GranosPage    goPage={goPage} />}
+        {activePage === 'granos'     && <GranosPage    goPage={goPage} apiStatus={apiStatus} reloadAll={reloadAll} />}
         {activePage === 'hacienda'   && <HaciendaPage  goPage={goPage} />}
-        {activePage === 'financiero' && <FinancieroPage goPage={goPage} dolares={dolares} uva={uva} tasas={tasas} bcra={bcra} loadBcra={loadBcra} />}
-        {activePage === 'macro'      && <MacroPage     goPage={goPage} inflacion={inflacion} riesgoPais={riesgoPais} bcra={bcra} loadBcra={loadBcra} indec={indec} loadIndec={loadIndec} />}
+        {activePage === 'financiero' && <FinancieroPage goPage={goPage} dolares={dolares} uva={uva} tasas={tasas} bcra={bcra} loadBcra={loadBcra} apiStatus={apiStatus} reloadAll={reloadAll} />}
+        {activePage === 'macro'      && <MacroPage     goPage={goPage} inflacion={inflacion} riesgoPais={riesgoPais} bcra={bcra} loadBcra={loadBcra} indec={indec} loadIndec={loadIndec} apiStatus={apiStatus} reloadAll={reloadAll} />}
         {activePage === 'mundo'      && <MundoPage     goPage={goPage} mundo={mundo} loadMundo={loadMundo} />}
         {activePage === 'insumos'    && <InsumosPage   goPage={goPage} />}
         {activePage === 'indices'    && <IndicesPage   goPage={goPage} />}

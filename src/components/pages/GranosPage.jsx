@@ -1,5 +1,7 @@
 // GranosPage.jsx — Redesigned with full API coverage from Downtack PDF
 import React, { useState } from 'react';
+import { ApiErrorBanner } from '../ui/StatCard';
+
 import {
   GRANOS_OVERVIEW, GRANOS_PIZARRAS, GRANOS_FOB_FAS,
   GRANOS_FUTUROS, GRANOS_SIO, GRANOS_SUBPRODUCTOS,
@@ -506,7 +508,7 @@ const TABS = [
   { id: 'historico',     label: 'Histórico' },
 ];
 
-export function GranosPage({ goPage }) {
+export function GranosPage({ goPage, apiStatus, reloadAll }) {
   const [moneda, setMoneda]     = useState('ARS');
   const [activeTab, setActiveTab] = useState('pizarras');
 

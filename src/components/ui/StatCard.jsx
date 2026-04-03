@@ -51,3 +51,34 @@ export function AlertStrip({ type = 'warn', icon = 'ℹ', children }) {
     </div>
   );
 }
+
+// ============================================================
+// components/ui/ApiErrorBanner.jsx
+// Muestra un banner de error cuando alguna API de la página falla.
+// Uso: <ApiErrorBanner keys={['dolares','uva']} apiStatus={apiStatus} onRetry={loadDolares} />
+// - keys: array de claves de apiStatus a monitorear
+// - labels: objeto opcional { clave: 'Nombre legible' }
+// - onRetry: función a llamar al hacer click en Reintentar
+// ============================================================
+export function ApiErrorBanner({ keys = [], apiStatus = {}, labels = {}, onRetry }) {
+  const failed = keys.filter(k => apiStatus[k] === 'error');
+  if (!failed.length) return null;
+
+  const names = failed.map(k => labels[k] || k).join(', ');
+
+  return (
+    <div className="alert-strip error" role="alert">
+      <span className="alert-icon">⚠</span>
+      <span className="alert-text">
+        <strong>Error al cargar datos</strong>
+        {' · '}{names}
+        {' · Verificá tu conexión o intentá de nuevo.'}
+      </span>
+      {onRetry && (
+        <button className="alert-strip-retry" onClick={onRetry}>
+          Reintentar
+        </button>
+      )}
+    </div>
+  );
+}

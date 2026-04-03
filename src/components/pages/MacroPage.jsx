@@ -605,7 +605,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
             const negFr = maxNeg / totalRange;
             const posFr = maxPos / totalRange;
             return (
-              <div style={{padding:'6px 24px'}}>
+              <div style={{padding:'2px 24px 4px'}}>
                 {sectors.map(({nombre,valor},i,arr)=>{
                   const neg = valor < 0;
                   const color = neg ? 'var(--red)' : 'var(--green)';
@@ -614,22 +614,20 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
                   const negPct = neg ? (Math.abs(valor)/maxNeg)*100 : 0;
                   return (
                     <div key={nombre} style={{
-                      display:'flex',alignItems:'center',padding:'7px 0',
+                      display:'flex',alignItems:'center',padding:'4px 0',
                       borderBottom: i<arr.length-1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                      background: isTop ? 'rgba(86,201,122,0.04)' : neg ? 'rgba(240,112,112,0.03)' : 'transparent',
-                      borderRadius:'4px',
                     }}>
-                      <div style={{width:'220px',flexShrink:0,fontSize:'12px',color:isTop?'var(--white)':neg?'var(--red)':'var(--text2)',fontWeight:isTop?600:400,paddingRight:'12px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{nombre}</div>
+                      <div style={{width:'210px',flexShrink:0,fontSize:'11px',color:isTop?'var(--white)':neg?'var(--red)':'var(--text2)',fontWeight:isTop?600:400,paddingRight:'10px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{nombre}</div>
                       <div style={{flex:1,display:'flex',alignItems:'center',minWidth:0}}>
-                        <div style={{flex:negFr,display:'flex',justifyContent:'flex-end',paddingRight:'3px'}}>
-                          {neg && <div style={{height:'9px',width:`${negPct}%`,background:'var(--red)',borderRadius:'5px 0 0 5px',opacity:0.85}}/>}
+                        <div style={{flex:negFr,display:'flex',justifyContent:'flex-end',paddingRight:'2px'}}>
+                          {neg && <div style={{height:'7px',width:`${negPct}%`,background:'var(--red)',borderRadius:'3px 0 0 3px',opacity:0.85}}/>}
                         </div>
-                        <div style={{width:'2px',height:'26px',background:'rgba(255,255,255,0.2)',borderRadius:'1px',flexShrink:0}}/>
-                        <div style={{flex:posFr,paddingLeft:'3px'}}>
-                          {!neg && <div style={{height:'9px',width:`${posPct}%`,background:isTop?'var(--green)':'rgba(86,201,122,0.65)',borderRadius:'0 5px 5px 0',boxShadow:isTop?'0 0 10px rgba(86,201,122,0.4)':'none'}}/>}
+                        <div style={{width:'1px',height:'16px',background:'rgba(255,255,255,0.18)',flexShrink:0}}/>
+                        <div style={{flex:posFr,paddingLeft:'2px'}}>
+                          {!neg && <div style={{height:'7px',width:`${posPct}%`,background:isTop?'var(--green)':'rgba(86,201,122,0.65)',borderRadius:'0 3px 3px 0',boxShadow:isTop?'0 0 8px rgba(86,201,122,0.35)':'none'}}/>}
                         </div>
                       </div>
-                      <div style={{width:'68px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'12px',fontWeight:700,color,textAlign:'right'}}>
+                      <div style={{width:'62px',flexShrink:0,fontFamily:'var(--mono)',fontSize:'11px',fontWeight:700,color,textAlign:'right'}}>
                         {neg?'−':'+'}{Math.abs(valor).toFixed(1).replace('.',',')}%
                       </div>
                     </div>

@@ -172,7 +172,6 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
               { n: 'Cripto USDT', val: dolares?.pCry, brecha: dolares?.bCry, color: '#9a9eb4' },
             ];
             const base = dolares?.pOf || 1;
-            // For scale: use max price among all
             const allVals = [base, ...items.map(x => x.val || base)];
             const scaleMin = base * 0.97;
             const scaleMax = Math.max(...allVals) * 1.02;
@@ -180,94 +179,87 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
             const baseX = toX(base);
 
             return (
-              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '0' }}>
-                {/* Scale header */}
-                <div style={{ position: 'relative', height: '28px', marginBottom: '4px', paddingLeft: '140px' }}>
-                  {/* Base marker label */}
-                  <div style={{
-                    position: 'absolute', left: `calc(140px + ${baseX}%)`,
-                    transform: 'translateX(-50%)',
-                    fontFamily: 'var(--mono)', fontSize: '8px', color: 'var(--accent)',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    Oficial ${Math.round(base).toLocaleString('es-AR')}
+              <div style={{ padding: '16px 20px 12px' }}>
+                {/* Eje de escala con ticks */}
+                <div style={{ paddingLeft: '160px', marginBottom: '10px', position: 'relative', height: '20px' }}>
+                  <div style={{ position: 'absolute', left: `calc(160px + ${baseX}%)`, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--accent)', fontWeight: 600 }}>
+                      Oficial ${Math.round(base).toLocaleString('es-AR')}
+                    </span>
                   </div>
                 </div>
 
-                {/* Track with base line */}
-                <div style={{ position: 'relative', paddingLeft: '140px', marginBottom: '20px' }}>
-                  <div style={{ height: '2px', background: 'rgba(255,255,255,0.07)', borderRadius: '1px', position: 'relative' }}>
-                    {/* Base vertical marker */}
-                    <div style={{
-                      position: 'absolute', left: `${baseX}%`,
-                      top: '-6px', bottom: '-6px',
-                      width: '1px', background: 'rgba(77,158,240,0.5)',
-                    }} />
-                  </div>
-                </div>
-
-                {/* Each currency row */}
+                {/* Filas de tipos de cambio */}
                 {items.map((item, i) => {
-                  const price = item.val || base;
-                  const posX = toX(price);
+                  const price  = item.val || base;
+                  const posX   = toX(price);
                   const brecha = item.brecha;
-                  const brechaStr = brecha != null ? (brecha > 0 ? '+' : '') + brecha.toFixed(1).replace('.', ',') + '%' : '—';
-                  const isNeg = brecha != null && brecha < 0;
+                  const isNeg  = brecha != null && brecha < 0;
+                  const brechaStr = brecha != null
+                    ? (brecha > 0 ? '+' : '') + brecha.toFixed(1).replace('.', ',') + '%'
+                    : '—';
+                  const brechaColor = isNeg ? '#56c97a' : item.color;
 
                   return (
                     <div key={item.n} style={{
-                      display: 'flex', alignItems: 'center', gap: '0',
-                      marginBottom: i < items.length - 1 ? '16px' : '0',
+                      display: 'flex', alignItems: 'center',
+                      padding: '6px 0',
+                      borderTop: i === 0 ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.04)',
                     }}>
-                      {/* Label */}
-                      <div style={{ width: '140px', flexShrink: 0 }}>
-                        <div style={{ fontSize: '13px', color: 'var(--text2)', fontWeight: 500 }}>{item.n}</div>
-                        <div style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: 'var(--white)', marginTop: '2px' }}>
-                          ${Math.round(price).toLocaleString('es-AR')}
+                      {/* Label + precio */}
+                      <div style={{ width: '160px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text3)', fontWeight: 400, letterSpacing: '.01em' }}>{item.n}</span>
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 700, color: 'var(--white)' }}>
+                            ${Math.round(price).toLocaleString('es-AR')}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Bar track */}
-                      <div style={{ flex: 1, position: 'relative', height: '32px' }}>
-                        {/* Track */}
-                        <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '2px', background: 'rgba(255,255,255,0.06)', transform: 'translateY(-50%)' }}>
-                          {/* Base reference line */}
+                      {/* Track */}
+                      <div style={{ flex: 1, position: 'relative', height: '24px' }}>
+                        {/* Línea base */}
+                        <div style={{
+                          position: 'absolute', top: '50%', left: 0, right: 0,
+                          height: '1px', background: 'rgba(255,255,255,0.06)',
+                          transform: 'translateY(-50%)',
+                        }}>
+                          {/* Línea vertical oficial */}
                           <div style={{
                             position: 'absolute', left: `${baseX}%`,
-                            top: '-8px', bottom: '-8px',
-                            width: '1px', background: 'rgba(77,158,240,0.3)',
+                            top: '-10px', bottom: '-10px',
+                            width: '1px', background: 'rgba(77,158,240,0.35)',
                           }} />
-                          {/* Segment from base to price */}
-                          {price > base && (
+                          {/* Segmento coloreado desde oficial */}
+                          {price !== base && (
                             <div style={{
                               position: 'absolute',
-                              left: `${baseX}%`,
-                              width: `${posX - baseX}%`,
-                              top: 0, height: '100%',
+                              left:  price > base ? `${baseX}%` : `${posX}%`,
+                              width: `${Math.abs(posX - baseX)}%`,
+                              top: '-1px', height: '3px',
                               background: item.color,
-                              opacity: 0.6,
+                              opacity: 0.45,
+                              borderRadius: '2px',
                             }} />
                           )}
                         </div>
-                        {/* Dot at price position */}
+                        {/* Dot */}
                         <div style={{
                           position: 'absolute',
                           left: `${posX}%`,
                           top: '50%',
                           transform: 'translate(-50%, -50%)',
-                          width: '10px', height: '10px',
+                          width: '9px', height: '9px',
                           borderRadius: '50%',
                           background: item.color,
-                          boxShadow: `0 0 8px ${item.color}88`,
+                          boxShadow: `0 0 6px ${item.color}99`,
+                          border: '1.5px solid rgba(255,255,255,0.15)',
                         }} />
                       </div>
 
-                      {/* Brecha badge */}
-                      <div style={{ width: '72px', textAlign: 'right', flexShrink: 0 }}>
-                        <span style={{
-                          fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 700,
-                          color: isNeg ? 'var(--green)' : item.color,
-                        }}>
+                      {/* Brecha % */}
+                      <div style={{ width: '64px', textAlign: 'right', flexShrink: 0 }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, color: brechaColor }}>
                           {brechaStr}
                         </span>
                       </div>

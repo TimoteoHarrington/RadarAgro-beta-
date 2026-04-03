@@ -264,12 +264,18 @@ export function useLiveData() {
       loadMundo, loadBcra, loadCotizaciones, loadIndec]);
 
   useEffect(() => {
-    // Carga inicial — todos los grupos
-    loadFast();
-    loadSlow();
-    loadDaily();
+    // Carga inicial — forzar todo sin importar TTL
+    // (sessionStorage puede tener timestamps de sesiones anteriores)
+    loadDolares();
+    loadUva();        markFresh('uva');
+    loadTasas();      markFresh('tasas');
+    loadRiesgoPais(); markFresh('riesgoPais');
+    loadBcra();       markFresh('bcra');
+    loadInflacion();  markFresh('inflacion');
+    loadIndec();      markFresh('indec');
+    loadFeriados();   markFresh('feriados');
 
-    // Polling diferenciado
+    // Polling diferenciado — con TTL a partir de la segunda vez
     const fastTimer  = setInterval(loadFast,  POLL_FAST);
     const slowTimer  = setInterval(loadSlow,  POLL_SLOW);
     const dailyTimer = setInterval(loadDaily, POLL_DAILY);
@@ -279,7 +285,7 @@ export function useLiveData() {
       clearInterval(slowTimer);
       clearInterval(dailyTimer);
     };
-  }, [loadFast, loadSlow, loadDaily]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Enriquecimiento de inflacion con valores BCRA ───────────
   // Cuando ambos estados cargan, resuelve la fuente primaria (BCRA)

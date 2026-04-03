@@ -21,8 +21,8 @@ async function get(url) {
 // APIs locales (sin backend / CORS libre)
 // ─────────────────────────────────────────────────────────────
 
-const DOLAR_BASE = import.meta.env.VITE_DOLAR_API      ?? 'https://dolarapi.com/v1';
-const AD_BASE    = import.meta.env.VITE_ARGENTINA_DATOS ?? 'https://api.argentinadatos.com/v1';
+const DOLAR_BASE = 'https://dolarapi.com/v1';
+const AD_BASE    = 'https://api.argentinadatos.com/v1';
 
 export async function fetchDolares()              { return get(`${DOLAR_BASE}/dolares`); }
 export async function fetchUVA()                  { return get(`${AD_BASE}/finanzas/indices/uva`); }

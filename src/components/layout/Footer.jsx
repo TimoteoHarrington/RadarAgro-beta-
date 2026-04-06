@@ -48,7 +48,7 @@ export function Footer({ goPage }) {
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M2 4a1 1 0 011-1h10a1 1 0 011 1v8a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm1 1v.217l5 3.124 5-3.124V5H3zm10 1.383l-4.447 2.779a1 1 0 01-1.106 0L3 6.383V12h10V6.383z"/>
               </svg>
-              info@radaragro.com.ar
+              contactoradaragro@gmail.com
             </a>
           </div>
 

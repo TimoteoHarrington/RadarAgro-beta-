@@ -704,103 +704,163 @@ function TabActEconomica({ pbi, emae, indec }) {
 function TabRiesgoPais({ riesgoPais }) {
   const [rpRange,setRpRange]=useState('1A');
   const rpVal=riesgoPais?.valor??null, rpDelta=riesgoPais?.delta??null;
-  const rpDisp=rpVal!=null?Math.round(rpVal).toLocaleString('es-AR')+' pb':'cargando…';
-  const rpDeltaDisp=rpDelta!=null?(rpDelta<0?' −':' +')+Math.abs(Math.round(rpDelta))+' pb vs ayer':'—';
-  const rpDeltaCls=rpDelta!=null?(rpDelta<0?'up':'dn'):'fl';
-  const{data:regionalData,loading:regionalLoading,maxVal:regionalMax}=useRiesgoRegional(rpVal);
+  const rpDisp=rpVal!=null?Math.round(rpVal).toLocaleString('es-AR')+' pb':'—';
+  const rpDeltaDisp=rpDelta!=null?(rpDelta<0?'−':'+')+Math.abs(Math.round(rpDelta))+' pb vs ayer':'—';
+  const rpDeltaUp=rpDelta!=null&&rpDelta<0; // baja en pb = mejora (up = verde)
+  const {data:regionalData,loading:regionalLoading,maxVal:regionalMax}=useRiesgoRegional(rpVal);
+  const risk=rpVal!=null?getRiskLabel(rpVal):{label:'—',bg:'var(--bg3)',color:'var(--text3)'};
+
+  // Stats derivadas del historial
+  const hist=riesgoPais?.history??[];
+  const curAnio=new Date().getFullYear().toString();
+  const histAnio=hist.filter(h=>(h.fecha||'').startsWith(curAnio));
+  const minAnio=histAnio.length?Math.round(Math.min(...histAnio.map(h=>parseFloat(h.valor||9999)))):null;
+  const maxAnio=histAnio.length?Math.round(Math.max(...histAnio.map(h=>parseFloat(h.valor||0)))):null;
+  const delta30=(()=>{
+    if(hist.length<30||rpVal==null)return null;
+    const d30=parseFloat(hist[hist.length-30]?.valor||0);
+    return Math.round(rpVal-d30);
+  })();
+  const delta30Up=delta30!=null&&delta30<0;
+
+  // Todos los países para la comparativa (Argentina + regionales)
+  const braVal=regionalData['bra']??null;
+  const ratioBra=rpVal!=null&&braVal?(rpVal/braVal).toFixed(1)+'×':'—';
+
+  const allCountries=[
+    {nombre:'Argentina',iso:'arg',pb:rpVal??0,isArg:true},
+    ...PAISES_REGIONAL.map(p=>({nombre:p.nombre,iso:p.iso,pb:regionalData[p.iso]??p.fallback,isArg:false}))
+  ].sort((a,b)=>b.pb-a.pb);
+  const globalMax=Math.max(...allCountries.map(c=>c.pb),1);
+
   return (
     <div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'16px'}}>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>EMBI+ Argentina <span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>HOY</span></div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{rpDisp}</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',marginTop:'6px',color:rpDeltaCls==='up'?'var(--green)':rpDeltaCls==='dn'?'var(--red)':'var(--text3)'}}>{rpDeltaDisp}</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>JP Morgan · EMBI+</div>
-        </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Variación 30 días</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>
-            {riesgoPais?.history?.length>=30?(()=>{const h=riesgoPais.history;const d30=parseFloat(h[h.length-30]?.valor||0);const dlt=Math.round(rpVal-d30);return(dlt<0?'−':'+')+Math.abs(dlt)+' pb';})():'—'}
+      {/* ── Cabecera de estado actual ── */}
+      <div style={{
+        display:'grid', gridTemplateColumns:'auto 1px 1fr 1px 1fr 1px 1fr',
+        background:'var(--bg1)', border:'1px solid var(--line)',
+        borderRadius:'12px', marginBottom:'20px', overflow:'hidden'
+      }}>
+        {/* Valor principal */}
+        <div style={{padding:'20px 28px', display:'flex', flexDirection:'column', justifyContent:'center', gap:'6px', minWidth:'200px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>EMBI+ Argentina</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',color:'var(--text2)'}}>HOY</span>
           </div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',marginTop:'6px',color:'var(--text3)'}}>vs 30 días atrás · puntos básicos</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Puntos básicos</div>
-        </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Mínimo del año</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--green)',lineHeight:1}}>
-            {riesgoPais?.history?.length?Math.round(Math.min(...riesgoPais.history.map(h=>parseFloat(h.valor||9999)))).toLocaleString('es-AR')+' pb':rpDisp}
+          <div style={{fontFamily:'var(--mono)',fontSize:'36px',fontWeight:700,color:'var(--white)',lineHeight:1,letterSpacing:'-.02em'}}>
+            {rpVal!=null?Math.round(rpVal).toLocaleString('es-AR'):<span style={{color:'var(--text3)',fontSize:'22px'}}>cargando…</span>}
           </div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',marginTop:'6px',color:'var(--text3)'}}>este año · menor riesgo</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>pb</div>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--text3)'}}>pb</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:600,color:rpDeltaUp?'var(--green)':'var(--red)'}}>{rpDeltaDisp}</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:risk.bg,color:risk.color,padding:'2px 8px',borderRadius:'4px',border:`1px solid ${risk.color}22`}}>{risk.label}</span>
+          </div>
         </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>vs Brasil</div>
-          {(()=>{
-            const braVal=regionalData['bra']??null;
-            const ratio=rpVal!=null&&braVal?(rpVal/braVal).toFixed(1)+'×':'—';
-            const braDisp=braVal?braVal.toLocaleString('es-AR')+' pb':'cargando…';
-            return(<>
-              <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{ratio}</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px',marginTop:'6px',color:'var(--text3)'}}>veces el riesgo de Brasil</div>
-              <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Brasil: {braDisp} · EMBI+</div>
-            </>);
-          })()}
+        <div style={{background:'var(--line)'}}/>
+        {/* Delta 30d */}
+        <div style={{padding:'20px 22px', display:'flex',flexDirection:'column',justifyContent:'center',gap:'4px'}}>
+          <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Variación 30 días</span>
+          <div style={{fontFamily:'var(--mono)',fontSize:'24px',fontWeight:700,color:delta30!=null?(delta30Up?'var(--green)':'var(--red)'):'var(--text3)',lineHeight:1}}>
+            {delta30!=null?(delta30<0?'−':'+')+Math.abs(delta30)+' pb':'—'}
+          </div>
+          <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>vs hace 30 días</span>
+        </div>
+        <div style={{background:'var(--line)'}}/>
+        {/* Min/Max año */}
+        <div style={{padding:'20px 22px', display:'flex',flexDirection:'column',justifyContent:'center',gap:'6px'}}>
+          <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Rango {curAnio}</span>
+          <div style={{display:'flex',alignItems:'baseline',gap:'10px'}}>
+            <div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginBottom:'2px'}}>MÍN</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--green)',lineHeight:1}}>{minAnio!=null?minAnio.toLocaleString('es-AR')+' pb':'—'}</div>
+            </div>
+            <div style={{width:'1px',height:'28px',background:'var(--line)',flexShrink:0}}/>
+            <div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginBottom:'2px'}}>MÁX</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--red)',lineHeight:1}}>{maxAnio!=null?maxAnio.toLocaleString('es-AR')+' pb':'—'}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{background:'var(--line)'}}/>
+        {/* Ratio vs Brasil */}
+        <div style={{padding:'20px 22px', display:'flex',flexDirection:'column',justifyContent:'center',gap:'4px'}}>
+          <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Ratio vs Brasil</span>
+          <div style={{fontFamily:'var(--mono)',fontSize:'24px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{ratioBra}</div>
+          <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>
+            {braVal?`Brasil: ${braVal.toLocaleString('es-AR')} pb`:'cargando…'}
+          </span>
         </div>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:'14px'}}>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Riesgo País EMBI+ — historial</div>
+
+      {/* ── Gráfico + Comparativa Regional ── */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 340px',gap:'14px'}}>
+        {/* Gráfico historial */}
+        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'12px',padding:'18px 20px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
+            <div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>EMBI+ Argentina — historial</div>
+              <div style={{fontSize:'12px',color:'var(--text2)',marginTop:'3px'}}>Puntos básicos · JP Morgan</div>
+            </div>
             <div style={{display:'flex',gap:'4px'}}>
               {['3M','6M','1A','MAX'].map(r=>(
-                <button key={r} onClick={()=>setRpRange(r)} style={{fontFamily:'var(--mono)',fontSize:'8px',padding:'2px 8px',borderRadius:'3px',border:`1px solid ${r===rpRange?'var(--accent)':'var(--line2)'}`,background:r===rpRange?'var(--acc-bg)':'transparent',color:r===rpRange?'var(--accent)':'var(--text3)',cursor:'pointer'}}>{r}</button>
+                <button key={r} onClick={()=>setRpRange(r)}
+                  style={{fontFamily:'var(--mono)',fontSize:'9px',padding:'3px 10px',borderRadius:'4px',
+                    border:`1px solid ${r===rpRange?'var(--accent)':'var(--line2)'}`,
+                    background:r===rpRange?'var(--acc-bg)':'transparent',
+                    color:r===rpRange?'var(--accent)':'var(--text3)',cursor:'pointer',transition:'all .12s'}}>
+                  {r}
+                </button>
               ))}
             </div>
           </div>
-          <RiesgoPaisChart history={riesgoPais?.history??[]} range={rpRange}/>
-          <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'8px',textAlign:'right'}}>Fuente: JP Morgan EMBI+ · ArgentinaDatos.com</div>
+          <RiesgoPaisChart history={hist} range={rpRange}/>
+          <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'10px',textAlign:'right'}}>
+            Fuente: JP Morgan EMBI+ · ArgentinaDatos.com · Frecuencia: diaria
+          </div>
         </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden',display:'flex',flexDirection:'column'}}>
-          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}>
-            <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Comparativa regional</div>
+
+        {/* Comparativa regional unificada */}
+        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'12px',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+          <div style={{padding:'14px 18px',borderBottom:'1px solid var(--line)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Comparativa regional</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>EMBI+</span>
           </div>
-          <div style={{padding:'11px 16px',borderBottom:'1px solid var(--line)',background:'rgba(91,156,246,.04)'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
-              <span style={{fontSize:'12px',fontWeight:600,color:'var(--accent)'}}>Argentina</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'14px',fontWeight:700,color:'var(--accent)'}}>{rpVal!=null?Math.round(rpVal).toLocaleString('es-AR'):'—'}</span>
-            </div>
-            <div style={{height:'3px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
-              <div style={{height:'100%',width:'100%',background:'rgba(91,156,246,0.55)',borderRadius:'3px'}}/>
-            </div>
-            <div style={{display:'flex',justifyContent:'space-between',marginTop:'4px'}}>
-              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>{rpDeltaDisp}</span>
-              {rpVal!=null&&<span style={{fontFamily:'var(--mono)',fontSize:'9px',...getRiskLabel(rpVal)}}>{getRiskLabel(rpVal).label}</span>}
-            </div>
+          <div style={{flex:1,overflowY:'auto'}}>
+            {regionalLoading&&!Object.keys(regionalData).length?(
+              <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'10px'}}>Cargando datos regionales…</div>
+            ):allCountries.map((c,i)=>{
+              const barPct=Math.round((c.pb/globalMax)*100);
+              const r=getRiskLabel(c.pb);
+              const barColor=c.isArg?'rgba(91,156,246,0.60)':c.pb>=350?'rgba(224,92,92,0.50)':c.pb>=200?'rgba(250,185,50,0.40)':'rgba(74,191,120,0.45)';
+              const isLast=i===allCountries.length-1;
+              return(
+                <div key={c.iso} style={{
+                  padding:'10px 18px',
+                  borderBottom:isLast?'none':'1px solid var(--line)',
+                  background:c.isArg?'rgba(91,156,246,.04)':'transparent'
+                }}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'7px'}}>
+                      <span style={{fontSize:'12px',fontWeight:c.isArg?600:400,color:c.isArg?'var(--accent)':'var(--text2)'}}>{c.nombre}</span>
+                      {c.isArg&&<span style={{fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)'}}>ARG</span>}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:'7px'}}>
+                      <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:r.bg,color:r.color,padding:'1px 6px',borderRadius:'3px'}}>{r.label}</span>
+                      <span style={{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:700,color:c.isArg?'var(--accent)':'var(--white)'}}>{c.pb.toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
+                  <div style={{height:'4px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${barPct}%`,background:barColor,borderRadius:'3px',transition:'width .5s ease'}}/>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {regionalLoading&&!Object.keys(regionalData).length?(
-            <div style={{padding:'20px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'10px'}}>Cargando datos…</div>
-          ):PAISES_REGIONAL.map(p=>{
-            const pb=regionalData[p.iso]??p.fallback, barW=Math.round((pb/regionalMax)*100);
-            const risk=getRiskLabel(pb), barColor=pb>=350?'rgba(224,92,92,0.50)':pb>=200?'rgba(143,184,240,0.50)':'rgba(74,191,120,0.45)';
-            return(
-              <div key={p.iso} style={{padding:'9px 16px',borderBottom:'1px solid var(--line)'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
-                  <span style={{fontSize:'12px',color:'var(--text2)'}}>{p.nombre}</span>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:600,color:'var(--white)'}}>{pb.toLocaleString('es-AR')}</span>
-                </div>
-                <div style={{height:'3px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
-                  <div style={{height:'100%',width:`${barW}%`,background:barColor,borderRadius:'3px',transition:'width .5s ease'}}/>
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',marginTop:'3px',alignItems:'center'}}>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>pb</span>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:risk.bg,color:risk.color,padding:'1px 5px',borderRadius:'3px'}}>{risk.label}</span>
-                </div>
-              </div>
-            );
-          })}
+          <div style={{padding:'8px 18px',borderTop:'1px solid var(--line)'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>ArgentinaDatos.com · JP Morgan EMBI+ · datos referenciales</span>
+          </div>
         </div>
       </div>
-      <div className="source" style={{marginTop:'8px'}}>Fuente: JP Morgan EMBI+ · ArgentinaDatos.com · Frecuencia: diaria</div>
     </div>
   );
 }

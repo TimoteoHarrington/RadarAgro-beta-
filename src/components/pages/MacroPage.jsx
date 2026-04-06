@@ -15,12 +15,16 @@ const CHART_PALETTE = [
 ];
 
 const PAISES_REGIONAL = [
-  { nombre:'Colombia', iso:'col', fallback:280 },
-  { nombre:'Brasil',   iso:'bra', fallback:180 },
-  { nombre:'México',   iso:'mex', fallback:170 },
-  { nombre:'Chile',    iso:'chl', fallback:130 },
-  { nombre:'Uruguay',  iso:'ury', fallback:95  },
-  { nombre:'Perú',     iso:'per', fallback:190 },
+  { nombre:'Brasil',    iso:'bra', fallback:201  },
+  { nombre:'México',    iso:'mex', fallback:236  },
+  { nombre:'Colombia',  iso:'col', fallback:274  },
+  { nombre:'Chile',     iso:'chl', fallback:97   },
+  { nombre:'Perú',      iso:'per', fallback:128  },
+  { nombre:'Uruguay',   iso:'ury', fallback:70   },
+  { nombre:'Ecuador',   iso:'ecu', fallback:490  },
+  { nombre:'Paraguay',  iso:'pry', fallback:126  },
+  { nombre:'Bolivia',   iso:'bol', fallback:517  },
+  { nombre:'Venezuela', iso:'ven', fallback:9625 },
 ];
 
 function getRiskLabel(pb) {
@@ -35,28 +39,22 @@ function useRiesgoRegional(rpArgentina) {
   const [data, setData]     = useState({});
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const AD_BASE = 'https://api.argentinadatos.com/v1';
     let cancelled = false;
-    async function fetchPais(iso) {
-      try {
-        const r = await fetch(`${AD_BASE}/finanzas/indices/riesgo-pais/${iso}/ultimo`);
-        if (!r.ok) throw new Error();
-        const j = await r.json();
-        const val = typeof j === 'number' ? j : (j.valor ?? j.value ?? null);
-        return val != null ? parseFloat(val) : null;
-      } catch { return null; }
-    }
     async function fetchAll() {
       setLoading(true);
-      const results = await Promise.allSettled(PAISES_REGIONAL.map(p => fetchPais(p.iso)));
-      if (cancelled) return;
-      const map = {};
-      PAISES_REGIONAL.forEach((p, i) => {
-        const r = results[i];
-        map[p.iso] = (r.status === 'fulfilled' && r.value != null) ? Math.round(r.value) : p.fallback;
-      });
-      setData(map);
-      setLoading(false);
+      try {
+        const r = await fetch('/api/riesgo-pais-latam');
+        if (!r.ok) throw new Error();
+        const j = await r.json();
+        if (cancelled) return;
+        const map = {};
+        (j.data ?? []).forEach(p => { map[p.iso] = p.pb; });
+        setData(map);
+      } catch {
+        // En caso de error total, dejamos data vacío y los fallbacks de PAISES_REGIONAL se usan
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
     fetchAll();
     return () => { cancelled = true; };
@@ -820,7 +818,7 @@ function TabRiesgoPais({ riesgoPais }) {
         </div>
 
         {/* Comparativa regional unificada */}
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'12px',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'12px',overflow:'hidden',display:'flex',flexDirection:'column',maxHeight:'320px'}}>
           <div style={{padding:'14px 18px',borderBottom:'1px solid var(--line)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Comparativa regional</span>
             <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>EMBI+</span>
@@ -835,21 +833,21 @@ function TabRiesgoPais({ riesgoPais }) {
               const isLast=i===allCountries.length-1;
               return(
                 <div key={c.iso} style={{
-                  padding:'10px 18px',
+                  padding:'6px 14px',
                   borderBottom:isLast?'none':'1px solid var(--line)',
                   background:c.isArg?'rgba(91,156,246,.04)':'transparent'
                 }}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:'7px'}}>
-                      <span style={{fontSize:'12px',fontWeight:c.isArg?600:400,color:c.isArg?'var(--accent)':'var(--text2)'}}>{c.nombre}</span>
-                      {c.isArg&&<span style={{fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)'}}>ARG</span>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'3px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                      <span style={{fontSize:'11px',fontWeight:c.isArg?600:400,color:c.isArg?'var(--accent)':'var(--text2)'}}>{c.nombre}</span>
+                      {c.isArg&&<span style={{fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 4px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)'}}>ARG</span>}
                     </div>
-                    <div style={{display:'flex',alignItems:'center',gap:'7px'}}>
-                      <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:r.bg,color:r.color,padding:'1px 6px',borderRadius:'3px'}}>{r.label}</span>
-                      <span style={{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:700,color:c.isArg?'var(--accent)':'var(--white)'}}>{c.pb.toLocaleString('es-AR')}</span>
+                    <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                      <span style={{fontFamily:'var(--mono)',fontSize:'8px',background:r.bg,color:r.color,padding:'1px 5px',borderRadius:'3px'}}>{r.label}</span>
+                      <span style={{fontFamily:'var(--mono)',fontSize:'12px',fontWeight:700,color:c.isArg?'var(--accent)':'var(--white)'}}>{c.pb.toLocaleString('es-AR')}</span>
                     </div>
                   </div>
-                  <div style={{height:'4px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
+                  <div style={{height:'3px',background:'var(--bg3)',borderRadius:'3px',overflow:'hidden'}}>
                     <div style={{height:'100%',width:`${barPct}%`,background:barColor,borderRadius:'3px',transition:'width .5s ease'}}/>
                   </div>
                 </div>
@@ -857,7 +855,7 @@ function TabRiesgoPais({ riesgoPais }) {
             })}
           </div>
           <div style={{padding:'8px 18px',borderTop:'1px solid var(--line)'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>ArgentinaDatos.com · JP Morgan EMBI+ · datos referenciales</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)'}}>Banco Mundial / JP Morgan EMBI+ · datos referenciales</span>
           </div>
         </div>
       </div>

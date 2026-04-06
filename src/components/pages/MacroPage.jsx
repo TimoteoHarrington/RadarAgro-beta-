@@ -24,6 +24,7 @@ const PAISES_REGIONAL = [
   { nombre:'Ecuador',   iso:'ecu', fallback:490  },
   { nombre:'Paraguay',  iso:'pry', fallback:126  },
   { nombre:'Bolivia',   iso:'bol', fallback:517  },
+  { nombre:'Venezuela', iso:'ven', fallback:9625 },
 ];
 
 function getRiskLabel(pb) {
@@ -814,48 +815,245 @@ function TabRiesgoPais({ riesgoPais }) {
   );
 }
 
+// ── BCRA: gráfico de historial de una variable ───────────────
+function BcraHistorialChart({ item }) {
+  const canvasRef = useRef(null);
+  const [tooltip, setTooltip] = useState('');
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [range, setRange] = useState('6M');
+
+  useEffect(() => {
+    if (!item) return;
+    setLoading(true);
+    setData([]);
+    const desde = (()=>{
+      const d = new Date();
+      if (range==='1M') d.setMonth(d.getMonth()-1);
+      else if (range==='3M') d.setMonth(d.getMonth()-3);
+      else if (range==='6M') d.setMonth(d.getMonth()-6);
+      else if (range==='1A') d.setFullYear(d.getFullYear()-1);
+      else d.setFullYear(d.getFullYear()-3);
+      return d.toISOString().slice(0,10);
+    })();
+    fetch(`/api/bcra?variable=${item.id}&desde=${desde}`)
+      .then(r=>r.ok?r.json():Promise.reject())
+      .then(j=>{
+        const raw = j.data ?? [];
+        setData([...raw].reverse()); // API devuelve desc, necesitamos asc
+      })
+      .catch(()=>setData([]))
+      .finally(()=>setLoading(false));
+  }, [item?.id, range]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !data.length) return;
+    const draw = () => {
+      const dpr = window.devicePixelRatio||1, rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width*dpr; canvas.height = rect.height*dpr;
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+      const W=rect.width, H=rect.height, pad={t:18,r:16,b:32,l:62};
+      const vals = data.map(d=>parseFloat(d.valor??0));
+      const vmin = Math.min(...vals)*0.97, vmax = Math.max(...vals)*1.03;
+      const n=data.length, xS=(W-pad.l-pad.r)/(n-1||1), yS=(H-pad.t-pad.b)/(vmax-vmin||1);
+      const px=i=>pad.l+i*xS, py=v=>H-pad.b-(v-vmin)*yS;
+      // Grid
+      for(let i=0;i<=4;i++){
+        const v=vmin+(vmax-vmin)*i/4, y=py(v);
+        ctx.strokeStyle=i===0?'rgba(255,255,255,0.1)':'rgba(255,255,255,0.04)';
+        ctx.lineWidth=1; ctx.setLineDash(i===0?[]:[3,5]);
+        ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke(); ctx.setLineDash([]);
+        const isPct=item.formato==='pct';
+        const label=isPct?v.toFixed(1)+'%':(item.unidad==='MM $'?(v/1000).toFixed(1)+' B':Math.round(v).toLocaleString('es-AR'));
+        ctx.fillStyle='rgba(90,101,133,0.75)'; ctx.font='9px JetBrains Mono,monospace'; ctx.textAlign='right';
+        ctx.fillText(label,pad.l-5,y+3);
+      }
+      // Labels eje X
+      ctx.fillStyle='rgba(90,101,133,0.6)'; ctx.font='8px JetBrains Mono,monospace'; ctx.textAlign='center';
+      const step=Math.max(1,Math.floor(n/6));
+      data.forEach((d,i)=>{
+        if(i===0||i===n-1||i%step===0){
+          const fp=(d.fecha||'').split('-');
+          if(fp.length>=2) ctx.fillText(MESES_C[+fp[1]]+"'"+fp[0].slice(-2),px(i),H-pad.b+13);
+        }
+      });
+      // Área
+      const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+      grad.addColorStop(0,'rgba(91,156,246,0.18)'); grad.addColorStop(1,'rgba(91,156,246,0.01)');
+      ctx.beginPath(); ctx.moveTo(px(0),py(vals[0]));
+      vals.forEach((v,i)=>{if(i>0)ctx.lineTo(px(i),py(v));});
+      ctx.lineTo(px(n-1),H-pad.b); ctx.lineTo(px(0),H-pad.b); ctx.closePath();
+      ctx.fillStyle=grad; ctx.fill();
+      // Línea
+      ctx.beginPath(); ctx.moveTo(px(0),py(vals[0]));
+      vals.forEach((v,i)=>{if(i>0)ctx.lineTo(px(i),py(v));});
+      ctx.strokeStyle='rgba(91,156,246,0.85)'; ctx.lineWidth=1.5; ctx.lineJoin='round'; ctx.stroke();
+      // Punto final
+      const lv=vals[n-1];
+      ctx.beginPath(); ctx.arc(px(n-1),py(lv),3.5,0,Math.PI*2);
+      ctx.fillStyle='rgba(91,156,246,0.9)'; ctx.fill();
+    };
+    draw();
+    const ro=new ResizeObserver(draw); ro.observe(canvas); return()=>ro.disconnect();
+  }, [data, item]);
+
+  const handleMouseMove = e => {
+    if(!data.length) return;
+    const canvas=canvasRef.current, rect=canvas.getBoundingClientRect();
+    const xS=(rect.width-78)/(data.length-1||1);
+    const idx=Math.max(0,Math.min(data.length-1,Math.round((e.clientX-rect.left-62)/xS)));
+    const d=data[idx];
+    if(d){
+      const v=parseFloat(d.valor??0);
+      const isPct=item.formato==='pct';
+      const vStr=isPct?v.toFixed(2)+'%':(item.unidad==='MM $'?'$'+(v/1000).toFixed(1)+' B':v.toLocaleString('es-AR'));
+      setTooltip(`${d.fecha}  ·  ${vStr}`);
+    }
+  };
+
+  if(!item) return null;
+  return (
+    <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'12px',padding:'18px 20px',marginTop:'16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
+        <div>
+          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>{item.nombre} — historial</div>
+          <div style={{fontSize:'11px',color:'var(--text2)',marginTop:'3px'}}>{item.unidad} · BCRA</div>
+        </div>
+        <div style={{display:'flex',gap:'4px'}}>
+          {['1M','3M','6M','1A','MAX'].map(r=>(
+            <button key={r} onClick={()=>setRange(r)}
+              style={{fontFamily:'var(--mono)',fontSize:'9px',padding:'3px 10px',borderRadius:'4px',
+                border:`1px solid ${r===range?'var(--accent)':'var(--line2)'}`,
+                background:r===range?'var(--acc-bg)':'transparent',
+                color:r===range?'var(--accent)':'var(--text3)',cursor:'pointer',transition:'all .12s'}}>
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading
+        ? <div style={{height:'200px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando…</div>
+        : data.length===0
+          ? <div style={{height:'200px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Sin datos</div>
+          : <>
+              <canvas ref={canvasRef} style={{width:'100%',height:'200px',display:'block',cursor:'crosshair'}}
+                onMouseMove={handleMouseMove} onMouseLeave={()=>setTooltip('')}/>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text2)',minHeight:'14px',marginTop:'6px',textAlign:'center'}}>{tooltip}</div>
+            </>
+      }
+      <div style={{fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)',marginTop:'4px',textAlign:'right'}}>
+        Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0
+      </div>
+    </div>
+  );
+}
+
 // ── BCRA Monetario ────────────────────────────────────────────
+const BCRA_CATS = [
+  { id:'Monetario',  label:'Monetario'  },
+  { id:'Cambiario',  label:'Cambiario'  },
+  { id:'Tasas',      label:'Tasas'      },
+  { id:'Indices',    label:'Índices'    },
+];
+
 function BcraMonetarioSection({ bcra, loadBcra }) {
   useEffect(()=>{if(!bcra)loadBcra?.();},[bcra,loadBcra]);
-  const monetario=bcra?.byCat?.['Monetario']??[];
+  const [activeCat, setActiveCat] = useState('Monetario');
+  const [selectedItem, setSelectedItem] = useState(null);
+
   const ts=bcra?.timestamp?new Date(bcra.timestamp):null;
   const tsStr=ts?ts.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' hs':null;
+
+  const items = bcra?.byCat?.[activeCat] ?? [];
+
+  // Seleccionar el primer item de la categoría cuando cambia
+  useEffect(()=>{ setSelectedItem(items[0]??null); },[activeCat, bcra]);
+
   const fmtValor=item=>{
     if(item.valor==null)return'—';
     const v=parseFloat(item.valor);
     if(item.unidad==='MM $')return'$ '+(v/1000).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+' B';
     if(item.formato==='pct')return v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
+    if(item.unidad==='MM USD')return'USD '+(v/1000).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+' B';
     return v.toLocaleString('es-AR',{maximumFractionDigits:2});
   };
   const fmtDelta=item=>{
     if(item.valor==null||item.valorAnterior==null)return null;
     const d=parseFloat(item.valor)-parseFloat(item.valorAnterior);
     if(Math.abs(d)<0.001)return null;
-    if(item.unidad==='MM $'){const pct=(d/parseFloat(item.valorAnterior))*100;return{txt:(pct>0?'+':'')+pct.toFixed(2).replace('.',',')+'%',up:d>0};}
+    if(item.unidad==='MM $'||item.unidad==='MM USD'){
+      const pct=(d/parseFloat(item.valorAnterior))*100;
+      return{txt:(pct>0?'+':'')+pct.toFixed(2).replace('.',',')+'%',up:d>0};
+    }
     return{txt:(d>0?'+':'')+d.toLocaleString('es-AR',{maximumFractionDigits:2}),up:d>0};
   };
   const fmtFecha=f=>{if(!f)return'';const[y,m,d]=(f||'').split('-');return`${d}/${m}/${y}`;};
-  if(!bcra)return<div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>Cargando datos del BCRA…</div>;
+
+  if(!bcra) return(
+    <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px'}}>
+      Cargando datos del BCRA…
+    </div>
+  );
+
+  // Número de columnas según cantidad de items
+  const gridCols = items.length <= 3 ? 'grid-3' : items.length <= 4 ? 'grid-4' : 'grid-3';
+
   return (
     <div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-        <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Agregados monetarios — BCRA</div>
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
+        <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>
+          Variables BCRA
+        </div>
         {tsStr&&<span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>actualizado {tsStr}</span>}
       </div>
-      <div className="grid grid-3">
-        {monetario.map(item=>{
+
+      {/* Tabs de categoría */}
+      <div style={{display:'flex',gap:'6px',marginBottom:'16px',borderBottom:'1px solid var(--line)',paddingBottom:'12px'}}>
+        {BCRA_CATS.map(cat=>(
+          <button key={cat.id} onClick={()=>setActiveCat(cat.id)}
+            style={{fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.04em',padding:'5px 14px',borderRadius:'5px',
+              border:`1px solid ${activeCat===cat.id?'var(--accent)':'var(--line2)'}`,
+              background:activeCat===cat.id?'var(--acc-bg)':'transparent',
+              color:activeCat===cat.id?'var(--accent)':'var(--text3)',cursor:'pointer',transition:'all .12s'}}>
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Cards de la categoría activa */}
+      <div className={`grid ${gridCols}`}>
+        {items.map(item=>{
           const delta=fmtDelta(item);
+          const isSelected=selectedItem?.key===item.key;
           return(
-            <div key={item.key} className="stat c-flat">
-              <div className="stat-label">{item.nombre} <span className="stat-badge fl">{item.unidad}</span></div>
+            <div key={item.key} className="stat c-flat"
+              onClick={()=>setSelectedItem(isSelected?null:item)}
+              style={{cursor:'pointer',borderColor:isSelected?'var(--accent)':'',transition:'border-color .15s'}}
+              onMouseEnter={e=>{if(!isSelected)e.currentTarget.style.borderColor='var(--line2)';}}
+              onMouseLeave={e=>{if(!isSelected)e.currentTarget.style.borderColor='';}}>
+              <div className="stat-label">
+                {item.nombre}
+                <span className="stat-badge fl">{item.unidad}</span>
+                {isSelected&&<span style={{fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',marginLeft:'4px'}}>GRAF</span>}
+              </div>
               <div className="stat-val">{fmtValor(item)}</div>
-              {delta?<div className={`stat-delta ${delta.up?'up':'dn'}`}>{delta.txt} vs ant.</div>:<div className="stat-delta fl">sin variación</div>}
+              {delta
+                ?<div className={`stat-delta ${delta.up?'up':'dn'}`}>{delta.txt} vs ant.</div>
+                :<div className="stat-delta fl">sin variación</div>}
               <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
             </div>
           );
         })}
       </div>
-      <div className="source" style={{marginTop:'12px'}}>Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
+
+      {/* Gráfico de historial */}
+      {selectedItem && <BcraHistorialChart item={selectedItem}/>}
+
+      <div className="source" style={{marginTop:'12px'}}>
+        Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria
+      </div>
     </div>
   );
 }

@@ -447,42 +447,77 @@ function TabActEconomica({ pbi, emae, indec }) {
   const donutItems = apiSectors.map(s=>({nombre:s.nombre,share:s.share,vab:s.vab??null}));
   const maxShare = Math.max(...donutItems.map(x=>x.share),1);
 
+  // Resumen rápido de sectores para la cabecera
+  const positivosSectors = sectors.filter(s=>s.valor>=0).length;
+  const negativosSectors = sectors.filter(s=>s.valor<0).length;
+
   return (
     <div>
-      {/* ── KPIs unificados EMAE + PBI ── */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'20px'}}>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderTop:`2px solid ${emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)'}`,borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>
-            EMAE General <span style={{background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>{emaeMes}</span>
+      {/* ── Barra de contexto EMAE + PBI (sin duplicar KPIs del top) ── */}
+      <div style={{
+        display:'grid', gridTemplateColumns:'1fr 1px 1fr', gap:'0',
+        background:'var(--bg1)', border:'1px solid var(--line)',
+        borderRadius:'12px', marginBottom:'20px', overflow:'hidden'
+      }}>
+        {/* Bloque EMAE */}
+        <div style={{padding:'18px 24px', display:'flex', flexDirection:'column', gap:'10px'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>EMAE · Actividad mensual</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 7px',color:'var(--text2)'}}>{emaeMes}</span>
           </div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>{fmtE(emaeVal)}</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>
-            {emaeAccum!=null ? fmtE(emaeAccum)+` acum. ${emaeAnioAc}` : 'cargando…'}
+          <div style={{display:'flex', alignItems:'flex-end', gap:'16px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>{fmtE(emaeVal)}</div>
+            <div style={{paddingBottom:'4px'}}>
+              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>var. interanual</div>
+              {emaeAccum!=null&&<div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text2)',marginTop:'2px'}}>{fmtE(emaeAccum)} acum. {emaeAnioAc}</div>}
+            </div>
           </div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Var. interanual · INDEC mensual</div>
+          {sectors.length>0&&(
+            <div style={{display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'2px'}}>
+              {bestSector&&(
+                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--green-bg)',borderRadius:'6px',padding:'4px 10px'}}>
+                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--green)'}}>↑ {bestSector.nombre}</span>
+                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,color:'var(--green)'}}>{fmtE(bestSector.valor)}</span>
+                </div>
+              )}
+              {worstSector&&(
+                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--red-bg)',borderRadius:'6px',padding:'4px 10px'}}>
+                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--red)'}}>↓ {worstSector.nombre}</span>
+                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,color:'var(--red)'}}>{fmtE(worstSector.valor)}</span>
+                </div>
+              )}
+              {sectors.length>0&&(
+                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--bg3)',borderRadius:'6px',padding:'4px 10px'}}>
+                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>{positivosSectors} en alza · {negativosSectors} en baja</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>Mejor sector EMAE</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'13px',fontWeight:700,color:'var(--green)',lineHeight:1.2}}>{bestSector?bestSector.nombre:'—'}</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'20px',fontWeight:700,color:'var(--green)',marginTop:'4px'}}>{bestSector?fmtE(bestSector.valor):'—'}</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>var. interanual · {emaeMes}</div>
-        </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderTop:`2px solid ${pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)'}`,borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px'}}>
-            PBI Real <span style={{background:pbiVal!=null&&pbiVal>=0?'var(--green-bg)':'var(--red-bg)',color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',borderRadius:'3px',padding:'1px 6px',marginLeft:'4px',fontSize:'8px'}}>{pbiTrim}</span>
+        {/* Divisor */}
+        <div style={{background:'var(--line)'}}/>
+        {/* Bloque PBI */}
+        <div style={{padding:'18px 24px', display:'flex', flexDirection:'column', gap:'10px'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>PBI · Actividad trimestral</span>
+            <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:pbiVal!=null&&pbiVal>=0?'var(--green-bg)':'var(--red-bg)',color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',borderRadius:'3px',padding:'1px 7px',border:`1px solid ${pbiVal!=null&&pbiVal>=0?'rgba(74,191,120,.25)':'rgba(224,92,92,.25)'}`}}>{pbiTrim}</span>
           </div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>{fmtPbi(pbiVal)}</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>{pbiPrev!=null?`Trim. ant.: ${fmtPbi(pbiPrev)}`:'cargando…'}</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Var. interanual · precios constantes</div>
-        </div>
-        <div style={{background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',padding:'16px 18px'}}>
-          <div style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'8px',display:'flex',alignItems:'center',gap:'6px'}}>
-            Proyección 2026 — FMI
-            <span style={{background:'rgba(250,185,50,0.15)',color:'rgba(250,185,50,0.85)',border:'1px solid rgba(250,185,50,0.3)',borderRadius:'3px',padding:'1px 5px',fontSize:'7px',letterSpacing:'.05em'}}>ESTÁTICO</span>
+          <div style={{display:'flex', alignItems:'flex-end', gap:'16px'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>{fmtPbi(pbiVal)}</div>
+            <div style={{paddingBottom:'4px'}}>
+              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>var. interanual real</div>
+              {pbiPrev!=null&&<div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text2)',marginTop:'2px'}}>Trim. ant.: {fmtPbi(pbiPrev)}</div>}
+            </div>
           </div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--accent)',lineHeight:1}}>+5,0%</div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginTop:'6px'}}>WEO Oct 2025 · sujeto a revisión</div>
-          <div style={{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}}>Consenso privado: +4,2%</div>
+          <div style={{display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'2px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--acc-bg)',borderRadius:'6px',padding:'4px 10px',border:'1px solid rgba(91,156,246,.15)'}}>
+              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--accent)'}}>FMI 2026</span>
+              <span style={{fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,color:'var(--accent)'}}>+5,0%</span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--bg3)',borderRadius:'6px',padding:'4px 10px'}}>
+              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Consenso privado +4,2%</span>
+            </div>
+          </div>
         </div>
       </div>
 

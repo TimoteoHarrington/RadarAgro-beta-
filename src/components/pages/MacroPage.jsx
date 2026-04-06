@@ -451,71 +451,40 @@ function TabActEconomica({ pbi, emae, indec }) {
 
   return (
     <div>
-      {/* ── Barra de contexto EMAE + PBI (sin duplicar KPIs del top) ── */}
-      <div style={{
-        display:'grid', gridTemplateColumns:'1fr 1px 1fr', gap:'0',
-        background:'var(--bg1)', border:'1px solid var(--line)',
-        borderRadius:'12px', marginBottom:'20px', overflow:'hidden'
-      }}>
-        {/* Bloque EMAE */}
-        <div style={{padding:'18px 24px', display:'flex', flexDirection:'column', gap:'10px'}}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>EMAE · Actividad mensual</span>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 7px',color:'var(--text2)'}}>{emaeMes}</span>
-          </div>
-          <div style={{display:'flex', alignItems:'flex-end', gap:'16px'}}>
-            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>{fmtE(emaeVal)}</div>
-            <div style={{paddingBottom:'4px'}}>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>var. interanual</div>
-              {emaeAccum!=null&&<div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text2)',marginTop:'2px'}}>{fmtE(emaeAccum)} acum. {emaeAnioAc}</div>}
-            </div>
-          </div>
-          {sectors.length>0&&(
-            <div style={{display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'2px'}}>
-              {bestSector&&(
-                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--green-bg)',borderRadius:'6px',padding:'4px 10px'}}>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--green)'}}>↑ {bestSector.nombre}</span>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,color:'var(--green)'}}>{fmtE(bestSector.valor)}</span>
-                </div>
-              )}
-              {worstSector&&(
-                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--red-bg)',borderRadius:'6px',padding:'4px 10px'}}>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--red)'}}>↓ {worstSector.nombre}</span>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,color:'var(--red)'}}>{fmtE(worstSector.valor)}</span>
-                </div>
-              )}
-              {sectors.length>0&&(
-                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--bg3)',borderRadius:'6px',padding:'4px 10px'}}>
-                  <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>{positivosSectors} en alza · {negativosSectors} en baja</span>
-                </div>
-              )}
-            </div>
-          )}
+      {/* ── KPIs ── */}
+      <div className="grid grid-4" style={{marginBottom:'20px'}}>
+        <div className="stat c-flat">
+          <div className="stat-label">EMAE General <span className="stat-badge fl">{emaeMes}</span></div>
+          <div className="stat-val" style={{color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)'}}>{fmtE(emaeVal)}</div>
+          <div className="stat-delta fl">var. interanual</div>
+          <div className="stat-meta">{emaeAccum!=null?`Acum. ${fmtE(emaeAccum)} en ${emaeAnioAc}`:'INDEC · datos.gob.ar'}</div>
         </div>
-        {/* Divisor */}
-        <div style={{background:'var(--line)'}}/>
-        {/* Bloque PBI */}
-        <div style={{padding:'18px 24px', display:'flex', flexDirection:'column', gap:'10px'}}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>PBI · Actividad trimestral</span>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:pbiVal!=null&&pbiVal>=0?'var(--green-bg)':'var(--red-bg)',color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',borderRadius:'3px',padding:'1px 7px',border:`1px solid ${pbiVal!=null&&pbiVal>=0?'rgba(74,191,120,.25)':'rgba(224,92,92,.25)'}`}}>{pbiTrim}</span>
-          </div>
-          <div style={{display:'flex', alignItems:'flex-end', gap:'16px'}}>
-            <div style={{fontFamily:'var(--mono)',fontSize:'28px',fontWeight:700,color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)',lineHeight:1}}>{fmtPbi(pbiVal)}</div>
-            <div style={{paddingBottom:'4px'}}>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>var. interanual real</div>
-              {pbiPrev!=null&&<div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text2)',marginTop:'2px'}}>Trim. ant.: {fmtPbi(pbiPrev)}</div>}
+        <div className="stat c-flat">
+          <div className="stat-label">PBI Real <span className="stat-badge fl">{pbiTrim}</span></div>
+          <div className="stat-val" style={{color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)'}}>{fmtPbi(pbiVal)}</div>
+          <div className="stat-delta fl">{pbiPrev!=null?`Trim. ant.: ${fmtPbi(pbiPrev)}`:'var. interanual real'}</div>
+          <div className="stat-meta">INDEC · precios constantes 2004</div>
+        </div>
+        <div className="stat c-flat">
+          <div className="stat-label">Mejor sector</div>
+          <div className="stat-val" style={{color:'var(--green)',fontSize:'18px',marginTop:'4px'}}>{bestSector?bestSector.nombre:'—'}</div>
+          <div className="stat-delta up">{bestSector?fmtE(bestSector.valor):'—'}</div>
+          <div className="stat-meta">{worstSector?`Peor: ${worstSector.nombre} ${fmtE(worstSector.valor)}`:'EMAE · var. interanual'}</div>
+        </div>
+        <div className="stat c-flat">
+          <div className="stat-label">Sectores</div>
+          <div style={{display:'flex',alignItems:'baseline',gap:'12px',marginTop:'6px',marginBottom:'4px'}}>
+            <div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginBottom:'2px'}}>EN ALZA</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--green)',lineHeight:1}}>{positivosSectors}</div>
+            </div>
+            <div style={{width:'1px',height:'28px',background:'var(--line)',flexShrink:0,alignSelf:'center'}}/>
+            <div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginBottom:'2px'}}>EN BAJA</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--red)',lineHeight:1}}>{negativosSectors}</div>
             </div>
           </div>
-          <div style={{display:'flex', gap:'8px', flexWrap:'wrap', marginTop:'2px'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--acc-bg)',borderRadius:'6px',padding:'4px 10px',border:'1px solid rgba(91,156,246,.15)'}}>
-              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--accent)'}}>FMI 2026</span>
-              <span style={{fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,color:'var(--accent)'}}>+5,0%</span>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:'5px',background:'var(--bg3)',borderRadius:'6px',padding:'4px 10px'}}>
-              <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)'}}>Consenso privado +4,2%</span>
-            </div>
-          </div>
+          <div className="stat-meta">EMAE · {emaeMes}</div>
         </div>
       </div>
 
@@ -733,60 +702,43 @@ function TabRiesgoPais({ riesgoPais }) {
 
   return (
     <div>
-      {/* ── Cabecera de estado actual ── */}
-      <div style={{
-        display:'grid', gridTemplateColumns:'auto 1px 1fr 1px 1fr 1px 1fr',
-        background:'var(--bg1)', border:'1px solid var(--line)',
-        borderRadius:'12px', marginBottom:'20px', overflow:'hidden'
-      }}>
-        {/* Valor principal */}
-        <div style={{padding:'20px 28px', display:'flex', flexDirection:'column', justifyContent:'center', gap:'6px', minWidth:'200px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)'}}>EMBI+ Argentina</span>
-            <span style={{fontFamily:'var(--mono)',fontSize:'8px',background:'var(--bg3)',border:'1px solid var(--line2)',borderRadius:'3px',padding:'1px 6px',color:'var(--text2)'}}>HOY</span>
-          </div>
-          <div style={{fontFamily:'var(--mono)',fontSize:'36px',fontWeight:700,color:'var(--white)',lineHeight:1,letterSpacing:'-.02em'}}>
-            {rpVal!=null?Math.round(rpVal).toLocaleString('es-AR'):<span style={{color:'var(--text3)',fontSize:'22px'}}>cargando…</span>}
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'11px',color:'var(--text3)'}}>pb</span>
-            <span style={{fontFamily:'var(--mono)',fontSize:'11px',fontWeight:600,color:rpDeltaUp?'var(--green)':'var(--red)'}}>{rpDeltaDisp}</span>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',background:risk.bg,color:risk.color,padding:'2px 8px',borderRadius:'4px',border:`1px solid ${risk.color}22`}}>{risk.label}</span>
+      {/* ── KPIs ── */}
+      <div className="grid grid-4" style={{marginBottom:'20px'}}>
+        <div className="stat c-flat">
+          <div className="stat-label">EMBI+ Argentina <span className="stat-badge fl">HOY</span></div>
+          <div className="stat-val">{rpVal!=null?Math.round(rpVal).toLocaleString('es-AR')+' pb':'—'}</div>
+          <div className={`stat-delta ${rpDeltaUp?'up':'dn'}`}>{rpDeltaDisp}</div>
+          <div className="stat-meta" style={{display:'flex',alignItems:'center',gap:'6px'}}>
+            JP Morgan · ArgentinaDatos
+            <span style={{fontFamily:'var(--mono)',fontSize:'8px',background:risk.bg,color:risk.color,padding:'1px 6px',borderRadius:'3px',border:`1px solid ${risk.color}22`}}>{risk.label}</span>
           </div>
         </div>
-        <div style={{background:'var(--line)'}}/>
-        {/* Delta 30d */}
-        <div style={{padding:'20px 22px', display:'flex',flexDirection:'column',justifyContent:'center',gap:'4px'}}>
-          <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Variación 30 días</span>
-          <div style={{fontFamily:'var(--mono)',fontSize:'24px',fontWeight:700,color:delta30!=null?(delta30Up?'var(--green)':'var(--red)'):'var(--text3)',lineHeight:1}}>
-            {delta30!=null?(delta30<0?'−':'+')+Math.abs(delta30)+' pb':'—'}
-          </div>
-          <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>vs hace 30 días</span>
+        <div className="stat c-flat">
+          <div className="stat-label">Variación 30 días</div>
+          <div className={`stat-val ${delta30!=null?(delta30Up?'':''):''}` } style={{color:delta30!=null?(delta30Up?'var(--green)':'var(--red)'):'var(--text3)'}}>{delta30!=null?(delta30<0?'−':'+')+Math.abs(delta30)+' pb':'—'}</div>
+          <div className="stat-delta fl">vs hace 30 días</div>
+          <div className="stat-meta">Historial · ArgentinaDatos</div>
         </div>
-        <div style={{background:'var(--line)'}}/>
-        {/* Min/Max año */}
-        <div style={{padding:'20px 22px', display:'flex',flexDirection:'column',justifyContent:'center',gap:'6px'}}>
-          <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Rango {curAnio}</span>
-          <div style={{display:'flex',alignItems:'baseline',gap:'10px'}}>
+        <div className="stat c-flat">
+          <div className="stat-label">Rango {curAnio}</div>
+          <div style={{display:'flex',alignItems:'baseline',gap:'12px',marginTop:'6px',marginBottom:'4px'}}>
             <div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginBottom:'2px'}}>MÍN</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--green)',lineHeight:1}}>{minAnio!=null?minAnio.toLocaleString('es-AR')+' pb':'—'}</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginBottom:'2px'}}>MÍN</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'20px',fontWeight:700,color:'var(--green)',lineHeight:1}}>{minAnio!=null?minAnio.toLocaleString('es-AR')+' pb':'—'}</div>
             </div>
-            <div style={{width:'1px',height:'28px',background:'var(--line)',flexShrink:0}}/>
+            <div style={{width:'1px',height:'24px',background:'var(--line)',flexShrink:0,alignSelf:'center'}}/>
             <div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)',marginBottom:'2px'}}>MÁX</div>
-              <div style={{fontFamily:'var(--mono)',fontSize:'18px',fontWeight:700,color:'var(--red)',lineHeight:1}}>{maxAnio!=null?maxAnio.toLocaleString('es-AR')+' pb':'—'}</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',marginBottom:'2px'}}>MÁX</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:'20px',fontWeight:700,color:'var(--red)',lineHeight:1}}>{maxAnio!=null?maxAnio.toLocaleString('es-AR')+' pb':'—'}</div>
             </div>
           </div>
+          <div className="stat-meta">Año en curso</div>
         </div>
-        <div style={{background:'var(--line)'}}/>
-        {/* Ratio vs Brasil */}
-        <div style={{padding:'20px 22px', display:'flex',flexDirection:'column',justifyContent:'center',gap:'4px'}}>
-          <span style={{fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)'}}>Ratio vs Brasil</span>
-          <div style={{fontFamily:'var(--mono)',fontSize:'24px',fontWeight:700,color:'var(--white)',lineHeight:1}}>{ratioBra}</div>
-          <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--text3)'}}>
-            {braVal?`Brasil: ${braVal.toLocaleString('es-AR')} pb`:'cargando…'}
-          </span>
+        <div className="stat c-flat">
+          <div className="stat-label">Ratio vs Brasil</div>
+          <div className="stat-val">{ratioBra}</div>
+          <div className="stat-delta fl">{braVal?`Brasil: ${braVal.toLocaleString('es-AR')} pb`:'cargando…'}</div>
+          <div className="stat-meta">JP Morgan EMBI+</div>
         </div>
       </div>
 

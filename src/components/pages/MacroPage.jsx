@@ -24,7 +24,6 @@ const PAISES_REGIONAL = [
   { nombre:'Ecuador',   iso:'ecu', fallback:490  },
   { nombre:'Paraguay',  iso:'pry', fallback:126  },
   { nombre:'Bolivia',   iso:'bol', fallback:517  },
-  { nombre:'Venezuela', iso:'ven', fallback:9625 },
 ];
 
 function getRiskLabel(pb) {

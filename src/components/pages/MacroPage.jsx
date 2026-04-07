@@ -950,10 +950,9 @@ function BcraHistorialChart({ item }) {
 }
 
 // ── BCRA Monetario ────────────────────────────────────────────
+// Solo categorías macroeconomicas (Cambiario y Tasas pertenecen a Financiero)
 const BCRA_CATS = [
   { id:'Monetario',  label:'Monetario'  },
-  { id:'Cambiario',  label:'Cambiario'  },
-  { id:'Tasas',      label:'Tasas'      },
   { id:'Indices',    label:'Índices'    },
 ];
 
@@ -1049,7 +1048,30 @@ function BcraMonetarioSection({ bcra, loadBcra }) {
       </div>
 
       {/* Gráfico de historial */}
-      {selectedItem && <BcraHistorialChart item={selectedItem}/>}
+      {selectedItem
+        ? <BcraHistorialChart item={selectedItem}/>
+        : (
+          <div style={{
+            marginTop:'16px',
+            background:'var(--bg1)',
+            border:'1px dashed var(--line2)',
+            borderRadius:'12px',
+            padding:'28px 20px',
+            textAlign:'center',
+            display:'flex',
+            flexDirection:'column',
+            alignItems:'center',
+            gap:'8px',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span style={{fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textTransform:'uppercase',color:'var(--text3)'}}>
+              Seleccioná un indicador para ver el histórico
+            </span>
+          </div>
+        )
+      }
 
       <div className="source" style={{marginTop:'12px'}}>
         Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria

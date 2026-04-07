@@ -344,287 +344,251 @@ function TabDolares({ dolares, bcra }) {
 }
 
 // ── Tab: Tasas ────────────────────────────────────────────────
-// Íconos SVG inline para cada tipo de tasa
 const TASA_META = {
-  badlar_tna:         { label: 'BADLAR Privados', emoji: '🏦', color: '#5b9cf6', desc: 'Depósitos mayoristas +1MM · referencia del mercado' },
-  badlar_tea:         { label: 'BADLAR TEA',      emoji: '📈', color: '#4d9ef0', desc: 'Tasa efectiva anual equivalente' },
-  tamar_tna:          { label: 'TAMAR TNA',       emoji: '💳', color: '#7c6af5', desc: 'Tasa activa moneda nacional' },
-  tamar_tea:          { label: 'TAMAR TEA',       emoji: '💳', color: '#9a7cf5', desc: 'Tasa activa efectiva anual' },
-  tasa_depositos_30d: { label: 'Depósitos 30d',   emoji: '⏱',  color: '#56c97a', desc: 'Tasa de depósitos a 30 días' },
-  tasa_prestamos:     { label: 'Préstamos',        emoji: '💸', color: '#f0b840', desc: 'Tasa de préstamos al sector privado' },
+  badlar_tna:         { label: 'BADLAR Privados', color: '#5b9cf6', desc: 'Depósitos mayoristas +$1MM · referencia del mercado' },
+  badlar_tea:         { label: 'BADLAR TEA',      color: '#4d9ef0', desc: 'Tasa efectiva anual equivalente a BADLAR' },
+  tamar_tna:          { label: 'TAMAR TNA',       color: '#7c6af5', desc: 'Tasa activa moneda nacional' },
+  tamar_tea:          { label: 'TAMAR TEA',       color: '#9a7cf5', desc: 'Tasa activa efectiva anual' },
+  tasa_depositos_30d: { label: 'Depósitos 30d',   color: '#56c97a', desc: 'Tasa de depósitos a 30 días' },
+  tasa_prestamos:     { label: 'Préstamos',        color: '#f0b840', desc: 'Tasa de préstamos al sector privado' },
 };
 
-// Claves a excluir (Tasa Justicia)
 const TASAS_EXCLUIDAS = new Set(['tasa_justicia']);
 
-function TasaHeroCard({ item, isSelected, onClick }) {
-  if (!item) return null;
-  const meta = TASA_META[item.key] || {};
-  const v = item.valor != null ? parseFloat(item.valor) : null;
-  const vPrev = item.valorAnterior != null ? parseFloat(item.valorAnterior) : null;
-  const delta = v != null && vPrev != null ? v - vPrev : null;
-  const valStr = v != null ? v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%' : '—';
-  const deltaStr = delta != null && Math.abs(delta) >= 0.001
-    ? (delta > 0 ? '+' : '') + delta.toFixed(2).replace('.', ',') + ' pp'
-    : null;
-  const accentColor = meta.color || 'var(--accent)';
-
-  return (
-    <div onClick={onClick} style={{
-      position: 'relative', cursor: 'pointer', overflow: 'hidden',
-      background: isSelected
-        ? `linear-gradient(135deg, rgba(${accentColor.startsWith('#') ? hexToRgb(accentColor) : '91,156,246'}, 0.18) 0%, var(--bg2) 100%)`
-        : 'var(--bg1)',
-      border: `1px solid ${isSelected ? accentColor : 'var(--line)'}`,
-      borderRadius: '14px', padding: '20px 22px',
-      transition: 'all .2s ease',
-      boxShadow: isSelected ? `0 0 24px rgba(${accentColor.startsWith('#') ? hexToRgb(accentColor) : '91,156,246'}, 0.15)` : 'none',
-    }}
-    onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.background = 'var(--bg2)'; }}}
-    onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.background = 'var(--bg1)'; }}}>
-      {/* Accent bar top */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: accentColor, opacity: isSelected ? 1 : 0.35, borderRadius: '14px 14px 0 0' }}/>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
-        <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '4px' }}>
-            {meta.label || item.nombre}
-          </div>
-          <div style={{ fontSize: '9px', color: 'var(--text3)', opacity: 0.7 }}>{item.unidad}</div>
-        </div>
-        {isSelected && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '8px', background: 'rgba(91,156,246,.18)', color: 'var(--accent)', padding: '2px 7px', borderRadius: '4px', border: '1px solid rgba(91,156,246,.25)' }}>
-            HISTORIAL ↓
-          </span>
-        )}
-      </div>
-
-      <div style={{ fontFamily: 'var(--mono)', fontSize: '30px', fontWeight: 700, color: 'var(--white)', lineHeight: 1, marginBottom: '10px', letterSpacing: '-0.02em' }}>
-        {valStr}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {deltaStr ? (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: delta > 0 ? 'var(--green)' : 'var(--red)', background: delta > 0 ? 'var(--green-bg)' : 'var(--red-bg)', padding: '2px 8px', borderRadius: '4px' }}>
-            {deltaStr} vs ant.
-          </span>
-        ) : (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)' }}>sin variación</span>
-        )}
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>
-          {fmtFecha(item.fecha)}
-        </span>
-      </div>
-
-      {meta.desc && (
-        <div style={{ marginTop: '10px', fontSize: '10px', color: 'var(--text3)', lineHeight: 1.4 }}>{meta.desc}</div>
-      )}
-    </div>
-  );
-}
-
-// Helper hex → rgb para sombras dinámicas
+// Helper hex → rgb
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `${r},${g},${b}`;
 }
 
-function TabTasas({ bcra, tasas }) {
+// Card uniforme para tasas BCRA
+function TasaCard({ item, isSelected, onClick }) {
+  if (!item) return null;
+  const meta = TASA_META[item.key] || {};
+  const v    = item.valor != null ? parseFloat(item.valor) : null;
+  const vP   = item.valorAnterior != null ? parseFloat(item.valorAnterior) : null;
+  const delta = v != null && vP != null ? v - vP : null;
+  const valStr  = v != null ? v.toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + '%' : '—';
+  const deltaStr = delta != null && Math.abs(delta) >= 0.001
+    ? (delta > 0 ? '+' : '') + delta.toFixed(2).replace('.',',') + ' pp'
+    : null;
+  const accent = meta.color || 'var(--accent)';
+  const rgb    = accent.startsWith('#') ? hexToRgb(accent) : '91,156,246';
+
+  return (
+    <div onClick={onClick} style={{
+      position: 'relative', cursor: 'pointer', overflow: 'hidden',
+      background: isSelected
+        ? `linear-gradient(145deg, rgba(${rgb},0.14) 0%, var(--bg2) 100%)`
+        : 'var(--bg1)',
+      border: `1px solid ${isSelected ? accent : 'var(--line)'}`,
+      borderRadius: '12px', padding: '16px 18px',
+      transition: 'all .18s ease',
+      boxShadow: isSelected ? `0 0 20px rgba(${rgb},0.12)` : 'none',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      minHeight: '130px',
+    }}
+    onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor='var(--line2)'; e.currentTarget.style.background='var(--bg2)'; }}}
+    onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor='var(--line)'; e.currentTarget.style.background='var(--bg1)'; }}}>
+      {/* barra superior de color */}
+      <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:accent,opacity:isSelected?1:0.4,borderRadius:'12px 12px 0 0' }}/>
+
+      {/* cabecera */}
+      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px' }}>
+        <div>
+          <div style={{ fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'2px' }}>
+            {meta.label || item.nombre}
+          </div>
+          <div style={{ fontSize:'9px',color:'var(--text3)',opacity:0.6 }}>{item.unidad}</div>
+        </div>
+        {isSelected && (
+          <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:`rgba(${rgb},.18)`,color:accent,padding:'2px 6px',borderRadius:'3px',border:`1px solid rgba(${rgb},.25)`,flexShrink:0 }}>
+            HIST ↓
+          </span>
+        )}
+      </div>
+
+      {/* valor */}
+      <div style={{ fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--white)',lineHeight:1,marginBottom:'8px',letterSpacing:'-0.02em' }}>
+        {valStr}
+      </div>
+
+      {/* delta + fecha */}
+      <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap' }}>
+        {deltaStr ? (
+          <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+            color: delta > 0 ? 'var(--green)' : 'var(--red)',
+            background: delta > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+            padding:'1px 7px',borderRadius:'3px' }}>
+            {deltaStr} vs ant.
+          </span>
+        ) : (
+          <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>sin variación</span>
+        )}
+        <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>{fmtFecha(item.fecha)}</span>
+      </div>
+
+      {/* desc */}
+      {meta.desc && (
+        <div style={{ marginTop:'8px',fontSize:'10px',color:'var(--text3)',lineHeight:1.35,opacity:0.8 }}>{meta.desc}</div>
+      )}
+    </div>
+  );
+}
+
+// Subtab: Tasas BCRA
+function SubTabBCRA({ bcra }) {
   const allTasasBCRA = bcra?.byCat?.['Tasas'] ?? [];
-  // Filtrar Tasa Justicia
   const tasasBCRA = allTasasBCRA.filter(t => !TASAS_EXCLUIDAS.has(t.key));
-
-  // Separar las tasas "hero" (principales) de las secundarias
-  const heroKeys = ['badlar_tna', 'tamar_tna', 'tasa_depositos_30d', 'tasa_prestamos'];
-  const heroTasas = tasasBCRA.filter(t => heroKeys.includes(t.key));
-  const otherTasas = tasasBCRA.filter(t => !heroKeys.includes(t.key));
-
   const [selectedTasa, setSelectedTasa] = useState(null);
-  useEffect(() => { setSelectedTasa(heroTasas[0] ?? tasasBCRA[0] ?? null); }, [bcra]);
-
-  const plazoFijo = tasas?.plazoFijo ?? [];
-  const sortedPF  = [...plazoFijo]
-    .filter(e => e.tnaClientes || e.tnaNoClientes)
-    .sort((a, b) => toTNA(b.tnaClientes || b.tnaNoClientes) - toTNA(a.tnaClientes || a.tnaNoClientes));
-
-  const fmtValorTasa = item => {
-    if (item.valor == null) return '—';
-    const v = parseFloat(item.valor);
-    if (item.formato === 'pct') return v.toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + '%';
-    return v.toLocaleString('es-AR', { maximumFractionDigits:2 });
-  };
-  const fmtDeltaTasa = item => {
-    if (item.valor == null || item.valorAnterior == null) return null;
-    const d = parseFloat(item.valor) - parseFloat(item.valorAnterior);
-    if (Math.abs(d) < 0.001) return null;
-    return { txt: (d>0?'+':'')+d.toFixed(2).replace('.',',')+' pp vs ant.', up: d>0 };
-  };
+  useEffect(() => { setSelectedTasa(tasasBCRA[0] ?? null); }, [bcra]);
 
   return (
     <div>
-      {/* ── HERO: Tasas principales ── */}
-      {tasasBCRA.length > 0 && (
+      {tasasBCRA.length > 0 ? (
         <>
           <div style={{ fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'10px' }}>
             <span>Tasas de referencia BCRA · seleccioná para ver historial</span>
             <div style={{ flex:1,height:'1px',background:'var(--line)' }}/>
           </div>
 
-          {/* Cards hero grandes */}
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'12px',marginBottom:'4px' }}>
-            {heroTasas.map(item => (
-              <TasaHeroCard key={item.key} item={item}
+          {/* Grilla uniforme — todas las cards iguales */}
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:'4px' }}>
+            {tasasBCRA.map(item => (
+              <TasaCard key={item.key} item={item}
                 isSelected={selectedTasa?.key === item.key}
                 onClick={() => setSelectedTasa(selectedTasa?.key === item.key ? null : item)}
               />
             ))}
           </div>
 
-          {/* Cards secundarias más compactas */}
-          {otherTasas.length > 0 && (
-            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginTop:'10px',marginBottom:'4px' }}>
-              {otherTasas.map(item => {
-                const delta = fmtDeltaTasa(item);
-                const isSelected = selectedTasa?.key === item.key;
-                return (
-                  <div key={item.key} className="stat c-flat"
-                    onClick={() => setSelectedTasa(isSelected ? null : item)}
-                    style={{ cursor:'pointer',borderColor:isSelected?'var(--accent)':'',transition:'border-color .15s',padding:'14px 16px' }}
-                    onMouseEnter={e => { if(!isSelected) e.currentTarget.style.borderColor='var(--line2)'; }}
-                    onMouseLeave={e => { if(!isSelected) e.currentTarget.style.borderColor=''; }}>
-                    <div className="stat-label">
-                      {TASA_META[item.key]?.label || item.nombre}
-                      <span className="stat-badge fl">{item.unidad}</span>
-                      {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',marginLeft:'4px' }}>GRAF</span>}
-                    </div>
-                    <div className="stat-val">{fmtValorTasa(item)}</div>
-                    {delta
-                      ? <div className={`stat-delta ${delta.up?'up':'dn'}`}>{delta.txt}</div>
-                      : <div className="stat-delta fl">sin variación</div>}
-                    <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Gráfico histórico inline */}
+          {/* Gráfico histórico */}
           {selectedTasa ? <BcraHistorialChart item={selectedTasa}/> : <HistoricoPlaceholder/>}
         </>
+      ) : (
+        <div style={{ color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px',textAlign:'center',padding:'40px' }}>Cargando tasas BCRA…</div>
       )}
+      <div className="source" style={{ marginTop:'12px' }}>Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · Frecuencia: diaria</div>
+    </div>
+  );
+}
 
-      {/* ── Plazo Fijo por entidad ── */}
-      <div style={{ marginTop:'28px' }}>
-        <div style={{ fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'10px' }}>
-          <span>Plazo fijo por entidad · BCRA</span>
-          <div style={{ flex:1,height:'1px',background:'var(--line)' }}/>
+// Subtab: Tasas bancos (plazo fijo)
+function SubTabBancos({ tasas }) {
+  const plazoFijo = tasas?.plazoFijo ?? [];
+  const sortedPF  = [...plazoFijo]
+    .filter(e => e.tnaClientes || e.tnaNoClientes)
+    .sort((a, b) => toTNA(b.tnaClientes || b.tnaNoClientes) - toTNA(a.tnaClientes || a.tnaNoClientes));
+
+  return (
+    <div>
+      <div style={{ fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'10px' }}>
+        <span>Plazo fijo por entidad · BCRA</span>
+        <div style={{ flex:1,height:'1px',background:'var(--line)' }}/>
+      </div>
+
+      {/* Tabla completa */}
+      <div style={{ background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden',marginBottom:'14px' }}>
+        <div style={{ display:'grid',gridTemplateColumns:'32px 1fr 140px 140px',padding:'10px 18px',background:'var(--bg2)',borderBottom:'1px solid var(--line)',alignItems:'center' }}>
+          <span/>
+          <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',letterSpacing:'.08em' }}>
+            ENTIDAD · {sortedPF.length > 0 ? `${sortedPF.length} bancos` : 'cargando…'} · plazo fijo 30 días
+          </span>
+          <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--accent)',textAlign:'right',letterSpacing:'.06em' }}>TNA CLIENTES</span>
+          <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',textAlign:'right',letterSpacing:'.06em' }}>TNA NO-CLIENTES</span>
         </div>
-
-        {/* Top 3 mejores tasas como podio */}
-        {sortedPF.length >= 3 && (() => {
-          const top3 = sortedPF.slice(0, 3);
-          const maxTNA = toTNA(top3[0]?.tnaClientes || top3[0]?.tnaNoClientes) || 1;
-          return (
-            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'14px' }}>
-              {top3.map((e, i) => {
-                const tna = toTNA(e.tnaClientes);
-                const pct = Math.min(100,(tna/maxTNA)*100);
-                const podioColors = ['#4abf78','#5b9cf6','#9a9eb4'];
-                const podioLabels = ['🥇 MEJOR TNA','🥈 2° LUGAR','🥉 3° LUGAR'];
+        {sortedPF.length === 0 ? (
+          <div style={{ color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px',textAlign:'center',padding:'32px' }}>Cargando datos de tasas…</div>
+        ) : (
+          <div style={{ maxHeight:'500px',overflowY:'auto' }}>
+            {(() => {
+              const maxTNA = toTNA(sortedPF[0]?.tnaClientes || sortedPF[0]?.tnaNoClientes) || 1;
+              let rank = 1, nextRank = 2;
+              const ranks = sortedPF.map((e, i) => {
+                if (i === 0) { rank = 1; nextRank = 2; return 1; }
+                const prev = toTNA(sortedPF[i-1]?.tnaClientes || sortedPF[i-1]?.tnaNoClientes);
+                const curr = toTNA(e.tnaClientes || e.tnaNoClientes);
+                if (curr < prev) { rank = nextRank; }
+                nextRank = rank + 1;
+                return rank;
+              });
+              return sortedPF.map((e, i) => {
+                const tna = toTNA(e.tnaClientes), tnaNC = toTNA(e.tnaNoClientes);
+                const pct = Math.min(100, (tna / maxTNA) * 100);
+                const isTop = ranks[i] === 1;
                 return (
-                  <div key={i} style={{
-                    background: i===0 ? 'rgba(74,191,120,0.08)' : 'var(--bg1)',
-                    border: `1px solid ${i===0 ? '#4abf78' : 'var(--line)'}`,
-                    borderRadius:'12px', padding:'16px 18px',
-                    position:'relative',overflow:'hidden'
-                  }}>
-                    <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:podioColors[i],opacity:0.7,borderRadius:'12px 12px 0 0' }}/>
-                    <div style={{ fontFamily:'var(--mono)',fontSize:'8px',color:podioColors[i],marginBottom:'8px',letterSpacing:'.1em' }}>{podioLabels[i]}</div>
-                    <div style={{ fontSize:'13px',fontWeight:700,color:'var(--white)',marginBottom:'10px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
-                      {e.entidad || '—'}
+                  <div key={i}
+                    style={{ display:'grid',gridTemplateColumns:'36px 1fr 140px 140px',padding:'10px 18px',borderBottom:i<sortedPF.length-1?'1px solid rgba(255,255,255,0.04)':'none',background:isTop?'rgba(86,201,122,0.06)':'transparent',alignItems:'center',cursor:'default' }}
+                    onMouseEnter={ev => ev.currentTarget.style.background='rgba(77,158,240,0.06)'}
+                    onMouseLeave={ev => ev.currentTarget.style.background=isTop?'rgba(86,201,122,0.06)':'transparent'}>
+                    <div style={{ textAlign:'center' }}>
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'11px',fontWeight:isTop?700:400,color:isTop?'var(--green)':'var(--text3)' }}>{ranks[i]}</span>
                     </div>
-                    <div style={{ fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:podioColors[i],lineHeight:1,marginBottom:'10px' }}>
-                      {tna > 0 ? fTNA(tna) : '—'}
+                    <div>
+                      <div style={{ fontSize:'12px',fontWeight:isTop?700:500,color:isTop?'var(--white)':'var(--text2)',marginBottom:'5px' }}>
+                        {e.entidad || '—'}
+                        {isTop && <span style={{ marginLeft:'7px',fontSize:'9px',background:'rgba(86,201,122,.2)',color:'var(--green)',padding:'1px 6px',borderRadius:'3px',fontWeight:400 }}>MEJOR</span>}
+                      </div>
+                      <div style={{ height:'3px',width:'100%',maxWidth:'200px',background:'var(--bg3)',borderRadius:'2px',overflow:'hidden' }}>
+                        <div style={{ width:`${pct}%`,height:'100%',background:isTop?'var(--green)':'rgba(77,158,240,0.55)',borderRadius:'2px' }}/>
+                      </div>
                     </div>
-                    <div style={{ height:'4px',background:'var(--bg3)',borderRadius:'2px',overflow:'hidden' }}>
-                      <div style={{ width:`${pct}%`,height:'100%',background:podioColors[i],borderRadius:'2px',transition:'width .4s ease' }}/>
+                    <div style={{ textAlign:'right' }}>
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'15px',fontWeight:700,color:isTop?'var(--green)':'var(--white)' }}>
+                        {tna > 0 ? fTNA(tna) : '—'}
+                      </span>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'13px',color:tnaNC>0&&tnaNC!==tna?'var(--text2)':'var(--text3)' }}>
+                        {tnaNC > 0 && tnaNC !== tna ? fTNA(tnaNC) : '—'}
+                      </span>
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          );
-        })()}
-
-        {/* Tabla completa */}
-        <div style={{ background:'var(--bg1)',border:'1px solid var(--line)',borderRadius:'10px',overflow:'hidden',marginBottom:'14px' }}>
-          <div style={{ display:'grid',gridTemplateColumns:'32px 1fr 140px 140px',padding:'10px 18px',background:'var(--bg2)',borderBottom:'1px solid var(--line)',alignItems:'center' }}>
-            <span/>
-            <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',letterSpacing:'.08em' }}>
-              ENTIDAD · {sortedPF.length > 0 ? `${sortedPF.length} bancos` : 'cargando…'} · plazo fijo 30 días
-            </span>
-            <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--accent)',textAlign:'right',letterSpacing:'.06em' }}>TNA CLIENTES</span>
-            <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)',textAlign:'right',letterSpacing:'.06em' }}>TNA NO-CLIENTES</span>
+              });
+            })()}
           </div>
-          {sortedPF.length === 0 ? (
-            <div style={{ color:'var(--text3)',fontFamily:'var(--mono)',fontSize:'11px',textAlign:'center',padding:'32px' }}>Cargando datos de tasas…</div>
-          ) : (
-            <div style={{ maxHeight:'420px',overflowY:'auto' }}>
-              {(() => {
-                const maxTNA = toTNA(sortedPF[0]?.tnaClientes || sortedPF[0]?.tnaNoClientes) || 1;
-                let rank = 1, nextRank = 2;
-                const ranks = sortedPF.map((e, i) => {
-                  if (i === 0) { rank = 1; nextRank = 2; return 1; }
-                  const prev = toTNA(sortedPF[i-1]?.tnaClientes || sortedPF[i-1]?.tnaNoClientes);
-                  const curr = toTNA(e.tnaClientes || e.tnaNoClientes);
-                  if (curr < prev) { rank = nextRank; }
-                  nextRank = rank + 1;
-                  return rank;
-                });
-                return sortedPF.map((e, i) => {
-                  const tna = toTNA(e.tnaClientes), tnaNC = toTNA(e.tnaNoClientes);
-                  const pct = Math.min(100, (tna / maxTNA) * 100);
-                  const isTop = ranks[i] === 1;
-                  return (
-                    <div key={i}
-                      style={{ display:'grid',gridTemplateColumns:'36px 1fr 140px 140px',padding:'10px 18px',borderBottom:i<sortedPF.length-1?'1px solid rgba(255,255,255,0.04)':'none',background:isTop?'rgba(86,201,122,0.06)':'transparent',alignItems:'center',cursor:'default' }}
-                      onMouseEnter={ev => ev.currentTarget.style.background='rgba(77,158,240,0.06)'}
-                      onMouseLeave={ev => ev.currentTarget.style.background=isTop?'rgba(86,201,122,0.06)':'transparent'}>
-                      <div style={{ textAlign:'center' }}>
-                        <span style={{ fontFamily:'var(--mono)',fontSize:'11px',fontWeight:isTop?700:400,color:isTop?'var(--green)':'var(--text3)' }}>{ranks[i]}</span>
-                      </div>
-                      <div>
-                        <div style={{ fontSize:'12px',fontWeight:isTop?700:500,color:isTop?'var(--white)':'var(--text2)',marginBottom:'5px' }}>
-                          {e.entidad || '—'}
-                          {isTop && <span style={{ marginLeft:'7px',fontSize:'9px',background:'rgba(86,201,122,.2)',color:'var(--green)',padding:'1px 6px',borderRadius:'3px',fontWeight:400 }}>MEJOR</span>}
-                        </div>
-                        <div style={{ height:'3px',width:'100%',maxWidth:'200px',background:'var(--bg3)',borderRadius:'2px',overflow:'hidden' }}>
-                          <div style={{ width:`${pct}%`,height:'100%',background:isTop?'var(--green)':'rgba(77,158,240,0.55)',borderRadius:'2px' }}/>
-                        </div>
-                      </div>
-                      <div style={{ textAlign:'right' }}>
-                        <span style={{ fontFamily:'var(--mono)',fontSize:'15px',fontWeight:700,color:isTop?'var(--green)':'var(--white)' }}>
-                          {tna > 0 ? fTNA(tna) : '—'}
-                        </span>
-                      </div>
-                      <div style={{ textAlign:'right' }}>
-                        <span style={{ fontFamily:'var(--mono)',fontSize:'13px',color:tnaNC>0&&tnaNC!==tna?'var(--text2)':'var(--text3)' }}>
-                          {tnaNC > 0 && tnaNC !== tna ? fTNA(tnaNC) : '—'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          )}
-          <div style={{ padding:'9px 18px',borderTop:'1px solid var(--line)',background:'var(--bg2)',display:'flex',justifyContent:'space-between' }}>
-            <span style={{ fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)' }}>TNA = Tasa Nominal Anual · Plazo fijo 30 días</span>
-            <span style={{ fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)' }}>Fuente: BCRA · ArgentinaDatos.com · Frecuencia: diaria</span>
-          </div>
+        )}
+        <div style={{ padding:'9px 18px',borderTop:'1px solid var(--line)',background:'var(--bg2)',display:'flex',justifyContent:'space-between' }}>
+          <span style={{ fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)' }}>TNA = Tasa Nominal Anual · Plazo fijo 30 días</span>
+          <span style={{ fontFamily:'var(--mono)',fontSize:'8px',color:'var(--text3)' }}>Fuente: BCRA · ArgentinaDatos.com · Frecuencia: diaria</span>
         </div>
       </div>
-      <div className="source">Fuente: BCRA · api.bcra.gob.ar/estadisticas/v4.0 · ArgentinaDatos.com</div>
+      <div className="source">Fuente: BCRA · ArgentinaDatos.com</div>
+    </div>
+  );
+}
+
+const TASAS_SUBTABS = [
+  { id: 'bcra',   label: 'Tasas BCRA'   },
+  { id: 'bancos', label: 'Tasas Bancos' },
+];
+
+function TabTasas({ bcra, tasas }) {
+  const [subTab, setSubTab] = useState('bcra');
+
+  return (
+    <div>
+      {/* Subtabs internos */}
+      <div style={{ display:'flex',gap:'6px',marginBottom:'20px',borderBottom:'1px solid var(--line)',paddingBottom:'0' }}>
+        {TASAS_SUBTABS.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.06em',textTransform:'uppercase',
+            padding:'6px 16px',borderRadius:'6px 6px 0 0',cursor:'pointer',
+            border:'1px solid transparent',borderBottom:'none',
+            background: subTab===t.id ? 'var(--bg2)' : 'transparent',
+            color: subTab===t.id ? 'var(--white)' : 'var(--text3)',
+            borderColor: subTab===t.id ? 'var(--line)' : 'transparent',
+            marginBottom:'-1px',
+            transition:'all .15s',
+          }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'bcra'   && <SubTabBCRA   bcra={bcra}/>}
+      {subTab === 'bancos' && <SubTabBancos tasas={tasas}/>}
     </div>
   );
 }

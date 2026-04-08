@@ -455,20 +455,20 @@ function TabActEconomica({ pbi, emae, indec }) {
       <div className="grid grid-4" style={{marginBottom:'20px'}}>
         <div className="stat">
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>EMAE General <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>{emaeMes}</span></div>
-          <div className="stat-val" style={{color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)'}}>{fmtE(emaeVal)}</div>
-          <div className="stat-delta fl">var. interanual</div>
+          <div className="stat-val" style={{fontSize:'24px',marginBottom:0,color:emaeVal!=null&&emaeVal>=0?'var(--green)':'var(--red)'}}>{fmtE(emaeVal)}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', marginBottom: '6px' }}>var. interanual</div>
           <div className="stat-meta">{emaeAccum!=null?`Acum. ${fmtE(emaeAccum)} en ${emaeAnioAc}`:'INDEC · datos.gob.ar'}</div>
         </div>
         <div className="stat">
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>PBI Real <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>{pbiTrim}</span></div>
-          <div className="stat-val" style={{color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)'}}>{fmtPbi(pbiVal)}</div>
-          <div className="stat-delta fl">{pbiPrev!=null?`Trim. ant.: ${fmtPbi(pbiPrev)}`:'var. interanual real'}</div>
+          <div className="stat-val" style={{fontSize:'24px',marginBottom:0,color:pbiVal!=null&&pbiVal>=0?'var(--green)':'var(--red)'}}>{fmtPbi(pbiVal)}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', marginBottom: '6px' }}>{pbiPrev!=null?`Trim. ant.: ${fmtPbi(pbiPrev)}`:'var. interanual real'}</div>
           <div className="stat-meta">INDEC · precios constantes 2004</div>
         </div>
         <div className="stat">
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Mejor sector</div>
-          <div className="stat-val" style={{color:'var(--green)',fontSize:'18px',marginTop:'4px'}}>{bestSector?bestSector.nombre:'—'}</div>
-          <div className="stat-delta up">{bestSector?fmtE(bestSector.valor):'—'}</div>
+          <div className="stat-val" style={{fontSize:'16px',marginBottom:0,color:'var(--green)'}}>{bestSector?bestSector.nombre:'—'}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--green)', background: 'var(--green-bg)', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '6px' }}>{bestSector?fmtE(bestSector.valor):'—'}</div>
           <div className="stat-meta">{worstSector?`Peor: ${worstSector.nombre} ${fmtE(worstSector.valor)}`:'EMAE · var. interanual'}</div>
         </div>
         <div className="stat">
@@ -707,7 +707,7 @@ function TabRiesgoPais({ riesgoPais }) {
         <div className="stat">
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>EMBI+ Argentina <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>HOY</span></div>
           <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{rpVal!=null?Math.round(rpVal).toLocaleString('es-AR')+' pb':'—'}</div>
-          <div className={`stat-delta ${rpDeltaUp?'up':'dn'}`}>{rpDeltaDisp}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: rpDeltaUp ? 'var(--green)' : 'var(--red)', background: rpDeltaUp ? 'var(--green-bg)' : 'var(--red-bg)', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '6px' }}>{rpDeltaDisp}</div>
           <div className="stat-meta" style={{display:'flex',alignItems:'center',gap:'6px'}}>
             JP Morgan · ArgentinaDatos
             <span style={{fontFamily:'var(--mono)',fontSize:'8px',background:risk.bg,color:risk.color,padding:'1px 6px',borderRadius:'3px',border:`1px solid ${risk.color}22`}}>{risk.label}</span>
@@ -715,8 +715,8 @@ function TabRiesgoPais({ riesgoPais }) {
         </div>
         <div className="stat">
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Variación 30 días</div>
-          <div className={`stat-val ${delta30!=null?(delta30Up?'':''):''}` } style={{color:delta30!=null?(delta30Up?'var(--green)':'var(--red)'):'var(--text3)'}}>{delta30!=null?(delta30<0?'−':'+')+Math.abs(delta30)+' pb':'—'}</div>
-          <div className="stat-delta fl">vs hace 30 días</div>
+          <div className="stat-val" style={{fontSize:'24px',marginBottom:0,color:delta30!=null?(delta30Up?'var(--green)':'var(--red)'):'var(--text3)'}}>{delta30!=null?(delta30<0?'−':'+')+Math.abs(delta30)+' pb':'—'}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', marginBottom: '6px' }}>vs hace 30 días</div>
           <div className="stat-meta">Historial · ArgentinaDatos</div>
         </div>
         <div className="stat">
@@ -737,7 +737,7 @@ function TabRiesgoPais({ riesgoPais }) {
         <div className="stat">
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Ratio vs Brasil</div>
           <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{ratioBra}</div>
-          <div className="stat-delta fl">{braVal?`Brasil: ${braVal.toLocaleString('es-AR')} pb`:'cargando…'}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', marginBottom: '6px' }}>{braVal?`Brasil: ${braVal.toLocaleString('es-AR')} pb`:'cargando…'}</div>
           <div className="stat-meta">JP Morgan EMBI+</div>
         </div>
       </div>
@@ -1039,8 +1039,8 @@ function BcraMonetarioSection({ bcra, loadBcra }) {
               </div>
               <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{fmtValor(item)}</div>
               {delta
-                ?<div className={`stat-delta ${delta.up?'up':'dn'}`}>{delta.txt} vs ant.</div>
-                :<div className="stat-delta fl">sin variación</div>}
+                ?<div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: delta.up ? 'var(--green)' : 'var(--red)', background: delta.up ? 'var(--green-bg)' : 'var(--red-bg)', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '6px' }}>{delta.txt} vs ant.</div>
+                :<div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', marginBottom: '6px' }}>sin variación</div>}
               <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
             </div>
           );
@@ -1136,7 +1136,7 @@ export function MacroPage({ goPage, inflacion, riesgoPais, bcra, loadBcra, indec
               onMouseLeave={e=>e.currentTarget.style.borderColor='var(--line)'}>
               <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>{k.lbl} <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>{k.badge}</span></div>
               <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{k.val}</div>
-              <div className="stat-delta fl">{k.sub}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', marginBottom: '6px' }}>{k.sub}</div>
               <div className="stat-meta">{k.meta}</div>
             </div>
           ))}

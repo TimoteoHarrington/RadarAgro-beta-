@@ -444,58 +444,51 @@ function TasaCard({ item, isSelected, onClick }) {
   const rgb    = accent.startsWith('#') ? hexToRgb(accent) : '91,156,246';
 
   return (
-    <div onClick={onClick} style={{
-      position: 'relative', cursor: 'pointer', overflow: 'hidden',
-      background: 'var(--bg1)',
-      border: '1px solid var(--line)',
-      borderRadius: '12px', padding: '16px 18px',
-      transition: 'background .18s ease',
-      boxShadow: 'none',
-      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-      minHeight: '130px',
-    }}
-    onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg2)'; }}}
-    onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg1)'; }}}>
+    <div
+      className="stat"
+      onClick={onClick}
+      style={{
+        cursor: 'pointer',
+        borderColor: isSelected ? 'var(--accent)' : undefined,
+        background: isSelected ? 'var(--bg2)' : undefined,
+        transition: 'border-color .15s, background .15s',
+        position: 'relative',
+      }}
+      onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor='var(--line2)'; }}}
+      onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor=''; }}}>
 
 
-      {/* cabecera */}
-      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px' }}>
-        <div>
-          <div style={{ fontFamily:'var(--mono)',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:'2px' }}>
-            {meta.label || item.nombre}
-          </div>
-          <div style={{ fontSize:'9px',color:'var(--text3)',opacity:0.6 }}>{item.unidad}</div>
-        </div>
-        {isSelected && (
-          <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'2px 6px',borderRadius:'3px',border:'1px solid var(--line2)',flexShrink:0 }}>
-            HIST ↓
-          </span>
+      {/* Label — SymbolCard pattern */}
+      <div style={{ fontSize:'15px',fontWeight:400,color:'var(--text2)',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'flex-start' }}>
+        <span>{meta.label || item.nombre}</span>
+        {isSelected ? (
+          <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',flexShrink:0,marginLeft:'6px' }}>GRAF ▾</span>
+        ) : (
+          <span style={{ fontFamily:'var(--mono)',fontSize:'9px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line)',flexShrink:0,marginLeft:'6px' }}>{item.unidad}</span>
         )}
       </div>
 
-      {/* valor */}
-      <div style={{ fontFamily:'var(--mono)',fontSize:'26px',fontWeight:700,color:'var(--white)',lineHeight:1,marginBottom:'8px',letterSpacing:'-0.02em' }}>
-        {valStr}
-      </div>
-
-      {/* delta + fecha */}
-      <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap' }}>
+      {/* Valor + badge variación */}
+      <div style={{ display:'flex',alignItems:'baseline',gap:'10px',flexWrap:'wrap',marginBottom:'10px' }}>
+        <div style={{ fontFamily:'var(--mono)',fontSize:'24px',fontWeight:700,color:'var(--white)',lineHeight:1,letterSpacing:'-0.02em' }}>
+          {valStr}
+        </div>
         {deltaStr ? (
-          <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+          <span style={{ fontFamily:'var(--mono)',fontSize:'11px',fontWeight:600,
             color: delta > 0 ? 'var(--green)' : 'var(--red)',
             background: delta > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
-            padding:'1px 7px',borderRadius:'3px' }}>
-            {deltaStr} vs ant.
+            padding:'2px 8px',borderRadius:'4px' }}>
+            {deltaStr}
           </span>
         ) : (
           <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>sin variación</span>
         )}
-        <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>{fmtFecha(item.fecha)}</span>
       </div>
 
-      {/* desc */}
+      {/* Meta — fecha + descripcion */}
+      <div className="stat-meta">{fmtFecha(item.fecha)} · {item.unidad}</div>
       {meta.desc && (
-        <div style={{ marginTop:'8px',fontSize:'10px',color:'var(--text3)',lineHeight:1.35,opacity:0.8 }}>{meta.desc}</div>
+        <div className="stat-meta" style={{ marginTop:'3px' }}>{meta.desc}</div>
       )}
     </div>
   );

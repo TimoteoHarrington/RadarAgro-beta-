@@ -188,19 +188,10 @@ function SymbolCard({ item, onClick, isSelected }) {
     >
       {/* Título */}
       <div style={{
-        fontSize: '14px', fontWeight: 600, color: 'var(--white)',
-        marginBottom: '4px', lineHeight: 1.2, letterSpacing: '-0.01em',
+        fontSize: '15px', fontWeight: 600, color: 'var(--white)',
+        marginBottom: '12px', lineHeight: 1.3,
       }}>
         {item.name}
-      </div>
-      {/* Badge grupo */}
-      <div style={{ marginBottom: '10px' }}>
-        <span
-          className="stat-badge fl"
-          style={{ color, background: color + '18' }}
-        >
-          {item.group}
-        </span>
       </div>
 
       {/* Precio principal */}

@@ -381,15 +381,15 @@ function TasaCard({ item, isSelected, onClick }) {
       background: isSelected
         ? `linear-gradient(145deg, rgba(${rgb},0.14) 0%, var(--bg2) 100%)`
         : 'var(--bg1)',
-      border: `1px solid ${isSelected ? accent : 'var(--line)'}`,
+      border: '1px solid var(--line)',
       borderRadius: '12px', padding: '16px 18px',
       transition: 'all .18s ease',
-      boxShadow: isSelected ? `0 0 20px rgba(${rgb},0.12)` : 'none',
+      boxShadow: isSelected ? `0 0 20px rgba(${rgb},0.08)` : 'none',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       minHeight: '130px',
     }}
-    onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.borderColor='var(--line2)'; e.currentTarget.style.background='var(--bg2)'; }}}
-    onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.borderColor='var(--line)'; e.currentTarget.style.background='var(--bg1)'; }}}>
+    onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg2)'; }}}
+    onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg1)'; }}}>
       {/* barra superior de color */}
       <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:accent,opacity:isSelected?1:0.4,borderRadius:'12px 12px 0 0' }}/>
 

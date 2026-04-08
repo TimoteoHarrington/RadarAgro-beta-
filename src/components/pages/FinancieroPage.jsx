@@ -198,9 +198,9 @@ function TabDolares({ dolares, bcra }) {
     <div>
       {/* Cards tipos de cambio */}
       <div className="grid grid-3" style={{ marginBottom: '20px' }}>
-        <div className="stat c-flat">
-          <div className="stat-label">Oficial BCRA <span className="stat-badge fl">vendedor</span></div>
-          <div className="stat-val lg">{pOf}</div>
+        <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
+          <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Oficial BCRA <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>vendedor</span></div>
+          <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pOf}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
             <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
               color: dOf.cls==='up' ? 'var(--green)' : dOf.cls==='dn' ? 'var(--red)' : 'var(--text3)',
@@ -209,9 +209,9 @@ function TabDolares({ dolares, bcra }) {
           </div>
           <div className="stat-meta">{spOf ? spOf + ' · ' : ''}crawling peg ~1%/mes</div>
         </div>
-        <div className="stat c-flat">
-          <div className="stat-label">MEP / Bolsa <span className="stat-badge fl">AL30D</span></div>
-          <div className="stat-val lg">{pMep}</div>
+        <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
+          <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>MEP / Bolsa <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>AL30D</span></div>
+          <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pMep}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
             {dolares?.deltaMep != null && Math.abs(dolares.deltaMep) >= 1 ? (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -226,9 +226,9 @@ function TabDolares({ dolares, bcra }) {
           </div>
           <div className="stat-meta">Mercado secundario libre · legal</div>
         </div>
-        <div className="stat c-flat">
-          <div className="stat-label">CCL <span className="stat-badge fl">GD30</span></div>
-          <div className="stat-val lg">{pCcl}</div>
+        <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
+          <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>CCL <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>GD30</span></div>
+          <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pCcl}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
             {dolares?.deltaCcl != null && Math.abs(dolares.deltaCcl) >= 1 ? (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -243,9 +243,9 @@ function TabDolares({ dolares, bcra }) {
           </div>
           <div className="stat-meta">Contado con liquidación · exterior</div>
         </div>
-        <div className="stat c-flat">
-          <div className="stat-label">Blue <span className="stat-badge fl">informal</span></div>
-          <div className="stat-val lg">{pBlu}</div>
+        <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
+          <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Blue <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>informal</span></div>
+          <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pBlu}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
             {dolares?.deltaBlu != null && Math.abs(dolares.deltaBlu) >= 1 ? (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -260,9 +260,9 @@ function TabDolares({ dolares, bcra }) {
           </div>
           <div className="stat-meta">Mercado paralelo · referencia</div>
         </div>
-        <div className="stat c-flat">
-          <div className="stat-label">Cripto (USDT) <span className="stat-badge fl">—</span></div>
-          <div className="stat-val lg">{pCry}</div>
+        <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
+          <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Cripto (USDT) <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>—</span></div>
+          <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pCry}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
             {dolares?.deltaCry != null && Math.abs(dolares.deltaCry) >= 1 ? (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -277,9 +277,9 @@ function TabDolares({ dolares, bcra }) {
           </div>
           <div className="stat-meta">dolarapi.com · referencia</div>
         </div>
-        <div className="stat c-flat">
-          <div className="stat-label">Dólar Mayorista <span className="stat-badge fl">BCRA</span></div>
-          <div className="stat-val lg">{pMay}</div>
+        <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
+          <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Dólar Mayorista <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>BCRA</span></div>
+          <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pMay}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
             {dolares?.deltaMay != null && Math.abs(dolares.deltaMay) >= 1 ? (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -375,17 +375,17 @@ function TabDolares({ dolares, bcra }) {
               const delta = fmtDeltaCam(item);
               const isSelected = selectedCam?.key === item.key;
               return (
-                <div key={item.key} className="stat c-flat"
+                <div key={item.key} className="stat"
                   onClick={() => setSelectedCam(isSelected ? null : item)}
                   style={{ cursor:'pointer', transition:'background .15s' }}
                   onMouseEnter={e => { if(!isSelected) e.currentTarget.style.background='var(--bg2)'; }}
                   onMouseLeave={e => { if(!isSelected) e.currentTarget.style.background=''; }}>
-                  <div className="stat-label">
+                  <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
                     {item.nombre}
-                    <span className="stat-badge fl">{item.unidad}</span>
-                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line2)',marginLeft:'4px' }}>GRAF</span>}
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>{item.unidad}</span>
+                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',marginLeft:'4px' }}>GRAF ▾</span>}
                   </div>
-                  <div className="stat-val">{fmtValorCam(item)}</div>
+                  <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{fmtValorCam(item)}</div>
                   <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
                     {delta ? (
                       <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -725,17 +725,17 @@ function TabUvaIndices({ uva, bcra }) {
               const delta = fmtDeltaIdx(item);
               const isSelected = selectedIdx?.key === item.key;
               return (
-                <div key={item.key} className="stat c-flat"
+                <div key={item.key} className="stat"
                   onClick={() => setSelectedIdx(isSelected ? null : item)}
                   style={{ cursor:'pointer', transition:'background .15s' }}
                   onMouseEnter={e => { if(!isSelected) e.currentTarget.style.background='var(--bg2)'; }}
                   onMouseLeave={e => { if(!isSelected) e.currentTarget.style.background=''; }}>
-                  <div className="stat-label">
+                  <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
                     {item.nombre}
-                    <span className="stat-badge fl">{item.unidad}</span>
-                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line2)',marginLeft:'4px' }}>GRAF</span>}
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>{item.unidad}</span>
+                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',marginLeft:'4px' }}>GRAF ▾</span>}
                   </div>
-                  <div className="stat-val">{fmtValorIdx(item)}</div>
+                  <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{fmtValorIdx(item)}</div>
                   <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
                     {delta ? (
                       <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
@@ -830,48 +830,48 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
         <div className="section-title">Indicadores clave · resumen</div>
         <div className="grid grid-4">
           {/* Dólar Oficial */}
-          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+          <div className="stat" style={{ cursor: 'pointer', transition: 'border-color .15s, background .15s' }}
             onClick={() => setActiveTab('dolares')}
             onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
-            <div className="stat-label">Dólar Oficial <span className="stat-badge fl">BCRA</span></div>
-            <div className="stat-val">{pOf}</div>
+            <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Dólar Oficial <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>BCRA</span></div>
+            <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pOf}</div>
             <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
               {kpiDeltaBadge(dOfKpi, d => (d>0?'+$':'-$')+Math.abs(Math.round(d)).toLocaleString('es-AR')+' vs ant.')}
             </div>
             <div className="stat-meta">BCRA · DolarApi</div>
           </div>
           {/* Brecha Blue */}
-          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+          <div className="stat" style={{ cursor: 'pointer', transition: 'border-color .15s, background .15s' }}
             onClick={() => setActiveTab('dolares')}
             onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
-            <div className="stat-label">Brecha Blue <span className="stat-badge fl">HOY</span></div>
-            <div className="stat-val">{bBlu}</div>
+            <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Brecha Blue <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>HOY</span></div>
+            <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{bBlu}</div>
             <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
               {kpiDeltaBadge(dBluKpi, d => (d>0?'+$':'-$')+Math.abs(Math.round(d)).toLocaleString('es-AR')+' vs ant.')}
             </div>
             <div className="stat-meta">Mercado paralelo · referencia</div>
           </div>
           {/* BADLAR */}
-          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+          <div className="stat" style={{ cursor: 'pointer', transition: 'border-color .15s, background .15s' }}
             onClick={() => setActiveTab('tasas')}
             onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
-            <div className="stat-label">BADLAR Privados <span className="stat-badge fl">TNA</span></div>
-            <div className="stat-val">{badlarVal}</div>
+            <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>BADLAR Privados <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>TNA</span></div>
+            <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{badlarVal}</div>
             <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
               {kpiDeltaBadge(dBadlar, d => (d>0?'+':'')+d.toFixed(2).replace('.',',')+' pp vs ant.')}
             </div>
             <div className="stat-meta">BCRA · referencia</div>
           </div>
           {/* UVA */}
-          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+          <div className="stat" style={{ cursor: 'pointer', transition: 'border-color .15s, background .15s' }}
             onClick={() => setActiveTab('uva')}
             onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
-            <div className="stat-label">Valor UVA <span className="stat-badge fl">HOY</span></div>
-            <div className="stat-val">{uvaVal}</div>
+            <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Valor UVA <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>HOY</span></div>
+            <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{uvaVal}</div>
             <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
               {kpiDeltaBadge(dUva, d => (d>0?'+$':'-$')+Math.abs(d).toFixed(2).replace('.',',')+' vs ant.')}
             </div>

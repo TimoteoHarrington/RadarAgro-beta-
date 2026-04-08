@@ -35,25 +35,35 @@ function Spark({ pts, color }) {
 
 // ── Overview cards strip ──────────────────────────────────────
 function OverviewCards({ moneda }) {
-  const colorMap = { green: 'var(--green)', gold: 'var(--gold)', blue: 'var(--accent)', flat: 'var(--text3)' };
   return (
     <div className="grid grid-3" style={{ marginBottom: 28 }}>
       {GRANOS_OVERVIEW.map(g => {
         const precio = moneda === 'ARS' ? fmtARS(g.precioARS) : fmtUSD(g.precioUSD);
         const d = dir(g.variacionPct);
-        const c = colorMap[g.color] || 'var(--text3)';
+        const varTxt = (g.variacionPct > 0 ? '+' : '') + g.variacionPct.toFixed(1).replace('.', ',') + '%';
         return (
-          <div key={g.id} className={`stat c-${g.color === 'flat' ? 'flat' : g.color}`}>
-            <div className="stat-label">
-              {g.nombre} · Rosario
-              <span className={`stat-badge ${d}`}>{fmtPct(g.variacionPct)}</span>
+          <div key={g.id} className="stat" style={{ cursor: 'default' }}>
+            {/* Label */}
+            <div style={{
+              fontSize: '14px', fontWeight: 400, color: 'var(--text2)',
+              marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+            }}>
+              <span>{g.nombre} · Rosario</span>
             </div>
-            <div className="stat-val">{precio}</div>
-            <div className={`stat-delta ${d}`}>
-              {moneda === 'ARS'
-                ? (g.deltaARS !== 0 ? (g.deltaARS > 0 ? '+' : '') + fmtARS(g.deltaARS) + ' · ' : '= sin cambios · ')
-                : ''}
-              {moneda === 'USD' ? '' : 'USD ' + g.precioUSD + '/tn'}
+            {/* Precio + variación */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>
+                {precio}
+              </div>
+              <span style={{
+                fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
+                color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
+                background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
+                padding:    d === 'fl' ? '0' : '2px 8px',
+                borderRadius: '4px',
+              }}>
+                {varTxt}
+              </span>
             </div>
             <div className="stat-meta">
               FOB: USD {g.fob}/tn · FAS: USD {g.fas}/tn
@@ -311,12 +321,16 @@ function TabSubproductos() {
           { label: 'Harina Soja Fut. US',  valor: `USD ${s.harinaFutUs.precio}`, unidad: s.harinaFutUs.unidad, var: s.harinaFutUs.var, varDir: s.harinaFutUs.varDir },
           { label: 'Aceite Soja Fut. US',  valor: `${s.aceiteFutUs.precio}¢`,    unidad: 'USc/lb',             var: s.aceiteFutUs.var, varDir: s.aceiteFutUs.varDir },
         ].map(item => (
-          <div key={item.label} className={`stat c-${item.varDir === 'up' ? 'green' : item.varDir === 'dn' ? 'red' : 'flat'}`}>
-            <div className="stat-label">
-              {item.label}
-              <span className={`stat-badge ${item.varDir}`}>{fmtPct(item.var)}</span>
+          <div key={item.label} className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>{item.label}</span>
             </div>
-            <div className="stat-val sm">{item.valor}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '20px', marginBottom: 0 }}>{item.valor}</div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: item.varDir === 'up' ? 'var(--green)' : item.varDir === 'dn' ? 'var(--red)' : 'var(--text3)', background: item.varDir === 'up' ? 'var(--green-bg)' : item.varDir === 'dn' ? 'var(--red-bg)' : 'transparent', padding: item.varDir === 'fl' ? '0' : '2px 8px', borderRadius: '4px' }}>
+                {fmtPct(item.var)}
+              </span>
+            </div>
             <div className="stat-meta">{item.unidad}</div>
           </div>
         ))}
@@ -365,14 +379,21 @@ function TabSubproductos() {
 
       <div className="section-title" style={{ marginTop: 28 }}>Complejo Girasol</div>
       <div className="grid grid-2">
-        <div className={`stat c-${dir(g.aceiteFob.var) === 'up' ? 'green' : 'flat'}`}>
-          <div className="stat-label">Aceite Girasol FOB <span className={`stat-badge ${dir(g.aceiteFob.var)}`}>{fmtPct(g.aceiteFob.var)}</span></div>
-          <div className="stat-val sm">USD {g.aceiteFob.precio}</div>
+        <div className="stat" style={{ cursor: 'default' }}>
+          <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <span>Aceite Girasol FOB</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <div className="stat-val" style={{ fontSize: '20px', marginBottom: 0 }}>USD {g.aceiteFob.precio}</div>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: dir(g.aceiteFob.var) === 'up' ? 'var(--green)' : dir(g.aceiteFob.var) === 'dn' ? 'var(--red)' : 'var(--text3)', background: dir(g.aceiteFob.var) === 'up' ? 'var(--green-bg)' : dir(g.aceiteFob.var) === 'dn' ? 'var(--red-bg)' : 'transparent', padding: dir(g.aceiteFob.var) === 'fl' ? '0' : '2px 8px', borderRadius: '4px' }}>
+              {fmtPct(g.aceiteFob.var)}
+            </span>
+          </div>
           <div className="stat-meta">USD/tn · Exportación</div>
         </div>
-        <div className="stat c-flat">
-          <div className="stat-label">Girasol Grano FOB</div>
-          <div className="stat-val sm">USD 440</div>
+        <div className="stat" style={{ cursor: 'default' }}>
+          <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>Girasol Grano FOB</div>
+          <div className="stat-val" style={{ fontSize: '20px', marginBottom: '10px' }}>USD 440</div>
           <div className="stat-meta">Retención 7% · Bahía Blanca</div>
         </div>
       </div>

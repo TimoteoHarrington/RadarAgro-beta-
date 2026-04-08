@@ -209,21 +209,25 @@ function TabFertilizantes() {
       <div className="grid grid-4" style={{ marginBottom: 28 }}>
         {FERTILIZANTES.map(f => {
           const d = dir(f.varPct);
+          const varTxt = (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%';
           return (
-            <div key={f.id} className={`stat c-${d === 'dn' ? 'red' : d === 'up' ? 'green' : 'flat'}`}>
-              <div className="stat-label">
+            <div key={f.id} className="stat" style={{ cursor: 'default' }}>
+              <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <span>{f.nombre}</span>
-                <span className={`stat-badge ${d}`}>{fmtPct(f.varPct)}</span>
               </div>
-              <div className="stat-val">{fmtARS(f.ars)}</div>
-              <div className={`stat-delta ${d}`}>
-                {f.deltaArs !== 0
-                  ? (f.deltaArs > 0 ? '+' : '') + fmtARS(f.deltaArs) + ' hoy'
-                  : '= sin cambios'}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{fmtARS(f.ars)}</div>
+                <span style={{
+                  fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
+                  color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
+                  background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
+                  padding:    d === 'fl' ? '0' : '2px 8px',
+                  borderRadius: '4px',
+                }}>
+                  {varTxt}
+                </span>
               </div>
-              <div className="stat-meta">
-                {fmtUSD(f.usd)}/tn · Fórmula {f.formula}
-              </div>
+              <div className="stat-meta">{fmtUSD(f.usd)}/tn · Fórmula {f.formula}</div>
             </div>
           );
         })}
@@ -372,22 +376,36 @@ function TabCombustibles() {
       <div className="grid grid-4" style={{ marginBottom: 28 }}>
         {COMBUSTIBLES.map(c => {
           const d = dir(c.varPct);
+          const varTxt = (c.varPct > 0 ? '+' : '') + c.varPct.toFixed(1).replace('.', ',') + '%';
           const valDisplay = c.usd != null
             ? `USD ${c.usd.toFixed(2)}`
             : c.valor != null
               ? c.valor
               : fmtARS(c.ars);
           return (
-            <div key={c.id} className="stat c-flat">
-              <div className="stat-label">
+            <div key={c.id} className="stat" style={{ cursor: 'default' }}>
+              <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <span>{c.nombre}</span>
-                {c.badge
-                  ? <span className={`stat-badge ${c.badge.cls}`}>{c.badge.label}</span>
-                  : <span className={`stat-badge ${d}`}>{fmtPct(c.varPct)}</span>
-                }
               </div>
-              <div className="stat-val sm">{valDisplay}</div>
-              <div className="stat-meta" style={{ marginTop: 6 }}>{c.subtitulo}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{valDisplay}</div>
+                {c.badge ? (
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--accent)', background: 'var(--acc-bg)', padding: '2px 8px', borderRadius: '4px' }}>
+                    {c.badge.label}
+                  </span>
+                ) : (
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
+                    color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
+                    background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
+                    padding:    d === 'fl' ? '0' : '2px 8px',
+                    borderRadius: '4px',
+                  }}>
+                    {varTxt}
+                  </span>
+                )}
+              </div>
+              <div className="stat-meta">{c.subtitulo}</div>
               <div className="stat-meta">{c.nota}</div>
             </div>
           );

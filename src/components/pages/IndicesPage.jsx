@@ -194,28 +194,51 @@ export function IndicesPage({ goPage }) {
       <div className="section">
         <div className="section-title">Resumen · estado actual</div>
         <div className="grid grid-4">
-          <div className="stat c-green">
-            <div className="stat-label">Feedlot · Novillo/Maiz <span className="stat-badge up">VIABLE</span></div>
-            <div className="stat-val">19,8</div>
-            <div className="stat-delta up">+4,8 sobre umbral (15)</div>
-            <div className="stat-meta">Promedio historico: 16,4 · Tendencia ↑</div>
+          {/* Feedlot */}
+          <div className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>Feedlot · Novillo/Maiz</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--green-bg)', color: 'var(--green)', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(74,191,120,.2)', flexShrink: 0, marginLeft: '6px' }}>VIABLE</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>19,8</div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--green)', background: 'var(--green-bg)', padding: '2px 8px', borderRadius: '4px' }}>+4,8</span>
+            </div>
+            <div className="stat-meta">Umbral: 15 · Promedio hist.: 16,4 · Tendencia ↑</div>
           </div>
-          <div className="stat c-green">
-            <div className="stat-label">Cria · Ternero/Novillo <span className="stat-badge up">POSITIVO</span></div>
-            <div className="stat-val">1,37</div>
-            <div className="stat-delta up">+0,07 sobre umbral (1,30)</div>
-            <div className="stat-meta">Promedio historico: 1,30 · Tendencia →</div>
+          {/* Cria */}
+          <div className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>Cria · Ternero/Novillo</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--green-bg)', color: 'var(--green)', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(74,191,120,.2)', flexShrink: 0, marginLeft: '6px' }}>POSITIVO</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>1,37</div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--green)', background: 'var(--green-bg)', padding: '2px 8px', borderRadius: '4px' }}>+0,07</span>
+            </div>
+            <div className="stat-meta">Umbral: 1,30 · Promedio hist.: 1,30 · Tendencia →</div>
           </div>
-          <div className="stat c-red">
-            <div className="stat-label">Soja / Urea <span className="stat-badge dn">PRESION</span></div>
-            <div className="stat-val">0,94</div>
-            <div className="stat-delta dn">-0,06 bajo umbral (1,0)</div>
-            <div className="stat-meta">Promedio historico: 1,10 · Tendencia ↓</div>
+          {/* Soja/Urea */}
+          <div className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>Soja / Urea</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--red-bg)', color: 'var(--red)', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(224,92,92,.2)', flexShrink: 0, marginLeft: '6px' }}>PRESIÓN</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>0,94</div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--red)', background: 'var(--red-bg)', padding: '2px 8px', borderRadius: '4px' }}>−0,06</span>
+            </div>
+            <div className="stat-meta">Umbral: 1,0 · Promedio hist.: 1,10 · Tendencia ↓</div>
           </div>
-          <div className="stat c-flat">
-            <div className="stat-label">Gasoil / Soja <span className="stat-badge fl">REF</span></div>
-            <div className="stat-val">365 L</div>
-            <div className="stat-delta dn">+23 L vs anio anterior</div>
+          {/* Gasoil/Soja */}
+          <div className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>
+              Gasoil / Soja
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>365 L</div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--text3)' }}>REF</span>
+            </div>
             <div className="stat-meta">Litros de gasoil por tonelada de soja producida</div>
           </div>
         </div>

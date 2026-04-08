@@ -98,15 +98,26 @@ function OverviewCards() {
     <div className="grid grid-3" style={{ marginBottom: 28 }}>
       {HACIENDA_OVERVIEW.map(item => {
         const d = dirOf(item.var);
+        const varTxt = (item.var > 0 ? '+' : '') + item.var.toFixed(1).replace('.', ',') + '%';
         return (
-          <div key={item.id} className={`stat c-${d === 'up' ? 'green' : d === 'dn' ? 'red' : 'flat'}`}>
-            <div className="stat-label">
-              {item.nombre}
-              <span className={`stat-badge ${d}`}>{fmtPct(item.var)}</span>
+          <div key={item.id} className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span>{item.nombre}</span>
             </div>
-            <div className="stat-val sm">{fmtARS(item.precio)}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{fmtARS(item.precio)}</div>
+              <span style={{
+                fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
+                color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
+                background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
+                padding:    d === 'fl' ? '0' : '2px 8px',
+                borderRadius: '4px',
+              }}>
+                {varTxt}
+              </span>
+            </div>
             <div className="stat-meta">{item.subcategoria} · {item.unidad}</div>
-            <div className="stat-meta" style={{ marginTop: 4 }}>Fuente: {item.fuente}</div>
+            <div className="stat-meta" style={{ marginTop: 2 }}>Fuente: {item.fuente}</div>
           </div>
         );
       })}

@@ -169,131 +169,57 @@ function DetailChart({ points, color }) {
   return <canvas ref={ref} style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }} />;
 }
 
-// ── helpers para separar número de unidad ──────────────────────
-const splitPrice = (v, group) => {
-  if (v == null) return { num: '—', unit: '' };
-  if (group === 'Tasas')   return { num: v.toFixed(3).replace('.', ','), unit: '%' };
-  if (group === 'Monedas') return { num: v.toFixed(4).replace('.', ','), unit: 'USD' };
-  if (group === 'Crypto')  return {
-    num: v > 1000
-      ? Math.round(v).toLocaleString('es-AR')
-      : v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    unit: 'USD',
-  };
-  if (group === 'Agro') return {
-    num: v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    unit: 'USD/t',
-  };
-  return {
-    num: v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    unit: '',
-  };
-};
-
 // ── Symbol Card ─────────────────────────────────────────────────
 function SymbolCard({ item, onClick, isSelected }) {
-  const chg      = fmtChange(item.change);
-  const color    = GROUP_COLOR[item.group] || 'var(--accent)';
-  const { num, unit } = splitPrice(item.price, item.group);
-  const isUp     = chg.cls === 'up';
-  const isDn     = chg.cls === 'dn';
-  const chgColor = isUp ? '#4eca78' : isDn ? '#e05c5c' : '#6a8090';
-  const arrow    = isUp ? '▲' : isDn ? '▼' : '';
+  const chg   = fmtChange(item.change);
+  const color = GROUP_COLOR[item.group] || 'var(--accent)';
+  const price = item.price != null ? fmtPrice(item.price, item.group) : 'S/D';
 
   return (
     <div
+      className="stat"
       onClick={() => onClick(item)}
       style={{
-        position: 'relative',
-        background: isSelected ? 'var(--bg2)' : 'var(--bg1)',
-        border: `1px solid ${isSelected ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'}`,
-        borderRadius: '12px',
-        padding: '22px 24px',
         cursor: 'pointer',
+        borderColor: isSelected ? color + '70' : undefined,
+        background: isSelected ? 'var(--bg2)' : undefined,
         transition: 'border-color .15s, background .15s',
       }}
-      onMouseEnter={e => {
-        if (!isSelected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.11)';
-      }}
-      onMouseLeave={e => {
-        if (!isSelected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
-      }}
     >
-      {/* Nombre — uppercase tracking, opacidad baja */}
+      {/* Título */}
       <div style={{
-        fontFamily: 'var(--mono)',
-        fontSize: '10px',
-        fontWeight: 500,
-        letterSpacing: '0.12em',
-        textTransform: 'uppercase',
-        color: 'rgba(255,255,255,0.35)',
-        marginBottom: '14px',
+        fontSize: '15px', fontWeight: 600, color: 'var(--white)',
+        marginBottom: '12px', lineHeight: 1.3,
       }}>
         {item.name}
-        {isSelected && (
+      </div>
+
+      {/* Precio + variación en la misma línea */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>
+          {price}
+        </div>
+        {item.change != null ? (
           <span style={{
-            marginLeft: '8px', fontSize: '7px',
-            background: 'var(--bg3)', color: 'var(--text3)',
-            padding: '1px 5px', borderRadius: '3px',
-            border: '1px solid var(--line2)', verticalAlign: 'middle',
-            opacity: 0.8,
-          }}>GRAF</span>
+            fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
+            color:       chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
+            background:  chg.cls === 'up' ? 'var(--green-bg)' : chg.cls === 'dn' ? 'var(--red-bg)' : 'transparent',
+            padding:     chg.cls === 'fl' ? '0' : '2px 8px',
+            borderRadius: '4px',
+          }}>
+            {chg.txt}
+          </span>
+        ) : (
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>—</span>
+        )}
+        {isSelected && (
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line2)' }}>
+            GRAF
+          </span>
         )}
       </div>
 
-      {/* Precio — elemento dominante */}
-      <div style={{ marginBottom: '4px', lineHeight: 1 }}>
-        <span style={{
-          fontFamily: 'var(--display)',
-          fontSize: '34px',
-          fontWeight: 700,
-          color: '#ffffff',
-          letterSpacing: '-0.03em',
-        }}>
-          {num}
-        </span>
-      </div>
-
-      {/* Unidad debajo del precio, pequeña */}
-      {unit && (
-        <div style={{
-          fontFamily: 'var(--mono)',
-          fontSize: '10px',
-          color: 'rgba(255,255,255,0.3)',
-          letterSpacing: '0.06em',
-          marginBottom: '16px',
-        }}>
-          {unit}
-        </div>
-      )}
-
-      {/* Separador */}
-      <div style={{
-        height: '1px',
-        background: 'rgba(255,255,255,0.06)',
-        marginBottom: '12px',
-      }} />
-
-      {/* Variación diaria */}
-      {item.change != null ? (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-          fontFamily: 'var(--mono)',
-          fontSize: '12px',
-          fontWeight: 600,
-          color: chgColor,
-        }}>
-          {arrow && <span style={{ fontSize: '8px', lineHeight: 1 }}>{arrow}</span>}
-          <span>{chg.txt}</span>
-          <span style={{ fontWeight: 400, fontSize: '10px', color: 'rgba(255,255,255,0.25)', marginLeft: '2px' }}>
-            vs ayer
-          </span>
-        </div>
-      ) : (
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>—</div>
-      )}
+      <div className="stat-meta">Yahoo Finance · futuros</div>
     </div>
   );
 }

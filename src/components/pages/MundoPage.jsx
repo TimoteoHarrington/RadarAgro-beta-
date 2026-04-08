@@ -180,7 +180,7 @@ const splitPrice = (v, group) => {
       : v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     unit: 'USD',
   };
-  if (group === 'Agro')    return {
+  if (group === 'Agro') return {
     num: v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     unit: 'USD/t',
   };
@@ -192,59 +192,42 @@ const splitPrice = (v, group) => {
 
 // ── Symbol Card ─────────────────────────────────────────────────
 function SymbolCard({ item, onClick, isSelected }) {
-  const chg   = fmtChange(item.change);
-  const color = GROUP_COLOR[item.group] || 'var(--accent)';
+  const chg      = fmtChange(item.change);
+  const color    = GROUP_COLOR[item.group] || 'var(--accent)';
   const { num, unit } = splitPrice(item.price, item.group);
-  const isUp  = chg.cls === 'up';
-  const isDn  = chg.cls === 'dn';
-  const chgColor = isUp ? '#56c97a' : isDn ? '#f07070' : 'var(--text3)';
-  const arrow = isUp ? '▲' : isDn ? '▼' : '';
+  const isUp     = chg.cls === 'up';
+  const isDn     = chg.cls === 'dn';
+  const chgColor = isUp ? '#4eca78' : isDn ? '#e05c5c' : '#6a8090';
+  const arrow    = isUp ? '▲' : isDn ? '▼' : '';
 
   return (
     <div
       onClick={() => onClick(item)}
       style={{
         position: 'relative',
-        background: isSelected
-          ? 'linear-gradient(135deg, var(--bg2) 0%, var(--bg1) 100%)'
-          : 'linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%)',
-        border: `1px solid ${isSelected ? color + '55' : 'var(--line)'}`,
-        borderRadius: '14px',
-        padding: '18px 20px 14px',
+        background: isSelected ? 'var(--bg2)' : 'var(--bg1)',
+        border: `1px solid ${isSelected ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'}`,
+        borderRadius: '12px',
+        padding: '22px 24px',
         cursor: 'pointer',
-        overflow: 'hidden',
-        boxShadow: isSelected
-          ? `0 4px 24px ${color}18, 0 1px 4px rgba(0,0,0,0.4)`
-          : '0 1px 4px rgba(0,0,0,0.3)',
-        transition: 'border-color .2s, box-shadow .2s, background .2s',
+        transition: 'border-color .15s, background .15s',
       }}
       onMouseEnter={e => {
-        if (!isSelected) {
-          e.currentTarget.style.borderColor = color + '40';
-          e.currentTarget.style.boxShadow   = `0 4px 16px ${color}12, 0 1px 4px rgba(0,0,0,0.4)`;
-        }
+        if (!isSelected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.11)';
       }}
       onMouseLeave={e => {
-        if (!isSelected) {
-          e.currentTarget.style.borderColor = 'var(--line)';
-          e.currentTarget.style.boxShadow   = '0 1px 4px rgba(0,0,0,0.3)';
-        }
+        if (!isSelected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
       }}
     >
-      {/* Barra de acento lateral */}
+      {/* Nombre — uppercase tracking, opacidad baja */}
       <div style={{
-        position: 'absolute', left: 0, top: '16px', bottom: '16px',
-        width: '3px', borderRadius: '0 2px 2px 0',
-        background: color, opacity: isSelected ? 1 : 0.45,
-        transition: 'opacity .2s',
-      }} />
-
-      {/* Nombre — pequeño, arriba, tracking ancho */}
-      <div style={{
-        fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600,
-        letterSpacing: '0.1em', textTransform: 'uppercase',
-        color: 'var(--text3)', marginBottom: '8px',
-        paddingLeft: '8px',
+        fontFamily: 'var(--mono)',
+        fontSize: '10px',
+        fontWeight: 500,
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.35)',
+        marginBottom: '14px',
       }}>
         {item.name}
         {isSelected && (
@@ -253,53 +236,64 @@ function SymbolCard({ item, onClick, isSelected }) {
             background: 'var(--bg3)', color: 'var(--text3)',
             padding: '1px 5px', borderRadius: '3px',
             border: '1px solid var(--line2)', verticalAlign: 'middle',
+            opacity: 0.8,
           }}>GRAF</span>
         )}
       </div>
 
-      {/* Precio — foco visual principal */}
-      <div style={{ paddingLeft: '8px', marginBottom: '6px' }}>
+      {/* Precio — elemento dominante */}
+      <div style={{ marginBottom: '4px', lineHeight: 1 }}>
         <span style={{
-          fontFamily: 'var(--display)', fontSize: '30px', fontWeight: 700,
-          color: 'var(--white)', letterSpacing: '-0.03em', lineHeight: 1,
+          fontFamily: 'var(--display)',
+          fontSize: '34px',
+          fontWeight: 700,
+          color: '#ffffff',
+          letterSpacing: '-0.03em',
         }}>
           {num}
         </span>
-        {unit && (
-          <span style={{
-            fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 500,
-            color: 'var(--text3)', marginLeft: '6px', letterSpacing: '0.02em',
-          }}>
-            {unit}
-          </span>
-        )}
       </div>
 
-      {/* Variación — flecha + % con color */}
-      <div style={{ paddingLeft: '8px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-        {item.change != null ? (
-          <span style={{
-            fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700,
-            color: chgColor, display: 'flex', alignItems: 'center', gap: '3px',
-          }}>
-            {arrow && <span style={{ fontSize: '9px' }}>{arrow}</span>}
-            {chg.txt}
-          </span>
-        ) : (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)' }}>—</span>
-        )}
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', opacity: 0.6 }}>
-          vs ayer
-        </span>
-      </div>
+      {/* Unidad debajo del precio, pequeña */}
+      {unit && (
+        <div style={{
+          fontFamily: 'var(--mono)',
+          fontSize: '10px',
+          color: 'rgba(255,255,255,0.3)',
+          letterSpacing: '0.06em',
+          marginBottom: '16px',
+        }}>
+          {unit}
+        </div>
+      )}
 
-      {/* Sparkline */}
-      <div style={{ height: '32px', marginLeft: '-20px', marginRight: '-20px', marginBottom: '-14px' }}>
-        {item.sparkline?.length > 1
-          ? <Sparkline pts={item.sparkline} change={item.change} />
-          : <div style={{ height: '100%', borderTop: '1px solid var(--line)' }} />
-        }
-      </div>
+      {/* Separador */}
+      <div style={{
+        height: '1px',
+        background: 'rgba(255,255,255,0.06)',
+        marginBottom: '12px',
+      }} />
+
+      {/* Variación diaria */}
+      {item.change != null ? (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          fontFamily: 'var(--mono)',
+          fontSize: '12px',
+          fontWeight: 600,
+          color: chgColor,
+        }}>
+          {arrow && <span style={{ fontSize: '8px', lineHeight: 1 }}>{arrow}</span>}
+          <span>{chg.txt}</span>
+          <span style={{ fontWeight: 400, fontSize: '10px', color: 'rgba(255,255,255,0.25)', marginLeft: '2px' }}>
+            vs ayer
+          </span>
+        </div>
+      ) : (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>—</div>
+      )}
     </div>
   );
 }

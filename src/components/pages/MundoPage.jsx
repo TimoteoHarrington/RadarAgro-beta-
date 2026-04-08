@@ -230,7 +230,6 @@ function DetailPanel({ item, onClose }) {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
   const color = GROUP_COLOR[item.group] || '#4d9ef0';
-  const chg = fmtChange(item.change);
 
   const loadChart = useCallback(async (r) => {
     setLoading(true);
@@ -242,6 +241,26 @@ function DetailPanel({ item, onClose }) {
   useEffect(() => { loadChart(range); }, [range, loadChart]);
 
   const RANGES = ['1d', '5d', '1mo', '3mo', '1y'];
+  const RANGE_LABEL = { '1d': '1 día', '5d': '5 días', '1mo': '1 mes', '3mo': '3 meses', '1y': '1 año' };
+
+  // Variación calculada desde el primer al último punto del rango cargado
+  const rangeChg = (() => {
+    if (!chartData || chartData.length < 2) return null;
+    const first = chartData[0].v;
+    const last  = chartData[chartData.length - 1].v;
+    if (!first) return null;
+    const pct = ((last - first) / first) * 100;
+    const abs = last - first;
+    const sign = pct > 0 ? '+' : '';
+    return {
+      pct:   sign + pct.toFixed(2).replace('.', ',') + '%',
+      abs:   sign + abs.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      up:    pct > 0,
+      dn:    pct < 0,
+      color: pct > 0 ? 'var(--green)' : pct < 0 ? 'var(--red)' : 'var(--text3)',
+      bg:    pct > 0 ? 'var(--green-bg)' : pct < 0 ? 'var(--red-bg)' : 'transparent',
+    };
+  })();
 
   return (
     <div style={{
@@ -254,22 +273,30 @@ function DetailPanel({ item, onClose }) {
       {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'var(--display)', fontSize: '18px', fontWeight: 700, color: 'var(--white)' }}>
               {item.name}
             </span>
             <span style={{ fontFamily: 'var(--mono)', fontSize: '22px', fontWeight: 700, color: 'var(--white)' }}>
               {fmtPrice(item.price, item.group)}
             </span>
-            <span style={{
-              fontFamily: 'var(--mono)', fontSize: '14px', fontWeight: 700,
-              color: chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
-            }}>
-              {chg.txt}
-            </span>
+            {rangeChg && (
+              <span style={{
+                fontFamily: 'var(--mono)', fontSize: '13px', fontWeight: 700,
+                color: rangeChg.color, background: rangeChg.bg,
+                padding: '2px 8px', borderRadius: '4px',
+              }}>
+                {rangeChg.up ? '▲' : rangeChg.dn ? '▼' : ''} {rangeChg.pct}
+              </span>
+            )}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '3px', fontFamily: 'var(--mono)' }}>
             {item.group} · Yahoo Finance · Futuros
+            {rangeChg && (
+              <span style={{ marginLeft: '8px', color: rangeChg.color }}>
+                · {rangeChg.abs} en {RANGE_LABEL[range]}
+              </span>
+            )}
           </div>
         </div>
         <button
@@ -280,8 +307,8 @@ function DetailPanel({ item, onClose }) {
         </button>
       </div>
 
-      {/* Range selector */}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', gap: '6px' }}>
+      {/* Range selector + variación del período */}
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', gap: '6px', alignItems: 'center' }}>
         {RANGES.map(r => (
           <button key={r} onClick={() => setRange(r)} style={{
             background: range === r ? color + '20' : 'none',
@@ -293,6 +320,15 @@ function DetailPanel({ item, onClose }) {
             {r}
           </button>
         ))}
+        {!loading && rangeChg && (
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, color: rangeChg.color }}>
+            {rangeChg.up ? '▲' : rangeChg.dn ? '▼' : ''} {rangeChg.pct}
+            <span style={{ fontWeight: 400, fontSize: '10px', color: 'var(--text3)', marginLeft: '5px' }}>en {RANGE_LABEL[range]}</span>
+          </span>
+        )}
+        {loading && (
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)' }}>cargando…</span>
+        )}
       </div>
 
       {/* Chart */}

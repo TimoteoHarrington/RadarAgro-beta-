@@ -262,27 +262,51 @@ function DetailChart({ points }) {
 }
 
 // ── Symbol Card ─────────────────────────────────────────────────
-function SymbolCard({ item, onClick, isSelected }) {
+function SymbolCard({ item, onClick, isSelected, clickable = true }) {
   const chg   = fmtChange(item.change);
   const price = item.price != null ? fmtPrice(item.price, item.group) : 'S/D';
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div
       className="stat"
-      onClick={() => onClick(item)}
+      onClick={clickable ? () => onClick(item) : undefined}
+      onMouseEnter={clickable ? () => setHovered(true) : undefined}
+      onMouseLeave={clickable ? () => setHovered(false) : undefined}
       style={{
-        cursor: 'pointer',
-        borderColor: isSelected ? 'var(--accent)' : undefined,
+        cursor: clickable ? 'pointer' : 'default',
+        borderColor: isSelected ? 'var(--accent)' : hovered && clickable ? 'var(--line2)' : undefined,
         background: isSelected ? 'var(--bg2)' : undefined,
         transition: 'border-color .15s, background .15s',
+        position: 'relative',
       }}
     >
       {/* Título */}
       <div style={{
         fontSize: '15px', fontWeight: 400, color: 'var(--text2)',
-        marginBottom: '8px',
+        marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
       }}>
-        {item.name}
+        <span>{item.name}</span>
+        {/* Hint de gráfico — solo en modo clickeable y no seleccionado */}
+        {clickable && !isSelected && (
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: '8px', color: 'var(--text3)',
+            opacity: hovered ? 0.8 : 0.35,
+            display: 'flex', alignItems: 'center', gap: '3px',
+            transition: 'opacity .15s', flexShrink: 0, marginLeft: '6px', paddingTop: '1px',
+          }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            ver
+          </span>
+        )}
+        {/* Badge GRAF cuando está seleccionado */}
+        {isSelected && (
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--acc-bg)', color: 'var(--accent)', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(91,156,246,.2)', flexShrink: 0, marginLeft: '6px' }}>
+            GRAF ▾
+          </span>
+        )}
       </div>
 
       {/* Precio + variación en la misma línea */}
@@ -302,11 +326,6 @@ function SymbolCard({ item, onClick, isSelected }) {
           </span>
         ) : (
           <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>—</span>
-        )}
-        {isSelected && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line2)' }}>
-            GRAF
-          </span>
         )}
       </div>
 
@@ -460,11 +479,8 @@ function DetailPanel({ item, onClose, isDefault = false }) {
 }
 
 // ── Group Section ───────────────────────────────────────────────
-function GroupSection({ group, items, selected, onSelect }) {
-  // Auto-seleccionar el primer item si ninguno está seleccionado en este grupo
+function GroupSection({ group, items, selected, onSelect, clickable = true }) {
   const groupSelected = selected && items.find(i => i.id === selected.id) ? selected : null;
-  const defaultItem   = !groupSelected ? items[0] : null;
-  const displayItem   = groupSelected || defaultItem;
 
   return (
     <div className="section">
@@ -478,17 +494,40 @@ function GroupSection({ group, items, selected, onSelect }) {
             item={item}
             onClick={onSelect}
             isSelected={selected?.id === item.id}
+            clickable={clickable}
           />
         ))}
       </div>
-      {/* Gráfico: muestra el seleccionado, o el primero por defecto */}
-      <div style={{ marginTop: '16px' }}>
-        <DetailPanel
-          item={displayItem}
-          onClose={groupSelected ? () => onSelect(null) : null}
-          isDefault={!groupSelected}
-        />
-      </div>
+      {/* Gráfico: solo si hay uno seleccionado. Si no, muestra hint */}
+      {clickable && (
+        <div style={{ marginTop: '16px' }}>
+          {groupSelected ? (
+            <DetailPanel
+              item={groupSelected}
+              onClose={() => onSelect(null)}
+              isDefault={false}
+            />
+          ) : (
+            <div style={{
+              background: 'var(--bg1)',
+              border: '1px dashed var(--line2)',
+              borderRadius: '12px',
+              padding: '22px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              color: 'var(--text3)',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5 }}>
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                Tocá un activo para ver su gráfico histórico
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -573,6 +612,7 @@ export function MundoPage({ goPage, mundo, loadMundo }) {
           items={byGroup[group]}
           selected={selected}
           onSelect={handleSelect}
+          clickable={filter !== 'Todos'}
         />
       ))}
 
@@ -627,7 +667,7 @@ export function MundoPage({ goPage, mundo, loadMundo }) {
             </div>
             <div style={{ padding: '8px 20px', background: 'var(--bg2)' }}>
               <span style={{ fontFamily: 'var(--mono)', fontSize: '8px', color: 'var(--text3)' }}>
-                Fuente: Yahoo Finance · Futuros · Datos con hasta 15 min de demora · Clic en cualquier activo para ver gráfico histórico
+                Fuente: Yahoo Finance · Futuros · Datos con hasta 15 min de demora · Seleccioná un grupo para ver gráficos
               </span>
             </div>
           </div>

@@ -339,14 +339,22 @@ function DetailPanel({ item, onClose, isDefault = false }) {
   const [range, setRange] = useState('5d');
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const color = 'rgba(154,176,196,0.85)';
+  const BTN_ACTIVE_BG     = 'var(--acc-bg)';
+  const BTN_ACTIVE_BORDER = 'var(--accent)';
+  const BTN_ACTIVE_COLOR  = 'var(--accent)';
 
   const loadChart = useCallback(async (r) => {
     setLoading(true);
-    setChartData(null); // limpiar datos anteriores para evitar flash de contenido viejo/vacío
+    setChartData(null);
     const { data, error } = await fetchMundoChart(item.id, r);
     if (!error && data?.points) setChartData(data.points);
     setLoading(false);
+  }, [item.id]);
+
+  // useLayoutEffect corre ANTES del primer paint, garantizando spinner inmediato
+  React.useLayoutEffect(() => {
+    setLoading(true);
+    setChartData(null);
   }, [item.id]);
 
   useEffect(() => { loadChart(range); }, [range, loadChart]);
@@ -437,9 +445,9 @@ function DetailPanel({ item, onClose, isDefault = false }) {
       <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', gap: '6px', alignItems: 'center' }}>
         {RANGES.map(r => (
           <button key={r} onClick={() => setRange(r)} style={{
-            background: range === r ? color + '20' : 'none',
-            border: `1px solid ${range === r ? color + '60' : 'var(--line)'}`,
-            borderRadius: '6px', color: range === r ? color : 'var(--text3)',
+            background: range === r ? BTN_ACTIVE_BG : 'none',
+            border: `1px solid ${range === r ? BTN_ACTIVE_BORDER : 'var(--line)'}`,
+            borderRadius: '6px', color: range === r ? BTN_ACTIVE_COLOR : 'var(--text3)',
             padding: '4px 12px', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: '11px',
             transition: 'all .15s',
           }}>

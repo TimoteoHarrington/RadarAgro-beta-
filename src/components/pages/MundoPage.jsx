@@ -171,46 +171,60 @@ function DetailChart({ points, color }) {
 
 // ── Symbol Card ─────────────────────────────────────────────────
 function SymbolCard({ item, onClick, isSelected }) {
-  const chg = fmtChange(item.change);
+  const chg   = fmtChange(item.change);
   const color = GROUP_COLOR[item.group] || 'var(--accent)';
+  const price = item.price != null ? fmtPrice(item.price, item.group) : 'S/D';
+
   return (
     <div
+      className="stat"
       onClick={() => onClick(item)}
       style={{
-        background: isSelected ? 'var(--bg2)' : 'var(--bg1)',
-        border: `1px solid ${isSelected ? color + '60' : 'var(--line)'}`,
-        borderRadius: '10px',
-        padding: '14px 16px',
         cursor: 'pointer',
+        borderColor: isSelected ? color + '70' : undefined,
+        background: isSelected ? 'var(--bg2)' : undefined,
         transition: 'border-color .15s, background .15s',
       }}
-      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--line2)'; }}
-      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--line)'; }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: 'var(--mono)', marginBottom: '3px' }}>
-            {item.name}
-          </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '16px', fontWeight: 700, color: 'var(--white)' }}>
-            {item.price != null ? fmtPrice(item.price, item.group) : 'S/D'}
-          </div>
-        </div>
-        <span style={{
-          fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700,
-          color: chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
-        }}>
-          {chg.txt}
+      {/* Título + badge grupo */}
+      <div className="stat-label">
+        {item.name}
+        <span
+          className="stat-badge fl"
+          style={{ color, background: color + '18', borderRadius: '4px' }}
+        >
+          {item.group}
         </span>
       </div>
-      <div style={{ height: '36px' }}>
-        {item.sparkline?.length > 1
-          ? <Sparkline pts={item.sparkline} change={item.change} />
-          : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>sin datos</span>
-            </div>
-        }
+
+      {/* Precio principal */}
+      <div className="stat-val" style={{ fontSize: '24px', marginBottom: '6px' }}>
+        {price}
       </div>
+
+      {/* Variación diaria — badge de color como en Financiero */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 6px' }}>
+        {item.change != null ? (
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600,
+            color:       chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
+            background:  chg.cls === 'up' ? 'var(--green-bg)' : chg.cls === 'dn' ? 'var(--red-bg)' : 'transparent',
+            padding:     chg.cls === 'fl' ? '0' : '1px 7px',
+            borderRadius: '3px',
+          }}>
+            {chg.txt}
+          </span>
+        ) : (
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>sin datos</span>
+        )}
+        {isSelected && (
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line2)' }}>
+            GRAF
+          </span>
+        )}
+      </div>
+
+      <div className="stat-meta">Yahoo Finance · clic para historial</div>
     </div>
   );
 }

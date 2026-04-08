@@ -338,11 +338,12 @@ function SymbolCard({ item, onClick, isSelected, clickable = true }) {
 function DetailPanel({ item, onClose, isDefault = false }) {
   const [range, setRange] = useState('5d');
   const [chartData, setChartData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const color = 'rgba(154,176,196,0.85)';
 
   const loadChart = useCallback(async (r) => {
     setLoading(true);
+    setChartData(null); // limpiar datos anteriores para evitar flash de contenido viejo/vacío
     const { data, error } = await fetchMundoChart(item.id, r);
     if (!error && data?.points) setChartData(data.points);
     setLoading(false);

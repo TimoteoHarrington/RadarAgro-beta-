@@ -225,7 +225,7 @@ function SymbolCard({ item, onClick, isSelected }) {
 }
 
 // ── Detail Panel ────────────────────────────────────────────────
-function DetailPanel({ item, onClose }) {
+function DetailPanel({ item, onClose, isDefault = false }) {
   const [range, setRange] = useState('5d');
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -307,12 +307,19 @@ function DetailPanel({ item, onClose }) {
             )}
           </div>
         </div>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: '1px solid var(--line)', borderRadius: '6px', color: 'var(--text3)', padding: '4px 10px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}
-        >
-          cerrar ×
-        </button>
+        {!isDefault && onClose && (
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: '1px solid var(--line)', borderRadius: '6px', color: 'var(--text3)', padding: '4px 10px', cursor: 'pointer', fontSize: '11px', fontFamily: 'var(--mono)' }}
+          >
+            cerrar ×
+          </button>
+        )}
+        {isDefault && (
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)', fontStyle: 'italic' }}>
+            seleccioná una card para ver otro activo
+          </span>
+        )}
       </div>
 
       {/* Range selector + variación del período */}
@@ -363,11 +370,14 @@ function DetailPanel({ item, onClose }) {
 
 // ── Group Section ───────────────────────────────────────────────
 function GroupSection({ group, items, selected, onSelect }) {
-  const color = GROUP_COLOR[group] || 'var(--accent)';
+  // Auto-seleccionar el primer item si ninguno está seleccionado en este grupo
+  const groupSelected = selected && items.find(i => i.id === selected.id) ? selected : null;
+  const defaultItem   = !groupSelected ? items[0] : null;
+  const displayItem   = groupSelected || defaultItem;
+
   return (
     <div className="section">
-      <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+      <div className="section-title">
         {group}
       </div>
       <div className="grid grid-3">
@@ -380,11 +390,14 @@ function GroupSection({ group, items, selected, onSelect }) {
           />
         ))}
       </div>
-      {selected && items.find(i => i.id === selected.id) && (
-        <div style={{ marginTop: '16px' }}>
-          <DetailPanel item={selected} onClose={() => onSelect(null)} />
-        </div>
-      )}
+      {/* Gráfico: muestra el seleccionado, o el primero por defecto */}
+      <div style={{ marginTop: '16px' }}>
+        <DetailPanel
+          item={displayItem}
+          onClose={groupSelected ? () => onSelect(null) : null}
+          isDefault={!groupSelected}
+        />
+      </div>
     </div>
   );
 }
@@ -436,10 +449,10 @@ export function MundoPage({ goPage, mundo, loadMundo }) {
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '24px' }}>
         {['Todos', ...GROUPS_ORDER].map(g => (
           <button key={g} onClick={() => { setFilter(g); setSelected(null); }} style={{
-            background: filter === g ? (GROUP_COLOR[g] ? GROUP_COLOR[g] + '20' : 'var(--acc-bg)') : 'none',
-            border: `1px solid ${filter === g ? (GROUP_COLOR[g] || 'var(--accent)') + '50' : 'var(--line)'}`,
+            background: filter === g ? 'var(--acc-bg)' : 'none',
+            border: `1px solid ${filter === g ? 'var(--accent)' : 'var(--line)'}`,
             borderRadius: '20px',
-            color: filter === g ? (GROUP_COLOR[g] || 'var(--accent)') : 'var(--text3)',
+            color: filter === g ? 'var(--accent)' : 'var(--text3)',
             padding: '5px 14px', cursor: 'pointer',
             fontFamily: 'var(--mono)', fontSize: '11px',
             transition: 'all .15s',

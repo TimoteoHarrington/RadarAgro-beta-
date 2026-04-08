@@ -243,18 +243,26 @@ function DetailPanel({ item, onClose }) {
   const RANGES = ['1d', '5d', '1mo', '3mo', '1y'];
   const RANGE_LABEL = { '1d': '1 día', '5d': '5 días', '1mo': '1 mes', '3mo': '3 meses', '1y': '1 año' };
 
-  // Variación calculada desde el primer al último punto del rango cargado
+  // Variación del período: en 1d usa item.change (vs cierre anterior, igual que la card)
+  // En otros rangos calcula desde el primer al último punto del gráfico
   const rangeChg = (() => {
-    if (!chartData || chartData.length < 2) return null;
-    const first = chartData[0].v;
-    const last  = chartData[chartData.length - 1].v;
-    if (!first) return null;
-    const pct = ((last - first) / first) * 100;
-    const abs = last - first;
+    let pct, abs;
+    if (range === '1d' && item.change != null) {
+      pct = item.change;
+      // abs: estimamos desde precio actual
+      abs = item.price != null ? item.price * pct / 100 : null;
+    } else {
+      if (!chartData || chartData.length < 2) return null;
+      const first = chartData[0].v;
+      const last  = chartData[chartData.length - 1].v;
+      if (!first) return null;
+      pct = ((last - first) / first) * 100;
+      abs = last - first;
+    }
     const sign = pct > 0 ? '+' : '';
     return {
       pct:   sign + pct.toFixed(2).replace('.', ',') + '%',
-      abs:   sign + abs.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      abs:   abs != null ? sign + abs.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
       up:    pct > 0,
       dn:    pct < 0,
       color: pct > 0 ? 'var(--green)' : pct < 0 ? 'var(--red)' : 'var(--text3)',

@@ -323,7 +323,7 @@ function TabDolares({ dolares, bcra }) {
                   <div className="stat-label">
                     {item.nombre}
                     <span className="stat-badge fl">{item.unidad}</span>
-                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',marginLeft:'4px' }}>GRAF</span>}
+                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line2)',marginLeft:'4px' }}>GRAF</span>}
                   </div>
                   <div className="stat-val">{fmtValorCam(item)}</div>
                   {delta
@@ -388,8 +388,7 @@ function TasaCard({ item, isSelected, onClick }) {
     }}
     onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg2)'; }}}
     onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg1)'; }}}>
-      {/* barra superior — solo visible si seleccionada */}
-      {isSelected && <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:accent,borderRadius:'12px 12px 0 0' }}/>}
+
 
       {/* cabecera */}
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px' }}>
@@ -400,7 +399,7 @@ function TasaCard({ item, isSelected, onClick }) {
           <div style={{ fontSize:'9px',color:'var(--text3)',opacity:0.6 }}>{item.unidad}</div>
         </div>
         {isSelected && (
-          <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:`rgba(${rgb},.18)`,color:accent,padding:'2px 6px',borderRadius:'3px',border:`1px solid rgba(${rgb},.25)`,flexShrink:0 }}>
+          <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'2px 6px',borderRadius:'3px',border:'1px solid var(--line2)',flexShrink:0 }}>
             HIST ↓
           </span>
         )}
@@ -666,7 +665,7 @@ function TabUvaIndices({ uva, bcra }) {
                   <div className="stat-label">
                     {item.nombre}
                     <span className="stat-badge fl">{item.unidad}</span>
-                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--acc-bg)',color:'var(--accent)',padding:'1px 5px',borderRadius:'3px',border:'1px solid rgba(91,156,246,.2)',marginLeft:'4px' }}>GRAF</span>}
+                    {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line2)',marginLeft:'4px' }}>GRAF</span>}
                   </div>
                   <div className="stat-val">{fmtValorIdx(item)}</div>
                   {delta

@@ -317,9 +317,9 @@ function TabDolares({ dolares, bcra }) {
               return (
                 <div key={item.key} className="stat c-flat"
                   onClick={() => setSelectedCam(isSelected ? null : item)}
-                  style={{ cursor:'pointer',borderColor:isSelected?'var(--accent)':'',transition:'border-color .15s' }}
-                  onMouseEnter={e => { if(!isSelected) e.currentTarget.style.borderColor='var(--line2)'; }}
-                  onMouseLeave={e => { if(!isSelected) e.currentTarget.style.borderColor=''; }}>
+                  style={{ cursor:'pointer', transition:'background .15s' }}
+                  onMouseEnter={e => { if(!isSelected) e.currentTarget.style.background='var(--bg2)'; }}
+                  onMouseLeave={e => { if(!isSelected) e.currentTarget.style.background=''; }}>
                   <div className="stat-label">
                     {item.nombre}
                     <span className="stat-badge fl">{item.unidad}</span>
@@ -378,20 +378,18 @@ function TasaCard({ item, isSelected, onClick }) {
   return (
     <div onClick={onClick} style={{
       position: 'relative', cursor: 'pointer', overflow: 'hidden',
-      background: isSelected
-        ? `linear-gradient(145deg, rgba(${rgb},0.14) 0%, var(--bg2) 100%)`
-        : 'var(--bg1)',
+      background: 'var(--bg1)',
       border: '1px solid var(--line)',
       borderRadius: '12px', padding: '16px 18px',
-      transition: 'all .18s ease',
-      boxShadow: isSelected ? `0 0 20px rgba(${rgb},0.08)` : 'none',
+      transition: 'background .18s ease',
+      boxShadow: 'none',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       minHeight: '130px',
     }}
     onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg2)'; }}}
     onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background='var(--bg1)'; }}}>
-      {/* barra superior de color */}
-      <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:accent,opacity:isSelected?1:0.4,borderRadius:'12px 12px 0 0' }}/>
+      {/* barra superior — solo visible si seleccionada */}
+      {isSelected && <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:accent,borderRadius:'12px 12px 0 0' }}/>}
 
       {/* cabecera */}
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px' }}>
@@ -662,9 +660,9 @@ function TabUvaIndices({ uva, bcra }) {
               return (
                 <div key={item.key} className="stat c-flat"
                   onClick={() => setSelectedIdx(isSelected ? null : item)}
-                  style={{ cursor:'pointer',borderColor:isSelected?'var(--accent)':'',transition:'border-color .15s' }}
-                  onMouseEnter={e => { if(!isSelected) e.currentTarget.style.borderColor='var(--line2)'; }}
-                  onMouseLeave={e => { if(!isSelected) e.currentTarget.style.borderColor=''; }}>
+                  style={{ cursor:'pointer', transition:'background .15s' }}
+                  onMouseEnter={e => { if(!isSelected) e.currentTarget.style.background='var(--bg2)'; }}
+                  onMouseLeave={e => { if(!isSelected) e.currentTarget.style.background=''; }}>
                   <div className="stat-label">
                     {item.nombre}
                     <span className="stat-badge fl">{item.unidad}</span>
@@ -742,10 +740,10 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
             { lbl:'BADLAR Privados', badge:'TNA',  val:badlarVal, sub:'tasa depósitos mayoristas',   meta:'BCRA · referencia',             tab:'tasas'   },
             { lbl:'Valor UVA',       badge:'HOY',  val:uvaVal,    sub:'base 1.000 = mar 2016',       meta:'BCRA oficial',                  tab:'uva'     },
           ].map((k, i) => (
-            <div key={i} className="stat c-flat" style={{ cursor:'pointer',transition:'border-color .15s' }}
+            <div key={i} className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
               onClick={() => setActiveTab(k.tab)}
-              onMouseEnter={e => e.currentTarget.style.borderColor='var(--line2)'}
-              onMouseLeave={e => e.currentTarget.style.borderColor='var(--line)'}>
+              onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
+              onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
               <div className="stat-label">{k.lbl} <span className="stat-badge fl">{k.badge}</span></div>
               <div className="stat-val">{k.val}</div>
               <div className="stat-delta fl">{k.sub}</div>

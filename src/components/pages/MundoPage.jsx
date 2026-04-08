@@ -504,6 +504,7 @@ function GroupSection({ group, items, selected, onSelect, clickable = true }) {
         <div style={{ marginTop: '16px' }}>
           {groupSelected ? (
             <DetailPanel
+              key={groupSelected.id}
               item={groupSelected}
               onClose={() => onSelect(null)}
               isDefault={false}

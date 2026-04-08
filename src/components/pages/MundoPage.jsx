@@ -81,98 +81,189 @@ function Sparkline({ pts, change }) {
 }
 
 // ── Detail Chart (línea con timestamps) ────────────────────────
-function DetailChart({ points, color }) {
-  const ref = useRef(null);
+function DetailChart({ points }) {
+  const ref      = useRef(null);
+  const overlayRef = useRef(null);
+  const [tooltip, setTooltip] = useState(null); // { x, y, val, time, idx }
+
+  const LINE_COLOR  = 'rgba(154,176,196,0.9)';
+  const FILL_START  = 'rgba(154,176,196,0.12)';
+  const FILL_END    = 'rgba(154,176,196,0.00)';
+  const PAD = { t: 20, r: 16, b: 32, l: 60 };
+
+  // Dibuja el gráfico base (sin cursor)
+  const draw = useCallback((canvas, hoverIdx = null) => {
+    if (!canvas || !points || points.length < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    const r   = canvas.getBoundingClientRect();
+    canvas.width  = r.width  * dpr;
+    canvas.height = r.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = r.width, H = r.height;
+    const pad = PAD;
+    const vals  = points.map(p => p.v);
+    const mn    = Math.min(...vals) * 0.999;
+    const mx    = Math.max(...vals) * 1.001;
+    const rng   = mx - mn || 1;
+    const n     = points.length;
+    const pxi   = i => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
+    const pyv   = v => H - pad.b - ((v - mn) / rng) * (H - pad.t - pad.b);
+
+    // Grid horizontal
+    for (let g = 0; g <= 3; g++) {
+      const v = mn + (rng * g / 3);
+      const y = pyv(v);
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(154,176,196,0.55)';
+      ctx.font = '9px JetBrains Mono,monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toLocaleString('es-AR', { maximumFractionDigits: 2 }), pad.l - 5, y + 3);
+    }
+
+    // X labels
+    ctx.fillStyle = 'rgba(154,176,196,0.45)';
+    ctx.font = '8px JetBrains Mono,monospace';
+    ctx.textAlign = 'center';
+    const ticks = [0, Math.floor(n * .25), Math.floor(n * .5), Math.floor(n * .75), n - 1];
+    ticks.forEach(i => {
+      const d   = new Date(points[i].t);
+      const lbl = d.getMonth() + 1 + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + 'h';
+      ctx.fillText(lbl, pxi(i), H - pad.b + 12);
+    });
+
+    // Fill
+    const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
+    grad.addColorStop(0, FILL_START);
+    grad.addColorStop(1, FILL_END);
+    ctx.beginPath();
+    ctx.moveTo(pxi(0), pyv(vals[0]));
+    vals.forEach((v, i) => { if (i > 0) ctx.lineTo(pxi(i), pyv(v)); });
+    ctx.lineTo(pxi(n - 1), H - pad.b);
+    ctx.lineTo(pxi(0), H - pad.b);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Línea
+    ctx.beginPath();
+    ctx.moveTo(pxi(0), pyv(vals[0]));
+    vals.forEach((v, i) => { if (i > 0) ctx.lineTo(pxi(i), pyv(v)); });
+    ctx.strokeStyle = LINE_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+    ctx.stroke();
+
+    // Punto final
+    const lv = vals[n - 1];
+    ctx.beginPath();
+    ctx.arc(pxi(n - 1), pyv(lv), 3, 0, Math.PI * 2);
+    ctx.fillStyle = LINE_COLOR;
+    ctx.fill();
+
+    // Cursor interactivo
+    if (hoverIdx !== null) {
+      const hx = pxi(hoverIdx);
+      const hy = pyv(vals[hoverIdx]);
+
+      // Línea vertical
+      ctx.beginPath();
+      ctx.moveTo(hx, pad.t);
+      ctx.lineTo(hx, H - pad.b);
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Punto de hover
+      ctx.beginPath();
+      ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(hx, hy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = LINE_COLOR;
+      ctx.fill();
+    }
+  }, [points]);
+
+  // Redibuja cuando cambian los puntos
   useEffect(() => {
     const canvas = ref.current;
-    if (!canvas || !points || points.length < 2) return;
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const r   = canvas.getBoundingClientRect();
-      canvas.width  = r.width  * dpr;
-      canvas.height = r.height * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-      const W = r.width, H = r.height;
-      const pad = { t: 20, r: 16, b: 32, l: 60 };
-      const vals = points.map(p => p.v);
-      const times = points.map(p => p.t);
-      const mn = Math.min(...vals) * 0.999;
-      const mx = Math.max(...vals) * 1.001;
-      const range = mx - mn || 1;
-      const n = points.length;
-      const px = i => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
-      const py = v => H - pad.b - ((v - mn) / range) * (H - pad.t - pad.b);
-
-      // Grid
-      for (let g = 0; g <= 3; g++) {
-        const v = mn + (range * g / 3);
-        const y = py(v);
-        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 5]);
-        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(154,176,196,0.6)';
-        ctx.font = '9px JetBrains Mono,monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText(v.toLocaleString('es-AR', { maximumFractionDigits: 2 }), pad.l - 5, y + 3);
-      }
-
-      // X labels (5 ticks)
-      ctx.fillStyle = 'rgba(154,176,196,0.5)';
-      ctx.font = '8px JetBrains Mono,monospace';
-      ctx.textAlign = 'center';
-      const ticks = [0, Math.floor(n * .25), Math.floor(n * .5), Math.floor(n * .75), n - 1];
-      ticks.forEach(i => {
-        const d = new Date(times[i]);
-        const lbl = d.getMonth() + 1 + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + 'h';
-        ctx.fillText(lbl, px(i), H - pad.b + 12);
-      });
-
-      // Fill
-      const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      grad.addColorStop(0, color + '30');
-      grad.addColorStop(1, color + '00');
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(vals[0]));
-      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
-      ctx.lineTo(px(n - 1), H - pad.b);
-      ctx.lineTo(px(0), H - pad.b);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Line
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(vals[0]));
-      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap  = 'round';
-      ctx.stroke();
-
-      // Last dot
-      const lv = vals[n - 1];
-      ctx.shadowColor = color; ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(px(n - 1), py(lv), 4, 0, Math.PI * 2);
-      ctx.fillStyle = color; ctx.fill();
-      ctx.shadowBlur = 0;
-    };
-    draw();
-    const ro = new ResizeObserver(draw);
+    if (!canvas) return;
+    draw(canvas, null);
+    const ro = new ResizeObserver(() => draw(canvas, null));
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [points, color]);
-  return <canvas ref={ref} style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }} />;
+  }, [points, draw]);
+
+  const handleMouseMove = useCallback((e) => {
+    const canvas = ref.current;
+    if (!canvas || !points || points.length < 2) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const W = rect.width;
+    const n = points.length;
+    const chartW = W - PAD.l - PAD.r;
+    const rawIdx = (mouseX - PAD.l) / chartW * (n - 1);
+    const idx = Math.max(0, Math.min(n - 1, Math.round(rawIdx)));
+    const pt  = points[idx];
+    const val = pt.v;
+    const d   = new Date(pt.t);
+    const timeStr = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) +
+                    ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + 'h';
+    const x = PAD.l + (idx / (n - 1)) * chartW;
+    setTooltip({ x, val, time: timeStr, idx });
+    draw(canvas, idx);
+  }, [points, draw]);
+
+  const handleMouseLeave = useCallback(() => {
+    setTooltip(null);
+    draw(ref.current, null);
+  }, [draw]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <canvas
+        ref={ref}
+        style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      />
+      {/* Tooltip flotante */}
+      {tooltip && (
+        <div style={{
+          position: 'absolute',
+          left: Math.min(tooltip.x + 12, 999),
+          top: '12px',
+          background: 'var(--bg2)',
+          border: '1px solid var(--line2)',
+          borderRadius: '6px',
+          padding: '5px 10px',
+          pointerEvents: 'none',
+          fontFamily: 'var(--mono)',
+          whiteSpace: 'nowrap',
+          zIndex: 10,
+        }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--white)' }}>
+            {tooltip.val.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div style={{ fontSize: '9px', color: 'var(--text3)', marginTop: '1px' }}>{tooltip.time}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Symbol Card ─────────────────────────────────────────────────
 function SymbolCard({ item, onClick, isSelected }) {
   const chg   = fmtChange(item.change);
-  const color = GROUP_COLOR[item.group] || 'var(--accent)';
   const price = item.price != null ? fmtPrice(item.price, item.group) : 'S/D';
 
   return (
@@ -181,7 +272,7 @@ function SymbolCard({ item, onClick, isSelected }) {
       onClick={() => onClick(item)}
       style={{
         cursor: 'pointer',
-        borderColor: isSelected ? color + '70' : undefined,
+        borderColor: isSelected ? 'var(--accent)' : undefined,
         background: isSelected ? 'var(--bg2)' : undefined,
         transition: 'border-color .15s, background .15s',
       }}
@@ -229,7 +320,7 @@ function DetailPanel({ item, onClose, isDefault = false }) {
   const [range, setRange] = useState('5d');
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const color = GROUP_COLOR[item.group] || '#4d9ef0';
+  const color = 'rgba(154,176,196,0.85)';
 
   const loadChart = useCallback(async (r) => {
     setLoading(true);
@@ -273,7 +364,7 @@ function DetailPanel({ item, onClose, isDefault = false }) {
   return (
     <div style={{
       background: 'var(--bg1)',
-      border: `1px solid ${color}40`,
+      border: '1px solid var(--line)',
       borderRadius: '12px',
       overflow: 'hidden',
       marginBottom: '24px',
@@ -353,7 +444,7 @@ function DetailPanel({ item, onClose, isDefault = false }) {
               Cargando…
             </div>
           : chartData?.length > 1
-            ? <DetailChart points={chartData} color={color} />
+            ? <DetailChart points={chartData} />
             : <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: '11px' }}>
                 Sin datos para el rango seleccionado
               </div>

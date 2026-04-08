@@ -201,37 +201,97 @@ function TabDolares({ dolares, bcra }) {
         <div className="stat c-flat">
           <div className="stat-label">Oficial BCRA <span className="stat-badge fl">vendedor</span></div>
           <div className="stat-val lg">{pOf}</div>
-          <div className={`stat-delta ${dOf.cls}`}>{dOf.txt}</div>
+          <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+            <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+              color: dOf.cls==='up' ? 'var(--green)' : dOf.cls==='dn' ? 'var(--red)' : 'var(--text3)',
+              background: dOf.cls==='up' ? 'var(--green-bg)' : dOf.cls==='dn' ? 'var(--red-bg)' : 'transparent',
+              padding: dOf.cls==='fl' ? '0' : '1px 7px', borderRadius:'3px' }}>{dOf.txt}</span>
+          </div>
           <div className="stat-meta">{spOf ? spOf + ' · ' : ''}crawling peg ~1%/mes</div>
         </div>
         <div className="stat c-flat">
           <div className="stat-label">MEP / Bolsa <span className="stat-badge fl">AL30D</span></div>
           <div className="stat-val lg">{pMep}</div>
-          <div className="stat-delta fl">brecha {bMep}</div>
+          <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+            {dolares?.deltaMep != null && Math.abs(dolares.deltaMep) >= 1 ? (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                color: dolares.deltaMep > 0 ? 'var(--green)' : 'var(--red)',
+                background: dolares.deltaMep > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+                padding:'1px 7px',borderRadius:'3px' }}>
+                {(dolares.deltaMep > 0 ? '+' : '') + Math.round(dolares.deltaMep).toLocaleString('es-AR') + ' vs ant.'}
+              </span>
+            ) : (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bMep}</span>
+            )}
+          </div>
           <div className="stat-meta">Mercado secundario libre · legal</div>
         </div>
         <div className="stat c-flat">
           <div className="stat-label">CCL <span className="stat-badge fl">GD30</span></div>
           <div className="stat-val lg">{pCcl}</div>
-          <div className="stat-delta fl">brecha {bCcl}</div>
+          <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+            {dolares?.deltaCcl != null && Math.abs(dolares.deltaCcl) >= 1 ? (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                color: dolares.deltaCcl > 0 ? 'var(--green)' : 'var(--red)',
+                background: dolares.deltaCcl > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+                padding:'1px 7px',borderRadius:'3px' }}>
+                {(dolares.deltaCcl > 0 ? '+' : '') + Math.round(dolares.deltaCcl).toLocaleString('es-AR') + ' vs ant.'}
+              </span>
+            ) : (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bCcl}</span>
+            )}
+          </div>
           <div className="stat-meta">Contado con liquidación · exterior</div>
         </div>
         <div className="stat c-flat">
           <div className="stat-label">Blue <span className="stat-badge fl">informal</span></div>
           <div className="stat-val lg">{pBlu}</div>
-          <div className="stat-delta fl">brecha {bBlu}{spBlu ? ' · ' + spBlu : ''}</div>
+          <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+            {dolares?.deltaBlu != null && Math.abs(dolares.deltaBlu) >= 1 ? (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                color: dolares.deltaBlu > 0 ? 'var(--green)' : 'var(--red)',
+                background: dolares.deltaBlu > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+                padding:'1px 7px',borderRadius:'3px' }}>
+                {(dolares.deltaBlu > 0 ? '+' : '') + Math.round(dolares.deltaBlu).toLocaleString('es-AR') + ' vs ant.'}
+              </span>
+            ) : (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bBlu}{spBlu ? ' · ' + spBlu : ''}</span>
+            )}
+          </div>
           <div className="stat-meta">Mercado paralelo · referencia</div>
         </div>
         <div className="stat c-flat">
           <div className="stat-label">Cripto (USDT) <span className="stat-badge fl">—</span></div>
           <div className="stat-val lg">{pCry}</div>
-          <div className="stat-delta fl">brecha {bCry}</div>
+          <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+            {dolares?.deltaCry != null && Math.abs(dolares.deltaCry) >= 1 ? (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                color: dolares.deltaCry > 0 ? 'var(--green)' : 'var(--red)',
+                background: dolares.deltaCry > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+                padding:'1px 7px',borderRadius:'3px' }}>
+                {(dolares.deltaCry > 0 ? '+' : '') + Math.round(dolares.deltaCry).toLocaleString('es-AR') + ' vs ant.'}
+              </span>
+            ) : (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bCry}</span>
+            )}
+          </div>
           <div className="stat-meta">dolarapi.com · referencia</div>
         </div>
         <div className="stat c-flat">
           <div className="stat-label">Dólar Mayorista <span className="stat-badge fl">BCRA</span></div>
           <div className="stat-val lg">{pMay}</div>
-          <div className="stat-delta fl">tipo comprador · BCRA</div>
+          <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+            {dolares?.deltaMay != null && Math.abs(dolares.deltaMay) >= 1 ? (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                color: dolares.deltaMay > 0 ? 'var(--green)' : 'var(--red)',
+                background: dolares.deltaMay > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+                padding:'1px 7px',borderRadius:'3px' }}>
+                {(dolares.deltaMay > 0 ? '+' : '') + Math.round(dolares.deltaMay).toLocaleString('es-AR') + ' vs ant.'}
+              </span>
+            ) : (
+              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>tipo comprador · BCRA</span>
+            )}
+          </div>
           <div className="stat-meta">Referencia exportaciones · crawling peg</div>
         </div>
       </div>
@@ -326,10 +386,18 @@ function TabDolares({ dolares, bcra }) {
                     {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line2)',marginLeft:'4px' }}>GRAF</span>}
                   </div>
                   <div className="stat-val">{fmtValorCam(item)}</div>
-                  {delta
-                    ? <div className={`stat-delta ${delta.up?'up':'dn'}`}>{delta.txt}</div>
-                    : <div className="stat-delta fl">sin variación</div>}
-                  <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
+                  <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+                    {delta ? (
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                        color: delta.up ? 'var(--green)' : 'var(--red)',
+                        background: delta.up ? 'var(--green-bg)' : 'var(--red-bg)',
+                        padding:'1px 7px',borderRadius:'3px' }}>{delta.txt}</span>
+                    ) : (
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>sin variación</span>
+                    )}
+                    <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>{fmtFecha(item.fecha)}</span>
+                  </div>
+                  <div className="stat-meta">BCRA</div>
                 </div>
               );
             })}
@@ -668,10 +736,18 @@ function TabUvaIndices({ uva, bcra }) {
                     {isSelected && <span style={{ fontFamily:'var(--mono)',fontSize:'7px',background:'var(--bg3)',color:'var(--text3)',padding:'1px 5px',borderRadius:'3px',border:'1px solid var(--line2)',marginLeft:'4px' }}>GRAF</span>}
                   </div>
                   <div className="stat-val">{fmtValorIdx(item)}</div>
-                  {delta
-                    ? <div className={`stat-delta ${delta.up?'up':'dn'}`}>{delta.txt}</div>
-                    : <div className="stat-delta fl">—</div>}
-                  <div className="stat-meta">BCRA · {fmtFecha(item.fecha)}</div>
+                  <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
+                    {delta ? (
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+                        color: delta.up ? 'var(--green)' : 'var(--red)',
+                        background: delta.up ? 'var(--green-bg)' : 'var(--red-bg)',
+                        padding:'1px 7px',borderRadius:'3px' }}>{delta.txt} vs ant.</span>
+                    ) : (
+                      <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>sin variación</span>
+                    )}
+                    <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>{fmtFecha(item.fecha)}</span>
+                  </div>
+                  <div className="stat-meta">BCRA</div>
                 </div>
               );
             })}
@@ -711,6 +787,26 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
       ? '$ ' + uva.valor.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})
       : '—';
 
+  // Deltas KPI
+  const dOfKpi = dolares?.deltaOf != null ? dolares.deltaOf : null;
+  const dBluKpi = dolares?.deltaBlu != null ? dolares.deltaBlu : null;
+  const dBadlar = badlarItem?.valor != null && badlarItem?.valorAnterior != null
+    ? parseFloat(badlarItem.valor) - parseFloat(badlarItem.valorAnterior) : null;
+  const uvaItem = bcra?.byKey?.uva;
+  const dUva = uvaItem?.valor != null && uvaItem?.valorAnterior != null
+    ? parseFloat(uvaItem.valor) - parseFloat(uvaItem.valorAnterior) : null;
+
+  const kpiDeltaBadge = (delta, fmt) => {
+    if (delta == null || Math.abs(delta) < 0.001) return <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>sin variación</span>;
+    const txt = fmt(delta);
+    return (
+      <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
+        color: delta > 0 ? 'var(--green)' : 'var(--red)',
+        background: delta > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
+        padding:'1px 7px',borderRadius:'3px' }}>{txt}</span>
+    );
+  };
+
   return (
     <div className="page-enter">
       <ApiErrorBanner
@@ -733,22 +829,54 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
       <div className="section">
         <div className="section-title">Indicadores clave · resumen</div>
         <div className="grid grid-4">
-          {[
-            { lbl:'Dólar Oficial',   badge:'BCRA', val:pOf,       sub:`Blue: ${pBlu}`,              meta:'BCRA · DolarApi',               tab:'dolares' },
-            { lbl:'Brecha Blue',     badge:'HOY',  val:bBlu,      sub:`vs Oficial ${pOf}`,           meta:'Mercado paralelo · referencia', tab:'dolares' },
-            { lbl:'BADLAR Privados', badge:'TNA',  val:badlarVal, sub:'tasa depósitos mayoristas',   meta:'BCRA · referencia',             tab:'tasas'   },
-            { lbl:'Valor UVA',       badge:'HOY',  val:uvaVal,    sub:'base 1.000 = mar 2016',       meta:'BCRA oficial',                  tab:'uva'     },
-          ].map((k, i) => (
-            <div key={i} className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
-              onClick={() => setActiveTab(k.tab)}
-              onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
-              onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
-              <div className="stat-label">{k.lbl} <span className="stat-badge fl">{k.badge}</span></div>
-              <div className="stat-val">{k.val}</div>
-              <div className="stat-delta fl">{k.sub}</div>
-              <div className="stat-meta">{k.meta}</div>
+          {/* Dólar Oficial */}
+          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+            onClick={() => setActiveTab('dolares')}
+            onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
+            onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
+            <div className="stat-label">Dólar Oficial <span className="stat-badge fl">BCRA</span></div>
+            <div className="stat-val">{pOf}</div>
+            <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
+              {kpiDeltaBadge(dOfKpi, d => (d>0?'+$':'-$')+Math.abs(Math.round(d)).toLocaleString('es-AR')+' vs ant.')}
             </div>
-          ))}
+            <div className="stat-meta">BCRA · DolarApi</div>
+          </div>
+          {/* Brecha Blue */}
+          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+            onClick={() => setActiveTab('dolares')}
+            onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
+            onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
+            <div className="stat-label">Brecha Blue <span className="stat-badge fl">HOY</span></div>
+            <div className="stat-val">{bBlu}</div>
+            <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
+              {kpiDeltaBadge(dBluKpi, d => (d>0?'+$':'-$')+Math.abs(Math.round(d)).toLocaleString('es-AR')+' vs ant.')}
+            </div>
+            <div className="stat-meta">Mercado paralelo · referencia</div>
+          </div>
+          {/* BADLAR */}
+          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+            onClick={() => setActiveTab('tasas')}
+            onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
+            onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
+            <div className="stat-label">BADLAR Privados <span className="stat-badge fl">TNA</span></div>
+            <div className="stat-val">{badlarVal}</div>
+            <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
+              {kpiDeltaBadge(dBadlar, d => (d>0?'+':'')+d.toFixed(2).replace('.',',')+' pp vs ant.')}
+            </div>
+            <div className="stat-meta">BCRA · referencia</div>
+          </div>
+          {/* UVA */}
+          <div className="stat c-flat" style={{ cursor:'pointer', transition:'background .15s' }}
+            onClick={() => setActiveTab('uva')}
+            onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
+            onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
+            <div className="stat-label">Valor UVA <span className="stat-badge fl">HOY</span></div>
+            <div className="stat-val">{uvaVal}</div>
+            <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
+              {kpiDeltaBadge(dUva, d => (d>0?'+$':'-$')+Math.abs(d).toFixed(2).replace('.',',')+' vs ant.')}
+            </div>
+            <div className="stat-meta">BCRA oficial</div>
+          </div>
         </div>
       </div>
 

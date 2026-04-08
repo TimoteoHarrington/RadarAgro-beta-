@@ -169,57 +169,137 @@ function DetailChart({ points, color }) {
   return <canvas ref={ref} style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }} />;
 }
 
+// ── helpers para separar número de unidad ──────────────────────
+const splitPrice = (v, group) => {
+  if (v == null) return { num: '—', unit: '' };
+  if (group === 'Tasas')   return { num: v.toFixed(3).replace('.', ','), unit: '%' };
+  if (group === 'Monedas') return { num: v.toFixed(4).replace('.', ','), unit: 'USD' };
+  if (group === 'Crypto')  return {
+    num: v > 1000
+      ? Math.round(v).toLocaleString('es-AR')
+      : v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    unit: 'USD',
+  };
+  if (group === 'Agro')    return {
+    num: v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    unit: 'USD/t',
+  };
+  return {
+    num: v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    unit: '',
+  };
+};
+
 // ── Symbol Card ─────────────────────────────────────────────────
 function SymbolCard({ item, onClick, isSelected }) {
   const chg   = fmtChange(item.change);
   const color = GROUP_COLOR[item.group] || 'var(--accent)';
-  const price = item.price != null ? fmtPrice(item.price, item.group) : 'S/D';
+  const { num, unit } = splitPrice(item.price, item.group);
+  const isUp  = chg.cls === 'up';
+  const isDn  = chg.cls === 'dn';
+  const chgColor = isUp ? '#56c97a' : isDn ? '#f07070' : 'var(--text3)';
+  const arrow = isUp ? '▲' : isDn ? '▼' : '';
 
   return (
     <div
-      className="stat"
       onClick={() => onClick(item)}
       style={{
+        position: 'relative',
+        background: isSelected
+          ? 'linear-gradient(135deg, var(--bg2) 0%, var(--bg1) 100%)'
+          : 'linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%)',
+        border: `1px solid ${isSelected ? color + '55' : 'var(--line)'}`,
+        borderRadius: '14px',
+        padding: '18px 20px 14px',
         cursor: 'pointer',
-        borderColor: isSelected ? color + '70' : undefined,
-        background: isSelected ? 'var(--bg2)' : undefined,
-        transition: 'border-color .15s, background .15s',
+        overflow: 'hidden',
+        boxShadow: isSelected
+          ? `0 4px 24px ${color}18, 0 1px 4px rgba(0,0,0,0.4)`
+          : '0 1px 4px rgba(0,0,0,0.3)',
+        transition: 'border-color .2s, box-shadow .2s, background .2s',
+      }}
+      onMouseEnter={e => {
+        if (!isSelected) {
+          e.currentTarget.style.borderColor = color + '40';
+          e.currentTarget.style.boxShadow   = `0 4px 16px ${color}12, 0 1px 4px rgba(0,0,0,0.4)`;
+        }
+      }}
+      onMouseLeave={e => {
+        if (!isSelected) {
+          e.currentTarget.style.borderColor = 'var(--line)';
+          e.currentTarget.style.boxShadow   = '0 1px 4px rgba(0,0,0,0.3)';
+        }
       }}
     >
-      {/* Título */}
+      {/* Barra de acento lateral */}
       <div style={{
-        fontSize: '15px', fontWeight: 600, color: 'var(--white)',
-        marginBottom: '12px', lineHeight: 1.3,
+        position: 'absolute', left: 0, top: '16px', bottom: '16px',
+        width: '3px', borderRadius: '0 2px 2px 0',
+        background: color, opacity: isSelected ? 1 : 0.45,
+        transition: 'opacity .2s',
+      }} />
+
+      {/* Nombre — pequeño, arriba, tracking ancho */}
+      <div style={{
+        fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600,
+        letterSpacing: '0.1em', textTransform: 'uppercase',
+        color: 'var(--text3)', marginBottom: '8px',
+        paddingLeft: '8px',
       }}>
         {item.name}
+        {isSelected && (
+          <span style={{
+            marginLeft: '8px', fontSize: '7px',
+            background: 'var(--bg3)', color: 'var(--text3)',
+            padding: '1px 5px', borderRadius: '3px',
+            border: '1px solid var(--line2)', verticalAlign: 'middle',
+          }}>GRAF</span>
+        )}
       </div>
 
-      {/* Precio + variación en la misma línea */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-        <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>
-          {price}
-        </div>
+      {/* Precio — foco visual principal */}
+      <div style={{ paddingLeft: '8px', marginBottom: '6px' }}>
+        <span style={{
+          fontFamily: 'var(--display)', fontSize: '30px', fontWeight: 700,
+          color: 'var(--white)', letterSpacing: '-0.03em', lineHeight: 1,
+        }}>
+          {num}
+        </span>
+        {unit && (
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 500,
+            color: 'var(--text3)', marginLeft: '6px', letterSpacing: '0.02em',
+          }}>
+            {unit}
+          </span>
+        )}
+      </div>
+
+      {/* Variación — flecha + % con color */}
+      <div style={{ paddingLeft: '8px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
         {item.change != null ? (
           <span style={{
-            fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
-            color:       chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
-            background:  chg.cls === 'up' ? 'var(--green-bg)' : chg.cls === 'dn' ? 'var(--red-bg)' : 'transparent',
-            padding:     chg.cls === 'fl' ? '0' : '2px 8px',
-            borderRadius: '4px',
+            fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700,
+            color: chgColor, display: 'flex', alignItems: 'center', gap: '3px',
           }}>
+            {arrow && <span style={{ fontSize: '9px' }}>{arrow}</span>}
             {chg.txt}
           </span>
         ) : (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>—</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--text3)' }}>—</span>
         )}
-        {isSelected && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line2)' }}>
-            GRAF
-          </span>
-        )}
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', opacity: 0.6 }}>
+          vs ayer
+        </span>
       </div>
 
-      <div className="stat-meta">Yahoo Finance · futuros</div>
+      {/* Sparkline */}
+      <div style={{ height: '32px', marginLeft: '-20px', marginRight: '-20px', marginBottom: '-14px' }}>
+        {item.sparkline?.length > 1
+          ? <Sparkline pts={item.sparkline} change={item.change} />
+          : <div style={{ height: '100%', borderTop: '1px solid var(--line)' }} />
+        }
+      </div>
     </div>
   );
 }

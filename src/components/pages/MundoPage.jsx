@@ -194,25 +194,23 @@ function SymbolCard({ item, onClick, isSelected }) {
         {item.name}
       </div>
 
-      {/* Precio principal */}
-      <div className="stat-val" style={{ fontSize: '24px', marginBottom: '6px' }}>
-        {price}
-      </div>
-
-      {/* Variación diaria — badge de color como en Financiero */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 6px' }}>
+      {/* Precio + variación en la misma línea */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>
+          {price}
+        </div>
         {item.change != null ? (
           <span style={{
-            fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600,
+            fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
             color:       chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
             background:  chg.cls === 'up' ? 'var(--green-bg)' : chg.cls === 'dn' ? 'var(--red-bg)' : 'transparent',
-            padding:     chg.cls === 'fl' ? '0' : '1px 7px',
-            borderRadius: '3px',
+            padding:     chg.cls === 'fl' ? '0' : '2px 8px',
+            borderRadius: '4px',
           }}>
             {chg.txt}
           </span>
         ) : (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>sin datos</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>—</span>
         )}
         {isSelected && (
           <span style={{ fontFamily: 'var(--mono)', fontSize: '7px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line2)' }}>
@@ -221,7 +219,7 @@ function SymbolCard({ item, onClick, isSelected }) {
         )}
       </div>
 
-      <div className="stat-meta">Yahoo Finance · clic para historial</div>
+      <div className="stat-meta">Yahoo Finance · futuros</div>
     </div>
   );
 }

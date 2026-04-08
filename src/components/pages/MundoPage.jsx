@@ -188,8 +188,8 @@ function SymbolCard({ item, onClick, isSelected }) {
     >
       {/* Título */}
       <div style={{
-        fontSize: '15px', fontWeight: 600, color: 'var(--white)',
-        marginBottom: '12px', lineHeight: 1.3,
+        fontSize: '15px', fontWeight: 400, color: 'var(--text2)',
+        marginBottom: '8px',
       }}>
         {item.name}
       </div>

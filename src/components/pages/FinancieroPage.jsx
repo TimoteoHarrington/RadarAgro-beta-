@@ -703,6 +703,8 @@ function TabUvaIndices({ uva, bcra }) {
     return uvaDeltaDisp;
   })();
   const uvaDeltaUp = uvaDelta != null ? uvaDelta >= 0 : true;
+  const uvaFechaRaw = bcra?.byKey?.uva?.fecha ?? uva?.fecha ?? null;
+  const uvaFechaDisp = (() => { if (!uvaFechaRaw) return null; const [y,m,d] = uvaFechaRaw.split('-'); return `${d}/${m}/${y}`; })();
 
   return (
     <div>
@@ -779,6 +781,14 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
     : uva?.valor
       ? '$ ' + uva.valor.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})
       : '—';
+
+  // Helpers de fecha
+  const fmtFechaCorta = f => { if (!f) return null; const [y,m,d] = (f||'').split('-'); return `${d}/${m}/${y}`; };
+
+  // Fechas de datos clave
+  const fechaUva    = fmtFechaCorta(uvaItem?.fecha ?? uva?.fecha);
+  const fechaBadlar = fmtFechaCorta(badlarItem?.fecha);
+  const fechaDolares = dolares?.fecha ? fmtFechaCorta(dolares.fecha) : null;
 
   // Deltas KPI
   const dOfKpi = dolares?.deltaOf != null ? dolares.deltaOf : null;
@@ -863,7 +873,7 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
             onClick={() => setActiveTab('uva')}
             onMouseEnter={e => e.currentTarget.style.background='var(--bg2)'}
             onMouseLeave={e => e.currentTarget.style.background='var(--bg1)'}>
-            <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Valor UVA <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>HOY</span></div>
+            <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Valor UVA <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: fechaUva ? 'var(--acc-bg)' : 'var(--bg3)', color: fechaUva ? 'var(--accent)' : 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: fechaUva ? '1px solid rgba(91,156,246,.2)' : '1px solid var(--line)' }}>{fechaUva ?? '…'}</span></div>
             <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{uvaVal}</div>
             <div style={{ display:'flex',alignItems:'center',gap:'8px',margin:'4px 0' }}>
               {kpiDeltaBadge(dUva, d => (d>0?'+$':'-$')+Math.abs(d).toFixed(2).replace('.',',')+' vs ant.')}

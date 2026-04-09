@@ -786,10 +786,6 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
   const fmtFechaCorta = f => { if (!f) return null; const [y,m,d] = (f||'').split('-'); return `${d}/${m}/${y}`; };
 
   // Fechas de datos clave
-  const fechaUva    = fmtFechaCorta(uvaItem?.fecha ?? uva?.fecha);
-  const fechaBadlar = fmtFechaCorta(badlarItem?.fecha);
-  const fechaDolares = dolares?.fecha ? fmtFechaCorta(dolares.fecha) : null;
-
   // Deltas KPI
   const dOfKpi = dolares?.deltaOf != null ? dolares.deltaOf : null;
   const dBluKpi = dolares?.deltaBlu != null ? dolares.deltaBlu : null;
@@ -798,6 +794,11 @@ export function FinancieroPage({ goPage, dolares, uva, tasas, bcra, loadBcra, ap
   const uvaItem = bcra?.byKey?.uva;
   const dUva = uvaItem?.valor != null && uvaItem?.valorAnterior != null
     ? parseFloat(uvaItem.valor) - parseFloat(uvaItem.valorAnterior) : null;
+
+  // Fechas de datos clave
+  const fechaUva    = fmtFechaCorta(uvaItem?.fecha ?? uva?.fecha);
+  const fechaBadlar = fmtFechaCorta(badlarItem?.fecha);
+  const fechaDolares = dolares?.fecha ? fmtFechaCorta(dolares.fecha) : null;
 
   const kpiDeltaBadge = (delta, fmt) => {
     if (delta == null || Math.abs(delta) < 0.001) return <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>sin variación</span>;

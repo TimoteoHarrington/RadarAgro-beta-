@@ -5,6 +5,7 @@ import {
   fetchRiesgoPais, fetchRiesgoPaisUltimo, fetchFeriados,
   fetchUVA, fetchTasasPlazoFijo, fetchTasasDepositos,
   fetchMundoData, fetchBCRAData, fetchCotizaciones, fetchINDEC,
+  fetchDolarHistorial,
 } from '../services/api';
 
 // Intervalos de polling por tipo de dato

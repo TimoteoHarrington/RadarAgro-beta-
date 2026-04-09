@@ -15,7 +15,7 @@ const toTNA = v => v != null && v !== '' ? parseFloat(v) * 100 : 0;
 const fDelta$ = delta => {
   if (delta == null) return { txt: '—', cls: 'fl' };
   const abs = Math.abs(delta).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  return delta >= 0 ? { txt: `+$${abs} hoy`, cls: 'up' } : { txt: `−$${abs} hoy`, cls: 'dn' };
+  return delta >= 0 ? { txt: `+$${abs} vs cierre ant.`, cls: 'up' } : { txt: `−$${abs} vs cierre ant.`, cls: 'dn' };
 };
 const fSpread  = s => s != null ? `spread $${s.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
 const fmtFecha = f => { if (!f) return ''; const [y,m,d] = (f||'').split('-'); return `${d}/${m}/${y}`; };
@@ -552,16 +552,12 @@ function TabDolares({ dolares, bcra }) {
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>MEP / Bolsa <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>AL30D</span></div>
           <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pMep}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
-            {dolares?.deltaMep != null && Math.abs(dolares.deltaMep) >= 1 ? (
+            {(() => { const d = fDelta$(dolares?.deltaMep); return (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
-                color: dolares.deltaMep > 0 ? 'var(--green)' : 'var(--red)',
-                background: dolares.deltaMep > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
-                padding:'1px 7px',borderRadius:'3px' }}>
-                {(dolares.deltaMep > 0 ? '+' : '') + Math.round(dolares.deltaMep).toLocaleString('es-AR') + ' vs ant.'}
-              </span>
-            ) : (
-              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bMep}</span>
-            )}
+                color: d.cls==='up' ? 'var(--green)' : d.cls==='dn' ? 'var(--red)' : 'var(--text3)',
+                background: d.cls==='up' ? 'var(--green-bg)' : d.cls==='dn' ? 'var(--red-bg)' : 'transparent',
+                padding: d.cls==='fl' ? '0' : '1px 7px', borderRadius:'3px' }}>{d.txt}</span>
+            ); })()}
           </div>
           <div className="stat-meta">Mercado secundario libre · legal</div>
         </div>
@@ -569,16 +565,12 @@ function TabDolares({ dolares, bcra }) {
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>CCL <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>GD30</span></div>
           <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pCcl}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
-            {dolares?.deltaCcl != null && Math.abs(dolares.deltaCcl) >= 1 ? (
+            {(() => { const d = fDelta$(dolares?.deltaCcl); return (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
-                color: dolares.deltaCcl > 0 ? 'var(--green)' : 'var(--red)',
-                background: dolares.deltaCcl > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
-                padding:'1px 7px',borderRadius:'3px' }}>
-                {(dolares.deltaCcl > 0 ? '+' : '') + Math.round(dolares.deltaCcl).toLocaleString('es-AR') + ' vs ant.'}
-              </span>
-            ) : (
-              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bCcl}</span>
-            )}
+                color: d.cls==='up' ? 'var(--green)' : d.cls==='dn' ? 'var(--red)' : 'var(--text3)',
+                background: d.cls==='up' ? 'var(--green-bg)' : d.cls==='dn' ? 'var(--red-bg)' : 'transparent',
+                padding: d.cls==='fl' ? '0' : '1px 7px', borderRadius:'3px' }}>{d.txt}</span>
+            ); })()}
           </div>
           <div className="stat-meta">Contado con liquidación · exterior</div>
         </div>
@@ -586,33 +578,25 @@ function TabDolares({ dolares, bcra }) {
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Blue <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>informal</span></div>
           <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pBlu}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
-            {dolares?.deltaBlu != null && Math.abs(dolares.deltaBlu) >= 1 ? (
+            {(() => { const d = fDelta$(dolares?.deltaBlu); return (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
-                color: dolares.deltaBlu > 0 ? 'var(--green)' : 'var(--red)',
-                background: dolares.deltaBlu > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
-                padding:'1px 7px',borderRadius:'3px' }}>
-                {(dolares.deltaBlu > 0 ? '+' : '') + Math.round(dolares.deltaBlu).toLocaleString('es-AR') + ' vs ant.'}
-              </span>
-            ) : (
-              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bBlu}{spBlu ? ' · ' + spBlu : ''}</span>
-            )}
+                color: d.cls==='up' ? 'var(--green)' : d.cls==='dn' ? 'var(--red)' : 'var(--text3)',
+                background: d.cls==='up' ? 'var(--green-bg)' : d.cls==='dn' ? 'var(--red-bg)' : 'transparent',
+                padding: d.cls==='fl' ? '0' : '1px 7px', borderRadius:'3px' }}>{d.txt}</span>
+            ); })()}
           </div>
-          <div className="stat-meta">Mercado paralelo · referencia</div>
+          <div className="stat-meta">Mercado paralelo · referencia{spBlu ? ' · ' + spBlu : ''}</div>
         </div>
         <div className="stat" style={{ transition: 'border-color .15s, background .15s' }}>
           <div style={{ fontSize: '15px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>Cripto (USDT) <span style={{ fontFamily: 'var(--mono)', fontSize: '9px', background: 'var(--bg3)', color: 'var(--text3)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--line)' }}>—</span></div>
           <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>{pCry}</div>
           <div style={{ display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',margin:'4px 0' }}>
-            {dolares?.deltaCry != null && Math.abs(dolares.deltaCry) >= 1 ? (
+            {(() => { const d = fDelta$(dolares?.deltaCry); return (
               <span style={{ fontFamily:'var(--mono)',fontSize:'10px',fontWeight:600,
-                color: dolares.deltaCry > 0 ? 'var(--green)' : 'var(--red)',
-                background: dolares.deltaCry > 0 ? 'var(--green-bg)' : 'var(--red-bg)',
-                padding:'1px 7px',borderRadius:'3px' }}>
-                {(dolares.deltaCry > 0 ? '+' : '') + Math.round(dolares.deltaCry).toLocaleString('es-AR') + ' vs ant.'}
-              </span>
-            ) : (
-              <span style={{ fontFamily:'var(--mono)',fontSize:'9px',color:'var(--text3)' }}>brecha {bCry}</span>
-            )}
+                color: d.cls==='up' ? 'var(--green)' : d.cls==='dn' ? 'var(--red)' : 'var(--text3)',
+                background: d.cls==='up' ? 'var(--green-bg)' : d.cls==='dn' ? 'var(--red-bg)' : 'transparent',
+                padding: d.cls==='fl' ? '0' : '1px 7px', borderRadius:'3px' }}>{d.txt}</span>
+            ); })()}
           </div>
           <div className="stat-meta">dolarapi.com · referencia</div>
         </div>

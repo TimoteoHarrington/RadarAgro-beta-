@@ -47,9 +47,20 @@ export function useLiveData() {
   // ── Dólares ──────────────────────────────────────────────────
   const loadDolares = useCallback(async () => {
     setStatus('dolares', 'loading');
-    const [{ data, error }, { data: cotiz }] = await Promise.all([
+
+    // Cargamos cotización actual + historial reciente de cada tipo (últimos 5 días)
+    // para calcular delta vs cierre anterior
+    const [{ data, error }, { data: cotiz }, histResults] = await Promise.all([
       fetchDolares(),
       fetchCotizaciones(),
+      Promise.all([
+        fetchDolarHistorial('oficial'),
+        fetchDolarHistorial('blue'),
+        fetchDolarHistorial('bolsa'),
+        fetchDolarHistorial('contadoconliqui'),
+        fetchDolarHistorial('mayorista'),
+        fetchDolarHistorial('cripto'),
+      ]),
     ]);
     if (error || !Array.isArray(data)) { setStatus('dolares', 'error'); return; }
 
@@ -87,19 +98,45 @@ export function useLiveData() {
     const cOf = getCompra('oficial');
     const spreadOf = pOf && cOf ? Math.round((pOf - cOf) * 100) / 100 : null;
 
-    // Delta diario oficial desde Yahoo Finance (via cotizaciones proxy)
-    const prevOf = cotiz?.oficial?.prevClose ?? null;
-    const deltaOf = pOf && prevOf ? Math.round((pOf - prevOf) * 100) / 100 : null;
-
-    // Delta Blue: compra vs venta como referencia de spread, no hay prevClose
+    // Delta Blue: compra vs venta como referencia de spread
     const cBlu = getCompra('blue');
     const spreadBlu = pBlu && cBlu ? Math.round((pBlu - cBlu) * 100) / 100 : null;
+
+    // Helper: obtiene el penúltimo valor de cierre del historial (último cierre anterior)
+    // El historial de ArgentinaDatos ya viene ordenado por fecha ASC
+    const getPrevClose = (histData) => {
+      if (!Array.isArray(histData) || histData.length < 2) return null;
+      // El último registro es hoy (o el más reciente), el penúltimo es el cierre anterior
+      const last   = histData[histData.length - 1];
+      const prev   = histData[histData.length - 2];
+      const vLast  = parseFloat(last?.venta ?? last?.compra ?? 0);
+      const vPrev  = parseFloat(prev?.venta ?? prev?.compra ?? 0);
+      return vPrev > 0 ? vPrev : null;
+    };
+
+    const [hOf, hBlu, hMep, hCcl, hMay, hCry] = histResults.map(r => r.data);
+
+    // Calculamos prevClose desde historial de ArgentinaDatos (más fiable que Yahoo para tipos AR)
+    const prevOf  = getPrevClose(hOf)  ?? cotiz?.oficial?.prevClose ?? null;
+    const prevBlu = getPrevClose(hBlu);
+    const prevMep = getPrevClose(hMep);
+    const prevCcl = getPrevClose(hCcl);
+    const prevMay = getPrevClose(hMay);
+    const prevCry = getPrevClose(hCry);
+
+    const calcDelta = (precio, prev) =>
+      precio && prev ? Math.round((precio - prev) * 100) / 100 : null;
 
     setDolares({
       pOf, pMep, pCcl, pBlu, pCry, pMay, pTar, pBlend,
       cOf, cBlu,
       spreadOf, spreadBlu,
-      deltaOf,
+      deltaOf:  calcDelta(pOf,  prevOf),
+      deltaMep: calcDelta(pMep, prevMep),
+      deltaCcl: calcDelta(pCcl, prevCcl),
+      deltaBlu: calcDelta(pBlu, prevBlu),
+      deltaMay: calcDelta(pMay, prevMay),
+      deltaCry: calcDelta(pCry, prevCry),
       bMep: pct(pOf, pMep), bCcl: pct(pOf, pCcl),
       bBlu: pct(pOf, pBlu), bCry: pct(pOf, pCry),
     });

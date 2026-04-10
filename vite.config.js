@@ -16,11 +16,14 @@ function vercelFunctionsPlugin() {
         const route = url.pathname.replace('/api/', '');
 
         const fnMap = {
-          mundo:        path.resolve('./api/mundo.js'),
-          bcra:         path.resolve('./api/bcra.js'),
-          cotizaciones: path.resolve('./api/cotizaciones.js'),
-          indec:        path.resolve('./api/indec.js'),
-          insumos:      path.resolve('./api/insumos.js'),
+          mundo:              path.resolve('./api/mundo.js'),
+          bcra:               path.resolve('./api/bcra.js'),
+          cotizaciones:       path.resolve('./api/cotizaciones.js'),
+          indec:              path.resolve('./api/indec.js'),
+          insumos:            path.resolve('./api/insumos.js'),
+          fob:                path.resolve('./api/fob.js'),
+          hacienda:           path.resolve('./api/hacienda.js'),
+          'riesgo-pais-latam':path.resolve('./api/riesgo-pais-latam.js'),
         };
 
         const fnPath = fnMap[route];

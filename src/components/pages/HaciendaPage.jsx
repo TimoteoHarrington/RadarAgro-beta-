@@ -1,5 +1,6 @@
 // HaciendaPage.jsx — Redesigned with full API coverage from Downtack PDF
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { fetchHaciendaReal } from '../../services/api';
 import {
   HACIENDA_OVERVIEW,
   HACIENDA_NOVILLOS, HACIENDA_NOVILLITOS, HACIENDA_VAQUILLONAS,
@@ -93,34 +94,82 @@ function HacTable({ rows }) {
 }
 
 // ── Overview cards ───────────────────────────────────────────
-function OverviewCards() {
+// Usa la API real del MAGyP cuando está disponible; cae al mock si no.
+function OverviewCards({ apiData, apiReady }) {
+  const fmt = v => '$\u00a0' + Math.round(v).toLocaleString('es-AR');
+
+  // Si la API devolvió datos, sobreescribimos los mocks de INSC/novillo/ternero/vaca
+  const precios = apiData?.precios ?? {};
+
+  const items = HACIENDA_OVERVIEW.map(item => {
+    let precio = item.precio;
+    let varPct  = item.var;
+    let fuente  = item.fuente;
+    let esReal  = false;
+
+    // Mapeo id del mock → clave de la API
+    const apiKeyMap = {
+      novillo:    precios.novillo     ?? precios.insc,
+      novillito:  precios.novillo,
+      vaquillona: precios.vaquillona,
+      vaca:       precios.vaca_conserva,
+    };
+
+    const apiVal = apiKeyMap[item.id];
+    if (apiReady && apiVal?.valor) {
+      precio  = apiVal.valor;
+      varPct  = apiVal.varSemana ?? apiVal.varDia ?? 0;
+      fuente  = 'MAGyP · SIO Carnes · real';
+      esReal  = true;
+    }
+
+    return { ...item, precio, var: varPct, fuente, esReal };
+  });
+
   return (
-    <div className="grid grid-3" style={{ marginBottom: 28 }}>
-      {HACIENDA_OVERVIEW.map(item => {
-        const d = dirOf(item.var);
-        const varTxt = (item.var > 0 ? '+' : '') + item.var.toFixed(1).replace('.', ',') + '%';
-        return (
-          <div key={item.id} className="stat" style={{ cursor: 'default' }}>
-            <div style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span>{item.nombre}</span>
+    <div>
+      {/* Badge de estado de datos */}
+      <div className="alert-strip info" style={{ marginBottom: 16 }}>
+        <span className="alert-icon">{apiReady ? (apiData ? '✓' : '!') : '…'}</span>
+        <span className="alert-text">
+          {!apiReady
+            ? 'Consultando MAGyP · SIO Carnes…'
+            : apiData
+              ? <>Indicadores económicos <strong>reales</strong> · MAGyP · SIO Carnes · {apiData.fecha ?? 'último disponible'}</>
+              : 'Sin conexión con MAGyP — mostrando datos de referencia (mock)'}
+        </span>
+      </div>
+
+      <div className="grid grid-3" style={{ marginBottom: 28 }}>
+        {items.map(item => {
+          const d = dirOf(item.var);
+          const varTxt = (item.var > 0 ? '+' : '') + item.var.toFixed(1).replace('.', ',') + '%';
+          return (
+            <div key={item.id} className="stat" style={{ cursor: 'default' }}>
+              <div style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <span>{item.nombre}</span>
+                {item.esReal && (
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--green)', background: 'var(--green-bg)', padding: '2px 6px', borderRadius: 4 }}>LIVE</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{fmtARS(item.precio)}</div>
+                <span style={{
+                  fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
+                  color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
+                  background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
+                  padding:    d === 'fl' ? '0' : '2px 8px',
+                  borderRadius: '4px',
+                }}>
+                  {varTxt}
+                </span>
+              </div>
+              <div className="stat-meta">{item.subcategoria} · {item.unidad}</div>
+              <div className="stat-meta" style={{ marginTop: 2 }}>Fuente: {item.fuente}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-              <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{fmtARS(item.precio)}</div>
-              <span style={{
-                fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
-                color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
-                background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
-                padding:    d === 'fl' ? '0' : '2px 8px',
-                borderRadius: '4px',
-              }}>
-                {varTxt}
-              </span>
-            </div>
-            <div className="stat-meta">{item.subcategoria} · {item.unidad}</div>
-            <div className="stat-meta" style={{ marginTop: 2 }}>Fuente: {item.fuente}</div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -405,17 +454,33 @@ const TABS = [
 ];
 
 export function HaciendaPage({ goPage }) {
-  const [activeTab, setActiveTab] = useState('faena');
+  const [activeTab,   setActiveTab]   = useState('faena');
+  const [apiData,     setApiData]     = useState(null);
+  const [apiReady,    setApiReady]    = useState(false);
+
+  useEffect(() => {
+    fetchHaciendaReal()
+      .then(({ data: d }) => { if (d?.precios) setApiData(d); })
+      .finally(() => setApiReady(true));
+  }, []);
+
   return (
     <div className="page-enter">
       <div className="ph">
         <div>
           <div className="ph-title">Hacienda <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-hacienda')} title="Ayuda">?</span></div>
-          <div className="ph-sub">Novillos · Novillitos · Vacas · Vaquillonas · Toros · Cañuelas INMAG/IGMAG · ROSGAN · 30/03/2026</div>
+          <div className="ph-sub">Novillos · Novillitos · Vacas · Vaquillonas · Toros · Cañuelas INMAG/IGMAG · ROSGAN</div>
+        </div>
+        <div className="ph-right">
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em' }}>
+            {apiReady
+              ? (apiData ? 'LIVE · MAGyP · SIO Carnes' : 'FALLBACK · sin conexión')
+              : 'cargando…'}
+          </div>
         </div>
       </div>
 
-      <OverviewCards />
+      <OverviewCards apiData={apiData} apiReady={apiReady} />
 
       <div className="tabs">
         {TABS.map(t => (

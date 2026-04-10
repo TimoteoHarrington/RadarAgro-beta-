@@ -189,3 +189,47 @@ export async function fetchCBOTAll() {
 
   return { data: out, error: null };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Insumos — todos los combustibles — via proxy /api/insumos
+// Extiende fetchInsumosGasoil con nafta y GNC.
+// Retorna { ok, fuente, fecha, gasoil: { g2, g3 }, nafta: { super, premium, gnc } }
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Precios completos de combustibles en surtidor (gasoil, nafta, GNC).
+ * Retrocompatible: el campo `gasoil` sigue igual que antes.
+ */
+export async function fetchInsumosAll() {
+  return get('/api/insumos');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Precios FOB oficiales MAGyP — via proxy /api/fob
+// Fuente: MAGyP · Mercados Agropecuarios · Ley 21.453
+// Retorna { ok, fuente, fecha, precios: { soja, maiz, trigo, girasol,
+//           harina_soja, aceite_soja } } — USD/tn
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Precios FOB oficiales del MAGyP para los principales granos.
+ * Son los precios en USD/tn que usa el gobierno para calcular retenciones.
+ */
+export async function fetchFOB() {
+  return get('/api/fob');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Hacienda bovina — via proxy /api/hacienda
+// Fuente: MAGyP · SIO Carnes · datos.gob.ar
+// Retorna { ok, fuente, fecha, precios: { insc, novillo, ternero,
+//           vaca_conserva, vaquillona }, hist30 }
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Indicadores económicos ganadería bovina: INSC, novillo, ternero, vaca.
+ * Reemplaza el mock de src/data/hacienda.js con datos reales del MAGyP.
+ */
+export async function fetchHaciendaReal() {
+  return get('/api/hacienda');
+}

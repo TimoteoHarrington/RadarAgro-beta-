@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { fetchInsumosGasoil } from '../../services/api';
 
 // ── Mock data ─────────────────────────────────────────────────
 
@@ -57,50 +58,11 @@ const FERTILIZANTES = [
   },
 ];
 
-const COMBUSTIBLES = [
-  {
-    id: 'g2',
-    nombre: 'Gasoil G2',
-    subtitulo: 'YPF · al surtidor',
-    ars: 1247,
-    unidad: 'ARS/litro',
-    varPct: 0,
-    nota: 'Precio bomba sin beneficio agro',
-    badge: null,
-  },
-  {
-    id: 'agro',
-    nombre: 'Gasoil Agro',
-    subtitulo: 'Con beneficio agropecuario',
-    ars: 1180,
-    unidad: 'ARS/litro',
-    varPct: 0,
-    nota: 'Subsidio sectorial vigente',
-    badge: { label: 'SUBSIDIO', cls: 'info' },
-  },
-  {
-    id: 'usd',
-    nombre: 'Gasoil en USD',
-    subtitulo: 'Equivalente dólar MEP',
-    ars: null,
-    usd: 1.00,
-    unidad: 'USD/litro',
-    varPct: 0,
-    nota: '$1.247 / $1.245 MEP',
-    badge: null,
-  },
-  {
-    id: 'soja-gasoil',
-    nombre: 'Soja / Gasoil',
-    subtitulo: 'Relación productiva',
-    ars: null,
-    valor: '365 L',
-    unidad: 'litros / tn de soja',
-    varPct: 0.8,
-    nota: 'hace 1m: 362 L · +0,8%',
-    badge: null,
-  },
-];
+
+// COMBUSTIBLES — datos vienen de /api/insumos (Sec. de Energía)
+// Ver TabCombustibles para el fetch
+
+
 
 const RELACIONES = [
   {
@@ -369,101 +331,173 @@ function HistLineChart() {
 // ── Tab: Combustibles ─────────────────────────────────────────
 
 function TabCombustibles() {
-  const histGasoil = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1230, 1247, 1247];
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchInsumosGasoil()
+      .then(({ data: d, error: e }) => {
+        if (e) { setError(e); return; }
+        if (!d?.gasoil) { setError('Sin datos de gasoil'); return; }
+        setData(d);
+      })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // ── helpers locales
+  const fmt = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
+  const fmtN = v => v == null ? '—' : v.toLocaleString('es-AR');
+
+  if (loading) {
+    return (
+      <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+        Consultando Secretaría de Energía…
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="alert-strip" style={{ marginBottom: 24 }}>
+        <span className="alert-icon">!</span>
+        <span className="alert-text">No se pudo conectar con datos.energia.gob.ar: {error}</span>
+      </div>
+    );
+  }
+
+  const { gasoil, fuente, fecha } = data;
+  const g2 = gasoil?.g2;
+  const g3 = gasoil?.g3;
+
+  // Para el gráfico histórico usamos el fallback estático; la API oficial
+  // solo expone los precios vigentes, no el historial en este endpoint.
+  const histGasoil = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1460, 1630, g2?.nucleo?.promedio ?? 1630];
+
+  // KPI cards: G2 zona núcleo promedio, G3 zona núcleo, G2 todo el país, dispersión
+  const cards = [
+    {
+      id: 'g2-nucleo',
+      nombre:   'Gasoil G2 · Zona Núcleo',
+      subtitulo: 'Promedio estaciones agro',
+      valor:    fmt(g2?.nucleo?.promedio),
+      meta:     `Mediana ${fmt(g2?.nucleo?.mediana)} · n=${fmtN(g2?.nucleo?.n)}`,
+      badge:    null,
+    },
+    {
+      id: 'g3-nucleo',
+      nombre:   'Gasoil G3 · Zona Núcleo',
+      subtitulo: 'Gasoil premium / Euro',
+      valor:    fmt(g3?.nucleo?.promedio),
+      meta:     `Mediana ${fmt(g3?.nucleo?.mediana)} · n=${fmtN(g3?.nucleo?.n)}`,
+      badge:    null,
+    },
+    {
+      id: 'g2-pais',
+      nombre:   'Gasoil G2 · País',
+      subtitulo: 'Promedio nacional',
+      valor:    fmt(g2?.pais?.promedio),
+      meta:     `Min ${fmt(g2?.pais?.min)} — Máx ${fmt(g2?.pais?.max)}`,
+      badge:    null,
+    },
+    {
+      id: 'g3-pais',
+      nombre:   'Gasoil G3 · País',
+      subtitulo: 'Promedio nacional',
+      valor:    fmt(g3?.pais?.promedio),
+      meta:     `Min ${fmt(g3?.pais?.min)} — Máx ${fmt(g3?.pais?.max)}`,
+      badge:    null,
+    },
+  ];
+
+  // Filas para tabla detallada
+  const filas = [
+    { producto: 'Gasoil G2', ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio, mediana: g2?.nucleo?.mediana, min: g2?.nucleo?.min, max: g2?.nucleo?.max, n: g2?.nucleo?.n },
+    { producto: 'Gasoil G2', ambito: 'País',        precio: g2?.pais?.promedio,   mediana: g2?.pais?.mediana,   min: g2?.pais?.min,   max: g2?.pais?.max,   n: g2?.pais?.n },
+    { producto: 'Gasoil G3', ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio, mediana: g3?.nucleo?.mediana, min: g3?.nucleo?.min, max: g3?.nucleo?.max, n: g3?.nucleo?.n },
+    { producto: 'Gasoil G3', ambito: 'País',        precio: g3?.pais?.promedio,   mediana: g3?.pais?.mediana,   min: g3?.pais?.min,   max: g3?.pais?.max,   n: g3?.pais?.n },
+  ];
+
+  const fechaDisplay = fecha
+    ? new Date(fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : 'vigentes';
 
   return (
     <div>
+      {/* Badge de fuente oficial */}
+      <div className="alert-strip info" style={{ marginBottom: 20 }}>
+        <span className="alert-icon">✓</span>
+        <span className="alert-text">
+          Precios reales en surtidor · <strong>{fuente}</strong> · Vigentes al {fechaDisplay} · Actualización cada hora
+        </span>
+      </div>
+
+      {/* KPI cards */}
       <div className="grid grid-4" style={{ marginBottom: 28 }}>
-        {COMBUSTIBLES.map(c => {
-          const d = dir(c.varPct);
-          const varTxt = (c.varPct > 0 ? '+' : '') + c.varPct.toFixed(1).replace('.', ',') + '%';
-          const valDisplay = c.usd != null
-            ? `USD ${c.usd.toFixed(2)}`
-            : c.valor != null
-              ? c.valor
-              : fmtARS(c.ars);
-          return (
-            <div key={c.id} className="stat" style={{ cursor: 'default' }}>
-              <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span>{c.nombre}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{valDisplay}</div>
-                {c.badge ? (
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: 'var(--accent)', background: 'var(--acc-bg)', padding: '2px 8px', borderRadius: '4px' }}>
-                    {c.badge.label}
-                  </span>
-                ) : (
-                  <span style={{
-                    fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
-                    color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
-                    background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
-                    padding:    d === 'fl' ? '0' : '2px 8px',
-                    borderRadius: '4px',
-                  }}>
-                    {varTxt}
-                  </span>
-                )}
-              </div>
-              <div className="stat-meta">{c.subtitulo}</div>
-              <div className="stat-meta">{c.nota}</div>
+        {cards.map(c => (
+          <div key={c.id} className="stat" style={{ cursor: 'default' }}>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>
+              {c.nombre}
             </div>
-          );
-        })}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+              <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{c.valor}</div>
+            </div>
+            <div className="stat-meta">{c.subtitulo}</div>
+            <div className="stat-meta">{c.meta}</div>
+          </div>
+        ))}
       </div>
 
       {/* Tabla detallada */}
-      <div className="section-title">Detalle por variante</div>
+      <div className="section-title">Detalle por producto y ámbito · ARS/litro</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <table>
           <thead>
             <tr>
               <th>Producto</th>
-              <th className="r">Precio</th>
-              <th>Unidad</th>
-              <th className="r">Var. %</th>
-              <th>Referencia</th>
+              <th>Ámbito</th>
+              <th className="r">Promedio</th>
+              <th className="r">Mediana</th>
+              <th className="r">Mínimo</th>
+              <th className="r">Máximo</th>
+              <th className="r">N estaciones</th>
             </tr>
           </thead>
           <tbody>
-            {COMBUSTIBLES.map(c => {
-              const d = dir(c.varPct);
-              const valDisplay = c.usd != null
-                ? `USD ${c.usd.toFixed(2)}`
-                : c.valor != null
-                  ? c.valor
-                  : fmtARS(c.ars);
-              return (
-                <tr key={c.id}>
-                  <td className="bold">{c.nombre}</td>
-                  <td className="r w mono">{valDisplay}</td>
-                  <td className="dim" style={{ fontSize: 11 }}>{c.unidad}</td>
-                  <td className="r"><Pill d={d}>{fmtPct(c.varPct)}</Pill></td>
-                  <td className="dim" style={{ fontSize: 11 }}>{c.nota}</td>
-                </tr>
-              );
-            })}
+            {filas.map((f, i) => (
+              <tr key={i}>
+                <td className="bold">{f.producto}</td>
+                <td className="dim" style={{ fontSize: 11 }}>{f.ambito}</td>
+                <td className="r w mono">{fmt(f.precio)}</td>
+                <td className="r mono">{fmt(f.mediana)}</td>
+                <td className="r mono dim">{fmt(f.min)}</td>
+                <td className="r mono dim">{fmt(f.max)}</td>
+                <td className="r mono dim" style={{ fontSize: 11 }}>{fmtN(f.n)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* Evolución gasoil */}
+      {/* Evolución gasoil G2 zona núcleo (12 meses móvil + último real) */}
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
-            Evolución Gasoil G2 · ARS/litro · Mar 2025 – Feb 2026
+            Evolución Gasoil G2 · ARS/litro · zona núcleo · últ. 12 meses
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ width: 20, height: 2, background: 'var(--accent)', borderRadius: 1 }} />
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>Gasoil G2 YPF</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>Gasoil G2 promedio</span>
           </div>
         </div>
         <GasoilChart data={histGasoil} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
           {[
-            { label: 'Precio actual', val: '$1.247/L' },
-            { label: 'Var. 12 meses', val: '+48,5%' },
-            { label: 'En USD (MEP)',   val: 'USD 1,00/L' },
+            { label: 'G2 · Zona Núcleo', val: fmt(g2?.nucleo?.promedio) },
+            { label: 'G3 · Zona Núcleo', val: fmt(g3?.nucleo?.promedio) },
+            { label: 'Dispersión G2',    val: g2?.pais?.min != null ? `${fmt(g2.pais.min)} – ${fmt(g2.pais.max)}` : '—' },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginBottom: 4 }}>{item.label}</div>
@@ -472,7 +506,7 @@ function TabCombustibles() {
           ))}
         </div>
       </div>
-      <div className="source">Fuente: YPF · Secretaría de Energía · datos mock · Feb 2026</div>
+      <div className="source">Fuente: {fuente} · Zona Núcleo: Santa Fe, Córdoba, Bs. As., Entre Ríos, La Pampa</div>
     </div>
   );
 }

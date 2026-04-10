@@ -137,6 +137,21 @@ export async function fetchINDEC() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Insumos — via proxy /api/insumos (Vercel Function)
+// Fuente: Secretaría de Energía · Res. 314/2016 · datos.energia.gob.ar
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Precios de gasoil en surtidor (vigentes), zona núcleo y país.
+ * Retorna { ok, fuente, fecha, gasoil: { g2, g3 } }
+ * Cada variante tiene: { label, grado, pais, nucleo }
+ * Cada scope tiene: { promedio, mediana, min, max, n }
+ */
+export async function fetchInsumosGasoil() {
+  return get('/api/insumos');
+}
+
+// ─────────────────────────────────────────────────────────────
 // CBOT — via proxy /api/mundo (mismo endpoint que MundoPage)
 // Los símbolos agro ya están incluidos en api/mundo.js con
 // conversión a USD/tn. Se filtran por group === 'Agro' y se

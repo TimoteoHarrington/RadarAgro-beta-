@@ -20,6 +20,7 @@ function vercelFunctionsPlugin() {
           bcra:         path.resolve('./api/bcra.js'),
           cotizaciones: path.resolve('./api/cotizaciones.js'),
           indec:        path.resolve('./api/indec.js'),
+          insumos:      path.resolve('./api/insumos.js'),
         };
 
         const fnPath = fnMap[route];

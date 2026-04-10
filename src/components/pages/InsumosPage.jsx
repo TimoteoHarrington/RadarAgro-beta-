@@ -330,12 +330,20 @@ function HistLineChart() {
 
 // ── Tab: Combustibles ─────────────────────────────────────────
 
-function TabCombustibles() {
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
+function TabCombustibles({ prefetch = {} }) {
+  const [data,    setData]    = useState(prefetch.data  ?? null);
+  const [loading, setLoading] = useState(!prefetch.ready);
   const [error,   setError]   = useState(null);
 
   useEffect(() => {
+    // Si el parent ya trajo los datos, los usamos directamente
+    if (prefetch.ready) {
+      setData(prefetch.data ?? null);
+      if (!prefetch.data) setError('Sin datos de gasoil');
+      setLoading(false);
+      return;
+    }
+    // Fallback: fetch propio si llegamos aquí sin prefetch (no debería pasar)
     setLoading(true);
     fetchInsumosGasoil()
       .then(({ data: d, error: e }) => {
@@ -345,7 +353,7 @@ function TabCombustibles() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [prefetch.ready, prefetch.data]);
 
   // ── helpers locales
   const fmt = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
@@ -656,7 +664,19 @@ const TABS = [
 ];
 
 export function InsumosPage({ goPage }) {
-  const [tab, setTab] = useState('fertilizantes');
+  const [tab,         setTab]         = useState('fertilizantes');
+  const [gasoilData,  setGasoilData]  = useState(null);
+  const [gasoilReady, setGasoilReady] = useState(false);
+
+  useEffect(() => {
+    fetchInsumosGasoil()
+      .then(({ data: d }) => { if (d?.gasoil) setGasoilData(d); })
+      .finally(() => setGasoilReady(true));
+  }, []);
+
+  // Valor del Gasoil G2 zona núcleo para el KPI del header
+  const g2Nucleo = gasoilData?.gasoil?.g2?.nucleo?.promedio ?? null;
+  const fmtKpi   = v => v == null ? '…' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
 
   return (
     <div className="page-enter">
@@ -667,11 +687,13 @@ export function InsumosPage({ goPage }) {
             Insumos
             <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-insumos')} title="Ayuda">?</span>
           </div>
-          <div className="ph-sub">Fertilizantes · Combustibles · Relaciones insumo/producto · Feb 2026</div>
+          <div className="ph-sub">Fertilizantes · Combustibles · Relaciones insumo/producto</div>
         </div>
         <div className="ph-right">
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em' }}>
-            MOCK DATA · zona núcleo
+            {gasoilReady
+              ? (gasoilData ? 'LIVE · Sec. de Energía' : 'FALLBACK · sin conexión')
+              : 'cargando…'}
           </div>
         </div>
       </div>
@@ -679,10 +701,34 @@ export function InsumosPage({ goPage }) {
       {/* KPIs resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
         {[
-          { label: 'Urea Gran.',   val: '$484.000', delta: '−1,6% hoy', cls: 'dn', sub: 'ARS/tn · zona núcleo' },
-          { label: 'Gasoil G2',   val: '$1.247',   delta: '= sin cambios', cls: 'fl', sub: 'ARS/litro · YPF' },
-          { label: 'Soja/Urea',   val: '0,94',     delta: 'bajo umbral 1,0', cls: 'dn', sub: 'tn soja/tn urea' },
-          { label: 'Maíz/Urea',   val: '0,52',     delta: 'hace 1m: 0,54', cls: 'dn', sub: 'tn maíz/tn urea' },
+          {
+            label: 'Urea Gran.',
+            val:   '$484.000',          // sigue mock hasta conectar fertilizantes
+            delta: '−1,6% hoy',
+            cls:   'dn',
+            sub:   'ARS/tn · zona núcleo · mock',
+          },
+          {
+            label: 'Gasoil G2',
+            val:   fmtKpi(g2Nucleo),   // ← dato real de la API
+            delta: gasoilReady && g2Nucleo ? 'zona núcleo · prom. real' : '…',
+            cls:   'fl',
+            sub:   'ARS/litro · surtidor',
+          },
+          {
+            label: 'Soja/Urea',
+            val:   '0,94',
+            delta: 'bajo umbral 1,0',
+            cls:   'dn',
+            sub:   'tn soja/tn urea · mock',
+          },
+          {
+            label: 'Maíz/Urea',
+            val:   '0,52',
+            delta: 'hace 1m: 0,54',
+            cls:   'dn',
+            sub:   'tn maíz/tn urea · mock',
+          },
         ].map(item => (
           <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 8 }}>{item.label}</div>
@@ -709,7 +755,7 @@ export function InsumosPage({ goPage }) {
       {/* Tab content */}
       <div className="section">
         {tab === 'fertilizantes' && <TabFertilizantes />}
-        {tab === 'combustibles'  && <TabCombustibles />}
+        {tab === 'combustibles'  && <TabCombustibles prefetch={{ data: gasoilData, ready: gasoilReady }} />}
         {tab === 'relaciones'    && <TabRelaciones />}
       </div>
     </div>

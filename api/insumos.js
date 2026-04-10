@@ -1,19 +1,28 @@
 // api/insumos.js — Vercel Serverless Function
-// Precios de gasoil en surtidor — Secretaría de Energía (Res. 314/2016)
+// Precios de combustibles en surtidor — Secretaría de Energía (Res. 314/2016)
 // Fuente: http://datos.energia.gob.ar/api/3/action/datastore_search
 //   resource_id: 80ac25de-a44a-4445-9215-090cf55cfda5 (vigentes)
+//
+// id_producto mapeados:
+//   2 = Nafta súper (92-95 Ron)
+//   3 = Gasoil Grado 2
+//   4 = Gasoil Grado 3
+//   6 = Nafta premium (>95 Ron)
+//  19 = GNC ($/m³)
 
-const CKAN_BASE  = 'http://datos.energia.gob.ar/api/3/action/datastore_search';
-const RES_ID     = '80ac25de-a44a-4445-9215-090cf55cfda5'; // precios vigentes
+const CKAN_BASE = 'http://datos.energia.gob.ar/api/3/action/datastore_search';
+const RES_ID    = '80ac25de-a44a-4445-9215-090cf55cfda5'; // precios vigentes
 
 // Provincias que forman la zona núcleo agrícola argentina
 const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
 
-// Nombres de producto tal como aparecen en el dataset
-// id_producto: 3 = Gasoil Grado 2, 4 = Gasoil Grado 3
-const PRODUCTOS_GASOIL = {
-  3: { label: 'Gasoil G2', grado: 2 },
-  4: { label: 'Gasoil G3', grado: 3 },
+// Todos los productos que traemos en una sola query
+const PRODUCTOS = {
+  2:  { label: 'Nafta Súper',   grupo: 'nafta',  unidad: 'ARS/litro' },
+  3:  { label: 'Gasoil G2',     grupo: 'gasoil', unidad: 'ARS/litro', grado: 2 },
+  4:  { label: 'Gasoil G3',     grupo: 'gasoil', unidad: 'ARS/litro', grado: 3 },
+  6:  { label: 'Nafta Premium', grupo: 'nafta',  unidad: 'ARS/litro' },
+  19: { label: 'GNC',           grupo: 'gnc',    unidad: 'ARS/m3'    },
 };
 
 async function fetchCKAN(url, timeoutMs = 20000) {
@@ -52,82 +61,82 @@ function estadisticas(arr) {
   };
 }
 
+function buildProducto(id, byProducto) {
+  const info   = PRODUCTOS[id];
+  const bucket = byProducto[String(id)] ?? { todos: [], nucleo: [] };
+  return {
+    label:  info.label,
+    unidad: info.unidad,
+    ...(info.grado != null ? { grado: info.grado } : {}),
+    pais:   estadisticas(bucket.todos),
+    nucleo: estadisticas(bucket.nucleo),
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=7200');
 
   try {
-    // Traemos los registros filtrando por gasoil (id_producto 3 y 4)
-    // La API CKAN permite filtros y paginación; el CSV vigente tiene ~15.000 filas.
-    // Para no cargar todo, hacemos dos llamadas: G2 y G3 en zona núcleo.
-    // filters acepta JSON: {"id_producto": ["3"]} pero CKAN admite multi-valor.
-    // Tomamos un limit generoso; si hay más filas, iteramos.
+    // Una sola query CKAN con multi-valor para ids 2, 3, 4, 6, 19
+    const IDS_FILTRO = Object.keys(PRODUCTOS).map(String);
+    const LIMIT = 8000;
 
-    const LIMIT = 5000; // suficiente para todo el país; zona núcleo ~1.500
-
-    const buildUrl = (idProducto) =>
+    const url =
       `${CKAN_BASE}?resource_id=${RES_ID}` +
-      `&filters=${encodeURIComponent(JSON.stringify({ id_producto: [String(idProducto)] }))}` +
+      `&filters=${encodeURIComponent(JSON.stringify({ id_producto: IDS_FILTRO }))}` +
       `&limit=${LIMIT}`;
 
-    const [respG2, respG3] = await Promise.all([
-      fetchCKAN(buildUrl(3)),
-      fetchCKAN(buildUrl(4)),
-    ]);
+    const resp = await fetchCKAN(url);
 
-    if (!respG2?.success || !respG3?.success) {
-      throw new Error('CKAN respondió sin éxito');
-    }
+    if (!resp?.success) throw new Error('CKAN respondió sin éxito');
 
-    const rows = [...(respG2.result?.records ?? []), ...(respG3.result?.records ?? [])];
-
-    if (!rows.length) {
-      throw new Error('Sin registros en la respuesta CKAN');
-    }
+    const rows = resp.result?.records ?? [];
+    if (!rows.length) throw new Error('Sin registros en la respuesta CKAN');
 
     // Estructura de columnas del dataset (Res. 314/2016):
-    // idempresa, empresa, idproducto, producto, idprovincia, provincia,
+    // idempresa, empresa, id_producto, producto, idprovincia, provincia,
     // idlocalidad, localidad, precio, fecha_vigencia
 
-    // Agrupamos por producto y zona (todo país vs zona núcleo)
-    const byProducto = {};  // { "3": { todos: [], nucleo: [] }, "4": {...} }
+    // Agrupamos por id_producto → { todos: [], nucleo: [] }
+    const byProducto = {};
 
     for (const row of rows) {
-      const idProd  = String(row.id_producto ?? row.idproducto ?? '');
-      const precio  = parseFloat(row.precio);
-      const prov    = row.provincia ?? row.Provincia ?? '';
+      const idProd = String(row.id_producto ?? row.idproducto ?? '');
+      const precio = parseFloat(row.precio);
+      const prov   = row.provincia ?? row.Provincia ?? '';
 
       if (!idProd || isNaN(precio) || precio <= 0) continue;
+      if (!PRODUCTOS[idProd]) continue;
 
-      if (!byProducto[idProd]) {
-        byProducto[idProd] = { todos: [], nucleo: [] };
-      }
+      if (!byProducto[idProd]) byProducto[idProd] = { todos: [], nucleo: [] };
       byProducto[idProd].todos.push(precio);
       if (ZONA_NUCLEO.some(zn => prov.toLowerCase().includes(zn.toLowerCase()))) {
         byProducto[idProd].nucleo.push(precio);
       }
     }
 
-    // Construimos respuesta
-    const gasoil = {};
-    for (const [idProd, info] of Object.entries(PRODUCTOS_GASOIL)) {
-      const bucket = byProducto[idProd] ?? { todos: [], nucleo: [] };
-      gasoil[`g${info.grado}`] = {
-        label:  info.label,
-        grado:  info.grado,
-        pais:   estadisticas(bucket.todos),
-        nucleo: estadisticas(bucket.nucleo),
-      };
-    }
-
-    // Fecha de vigencia del primer registro (referencial)
     const fechaRef = rows[0]?.fecha_vigencia ?? rows[0]?.vigencia ?? null;
+
+    // gasoil: mantiene retrocompatibilidad con InsumosPage existente
+    const gasoil = {
+      g2: buildProducto(3, byProducto),
+      g3: buildProducto(4, byProducto),
+    };
+
+    // nafta: bloque nuevo
+    const nafta = {
+      super:   buildProducto(2,  byProducto),
+      premium: buildProducto(6,  byProducto),
+      gnc:     buildProducto(19, byProducto),
+    };
 
     return res.status(200).json({
       ok:     true,
       fuente: 'Sec. de Energía · Res. 314/2016 · datos.energia.gob.ar',
       fecha:  fechaRef,
       gasoil,
+      nafta,
     });
 
   } catch (err) {
@@ -135,22 +144,16 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok:    false,
       error: err.message,
-      // Fallback con últimos valores conocidos (abril 2026)
       fuente: 'Sec. de Energía · fallback estático',
       fecha:  null,
       gasoil: {
-        g2: {
-          label:  'Gasoil G2',
-          grado:  2,
-          pais:   { promedio: 1655, mediana: 1620, min: 1320, max: 2100, n: null },
-          nucleo: { promedio: 1630, mediana: 1600, min: 1400, max: 1900, n: null },
-        },
-        g3: {
-          label:  'Gasoil G3',
-          grado:  3,
-          pais:   { promedio: 1901, mediana: 1860, min: 1500, max: 2300, n: null },
-          nucleo: { promedio: 1850, mediana: 1830, min: 1600, max: 2100, n: null },
-        },
+        g2: { label: 'Gasoil G2', grado: 2, unidad: 'ARS/litro', pais: { promedio: 1655, mediana: 1620, min: 1320, max: 2100, n: null }, nucleo: { promedio: 1630, mediana: 1600, min: 1400, max: 1900, n: null } },
+        g3: { label: 'Gasoil G3', grado: 3, unidad: 'ARS/litro', pais: { promedio: 1901, mediana: 1860, min: 1500, max: 2300, n: null }, nucleo: { promedio: 1850, mediana: 1830, min: 1600, max: 2100, n: null } },
+      },
+      nafta: {
+        super:   { label: 'Nafta Súper',   unidad: 'ARS/litro', pais: { promedio: 1420, mediana: 1400, min: 1100, max: 1800, n: null }, nucleo: { promedio: 1400, mediana: 1390, min: 1200, max: 1700, n: null } },
+        premium: { label: 'Nafta Premium', unidad: 'ARS/litro', pais: { promedio: 1720, mediana: 1690, min: 1350, max: 2100, n: null }, nucleo: { promedio: 1700, mediana: 1680, min: 1450, max: 2000, n: null } },
+        gnc:     { label: 'GNC',           unidad: 'ARS/m3',    pais: { promedio: 420,  mediana: 415,  min: 340,  max: 530,  n: null }, nucleo: { promedio: 415,  mediana: 410,  min: 360,  max: 500,  n: null } },
       },
     });
   }

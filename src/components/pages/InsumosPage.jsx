@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchInsumosGasoil } from '../../services/api';
+import { fetchInsumosAll } from '../../services/api';
 
 // ── Mock data ─────────────────────────────────────────────────
 
@@ -336,27 +336,24 @@ function TabCombustibles({ prefetch = {} }) {
   const [error,   setError]   = useState(null);
 
   useEffect(() => {
-    // Si el parent ya trajo los datos, los usamos directamente
     if (prefetch.ready) {
       setData(prefetch.data ?? null);
-      if (!prefetch.data) setError('Sin datos de gasoil');
+      if (!prefetch.data) setError('Sin datos de combustibles');
       setLoading(false);
       return;
     }
-    // Fallback: fetch propio si llegamos aquí sin prefetch (no debería pasar)
     setLoading(true);
-    fetchInsumosGasoil()
+    fetchInsumosAll()
       .then(({ data: d, error: e }) => {
         if (e) { setError(e); return; }
-        if (!d?.gasoil) { setError('Sin datos de gasoil'); return; }
+        if (!d?.gasoil) { setError('Sin datos de combustibles'); return; }
         setData(d);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [prefetch.ready, prefetch.data]);
 
-  // ── helpers locales
-  const fmt = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
+  const fmt  = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
   const fmtN = v => v == null ? '—' : v.toLocaleString('es-AR');
 
   if (loading) {
@@ -376,56 +373,34 @@ function TabCombustibles({ prefetch = {} }) {
     );
   }
 
-  const { gasoil, fuente, fecha } = data;
-  const g2 = gasoil?.g2;
-  const g3 = gasoil?.g3;
+  const { gasoil, nafta, fuente, fecha } = data;
+  const g2  = gasoil?.g2;
+  const g3  = gasoil?.g3;
+  const ns  = nafta?.super;
+  const np  = nafta?.premium;
+  const gnc = nafta?.gnc;
 
-  // Para el gráfico histórico usamos el fallback estático; la API oficial
-  // solo expone los precios vigentes, no el historial en este endpoint.
   const histGasoil = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1460, 1630, g2?.nucleo?.promedio ?? 1630];
 
-  // KPI cards: G2 zona núcleo promedio, G3 zona núcleo, G2 todo el país, dispersión
+  // KPI cards: los 4 principales, zona núcleo
   const cards = [
-    {
-      id: 'g2-nucleo',
-      nombre:   'Gasoil G2 · Zona Núcleo',
-      subtitulo: 'Promedio estaciones agro',
-      valor:    fmt(g2?.nucleo?.promedio),
-      meta:     `Mediana ${fmt(g2?.nucleo?.mediana)} · n=${fmtN(g2?.nucleo?.n)}`,
-      badge:    null,
-    },
-    {
-      id: 'g3-nucleo',
-      nombre:   'Gasoil G3 · Zona Núcleo',
-      subtitulo: 'Gasoil premium / Euro',
-      valor:    fmt(g3?.nucleo?.promedio),
-      meta:     `Mediana ${fmt(g3?.nucleo?.mediana)} · n=${fmtN(g3?.nucleo?.n)}`,
-      badge:    null,
-    },
-    {
-      id: 'g2-pais',
-      nombre:   'Gasoil G2 · País',
-      subtitulo: 'Promedio nacional',
-      valor:    fmt(g2?.pais?.promedio),
-      meta:     `Min ${fmt(g2?.pais?.min)} — Máx ${fmt(g2?.pais?.max)}`,
-      badge:    null,
-    },
-    {
-      id: 'g3-pais',
-      nombre:   'Gasoil G3 · País',
-      subtitulo: 'Promedio nacional',
-      valor:    fmt(g3?.pais?.promedio),
-      meta:     `Min ${fmt(g3?.pais?.min)} — Máx ${fmt(g3?.pais?.max)}`,
-      badge:    null,
-    },
+    { id: 'g2-n',  nombre: 'Gasoil G2 · Zona Núcleo',    subtitulo: 'Más usado en agro',        valor: fmt(g2?.nucleo?.promedio),  meta: `Mediana ${fmt(g2?.nucleo?.mediana)} · n=${fmtN(g2?.nucleo?.n)}` },
+    { id: 'g3-n',  nombre: 'Gasoil G3 · Zona Núcleo',    subtitulo: 'Premium / Euro',            valor: fmt(g3?.nucleo?.promedio),  meta: `Mediana ${fmt(g3?.nucleo?.mediana)} · n=${fmtN(g3?.nucleo?.n)}` },
+    { id: 'ns-n',  nombre: 'Nafta Súper · Zona Núcleo',  subtitulo: '92-95 Ron',                 valor: fmt(ns?.nucleo?.promedio),  meta: `Mediana ${fmt(ns?.nucleo?.mediana)} · n=${fmtN(ns?.nucleo?.n)}` },
+    { id: 'np-n',  nombre: 'Nafta Premium · Zona Núcleo',subtitulo: '+95 Ron',                   valor: fmt(np?.nucleo?.promedio),  meta: `Mediana ${fmt(np?.nucleo?.mediana)} · n=${fmtN(np?.nucleo?.n)}` },
   ];
 
-  // Filas para tabla detallada
+  // Tabla completa (gasoil + nafta + GNC, por ámbito)
   const filas = [
-    { producto: 'Gasoil G2', ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio, mediana: g2?.nucleo?.mediana, min: g2?.nucleo?.min, max: g2?.nucleo?.max, n: g2?.nucleo?.n },
-    { producto: 'Gasoil G2', ambito: 'País',        precio: g2?.pais?.promedio,   mediana: g2?.pais?.mediana,   min: g2?.pais?.min,   max: g2?.pais?.max,   n: g2?.pais?.n },
-    { producto: 'Gasoil G3', ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio, mediana: g3?.nucleo?.mediana, min: g3?.nucleo?.min, max: g3?.nucleo?.max, n: g3?.nucleo?.n },
-    { producto: 'Gasoil G3', ambito: 'País',        precio: g3?.pais?.promedio,   mediana: g3?.pais?.mediana,   min: g3?.pais?.min,   max: g3?.pais?.max,   n: g3?.pais?.n },
+    { producto: 'Gasoil G2',      unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio,  mediana: g2?.nucleo?.mediana,  min: g2?.nucleo?.min,  max: g2?.nucleo?.max,  n: g2?.nucleo?.n  },
+    { producto: 'Gasoil G2',      unidad: 'ARS/L', ambito: 'País',        precio: g2?.pais?.promedio,    mediana: g2?.pais?.mediana,    min: g2?.pais?.min,    max: g2?.pais?.max,    n: g2?.pais?.n    },
+    { producto: 'Gasoil G3',      unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio,  mediana: g3?.nucleo?.mediana,  min: g3?.nucleo?.min,  max: g3?.nucleo?.max,  n: g3?.nucleo?.n  },
+    { producto: 'Gasoil G3',      unidad: 'ARS/L', ambito: 'País',        precio: g3?.pais?.promedio,    mediana: g3?.pais?.mediana,    min: g3?.pais?.min,    max: g3?.pais?.max,    n: g3?.pais?.n    },
+    { producto: 'Nafta Súper',    unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: ns?.nucleo?.promedio,  mediana: ns?.nucleo?.mediana,  min: ns?.nucleo?.min,  max: ns?.nucleo?.max,  n: ns?.nucleo?.n  },
+    { producto: 'Nafta Súper',    unidad: 'ARS/L', ambito: 'País',        precio: ns?.pais?.promedio,    mediana: ns?.pais?.mediana,    min: ns?.pais?.min,    max: ns?.pais?.max,    n: ns?.pais?.n    },
+    { producto: 'Nafta Premium',  unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: np?.nucleo?.promedio,  mediana: np?.nucleo?.mediana,  min: np?.nucleo?.min,  max: np?.nucleo?.max,  n: np?.nucleo?.n  },
+    { producto: 'Nafta Premium',  unidad: 'ARS/L', ambito: 'País',        precio: np?.pais?.promedio,    mediana: np?.pais?.mediana,    min: np?.pais?.min,    max: np?.pais?.max,    n: np?.pais?.n    },
+    { producto: 'GNC',            unidad: 'ARS/m³',ambito: 'País',        precio: gnc?.pais?.promedio,   mediana: gnc?.pais?.mediana,   min: gnc?.pais?.min,   max: gnc?.pais?.max,   n: gnc?.pais?.n   },
   ];
 
   const fechaDisplay = fecha
@@ -434,7 +409,6 @@ function TabCombustibles({ prefetch = {} }) {
 
   return (
     <div>
-      {/* Badge de fuente oficial */}
       <div className="alert-strip info" style={{ marginBottom: 20 }}>
         <span className="alert-icon">✓</span>
         <span className="alert-text">
@@ -446,9 +420,7 @@ function TabCombustibles({ prefetch = {} }) {
       <div className="grid grid-4" style={{ marginBottom: 28 }}>
         {cards.map(c => (
           <div key={c.id} className="stat" style={{ cursor: 'default' }}>
-            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>
-              {c.nombre}
-            </div>
+            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>{c.nombre}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
               <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{c.valor}</div>
             </div>
@@ -458,38 +430,59 @@ function TabCombustibles({ prefetch = {} }) {
         ))}
       </div>
 
-      {/* Tabla detallada */}
-      <div className="section-title">Detalle por producto y ámbito · ARS/litro</div>
+      {/* GNC aparte — unidad diferente */}
+      {gnc?.pais?.promedio && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
+          {[
+            { label: 'GNC · Promedio País',   val: fmt(gnc.pais.promedio),  sub: 'ARS/m³' },
+            { label: 'GNC · Mediana',         val: fmt(gnc.pais.mediana),   sub: 'ARS/m³' },
+            { label: 'GNC · Dispersión',      val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones` },
+          ].map(item => (
+            <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6 }}>{item.label}</div>
+              <div style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 700, color: 'var(--white)', marginBottom: 2 }}>{item.val}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{item.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tabla completa */}
+      <div className="section-title">Detalle completo por producto y ámbito</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Ámbito</th>
-              <th className="r">Promedio</th>
-              <th className="r">Mediana</th>
-              <th className="r">Mínimo</th>
-              <th className="r">Máximo</th>
-              <th className="r">N estaciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filas.map((f, i) => (
-              <tr key={i}>
-                <td className="bold">{f.producto}</td>
-                <td className="dim" style={{ fontSize: 11 }}>{f.ambito}</td>
-                <td className="r w mono">{fmt(f.precio)}</td>
-                <td className="r mono">{fmt(f.mediana)}</td>
-                <td className="r mono dim">{fmt(f.min)}</td>
-                <td className="r mono dim">{fmt(f.max)}</td>
-                <td className="r mono dim" style={{ fontSize: 11 }}>{fmtN(f.n)}</td>
+        <div className="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Unidad</th>
+                <th>Ámbito</th>
+                <th className="r">Promedio</th>
+                <th className="r">Mediana</th>
+                <th className="r">Mínimo</th>
+                <th className="r">Máximo</th>
+                <th className="r">N est.</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filas.map((f, i) => (
+                <tr key={i}>
+                  <td className="bold">{f.producto}</td>
+                  <td className="dim mono" style={{ fontSize: 10 }}>{f.unidad}</td>
+                  <td className="dim" style={{ fontSize: 11 }}>{f.ambito}</td>
+                  <td className="r w mono">{fmt(f.precio)}</td>
+                  <td className="r mono">{fmt(f.mediana)}</td>
+                  <td className="r mono dim">{fmt(f.min)}</td>
+                  <td className="r mono dim">{fmt(f.max)}</td>
+                  <td className="r mono dim" style={{ fontSize: 11 }}>{fmtN(f.n)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Evolución gasoil G2 zona núcleo (12 meses móvil + último real) */}
+      {/* Evolución gasoil G2 zona núcleo */}
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
@@ -501,11 +494,12 @@ function TabCombustibles({ prefetch = {} }) {
           </div>
         </div>
         <GasoilChart data={histGasoil} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
           {[
-            { label: 'G2 · Zona Núcleo', val: fmt(g2?.nucleo?.promedio) },
-            { label: 'G3 · Zona Núcleo', val: fmt(g3?.nucleo?.promedio) },
-            { label: 'Dispersión G2',    val: g2?.pais?.min != null ? `${fmt(g2.pais.min)} – ${fmt(g2.pais.max)}` : '—' },
+            { label: 'G2 · Zona Núcleo',    val: fmt(g2?.nucleo?.promedio) },
+            { label: 'G3 · Zona Núcleo',    val: fmt(g3?.nucleo?.promedio) },
+            { label: 'Nafta Súper · Núcleo',val: fmt(ns?.nucleo?.promedio) },
+            { label: 'GNC · País',          val: fmt(gnc?.pais?.promedio)  },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginBottom: 4 }}>{item.label}</div>
@@ -664,19 +658,22 @@ const TABS = [
 ];
 
 export function InsumosPage({ goPage }) {
-  const [tab,         setTab]         = useState('fertilizantes');
-  const [gasoilData,  setGasoilData]  = useState(null);
-  const [gasoilReady, setGasoilReady] = useState(false);
+  const [tab,          setTab]          = useState('fertilizantes');
+  const [insumosData,  setInsumosData]  = useState(null);
+  const [insumosReady, setInsumosReady] = useState(false);
 
   useEffect(() => {
-    fetchInsumosGasoil()
-      .then(({ data: d }) => { if (d?.gasoil) setGasoilData(d); })
-      .finally(() => setGasoilReady(true));
+    fetchInsumosAll()
+      .then(({ data: d }) => { if (d?.gasoil || d?.nafta) setInsumosData(d); })
+      .finally(() => setInsumosReady(true));
   }, []);
 
-  // Valor del Gasoil G2 zona núcleo para el KPI del header
-  const g2Nucleo = gasoilData?.gasoil?.g2?.nucleo?.promedio ?? null;
-  const fmtKpi   = v => v == null ? '…' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
+  // KPI shortcuts
+  const g2Nucleo     = insumosData?.gasoil?.g2?.nucleo?.promedio ?? null;
+  const naftaSuper   = insumosData?.nafta?.super?.nucleo?.promedio ?? null;
+  const naftaPremium = insumosData?.nafta?.premium?.nucleo?.promedio ?? null;
+  const gnc          = insumosData?.nafta?.gnc?.pais?.promedio ?? null;
+  const fmtKpi = v => v == null ? '…' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
 
   return (
     <div className="page-enter">
@@ -691,43 +688,43 @@ export function InsumosPage({ goPage }) {
         </div>
         <div className="ph-right">
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em' }}>
-            {gasoilReady
-              ? (gasoilData ? 'LIVE · Sec. de Energía' : 'FALLBACK · sin conexión')
+            {insumosReady
+              ? (insumosData ? 'LIVE · Sec. de Energía' : 'FALLBACK · sin conexión')
               : 'cargando…'}
           </div>
         </div>
       </div>
 
-      {/* KPIs resumen */}
+      {/* KPIs resumen — 4 combustibles reales */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
         {[
           {
-            label: 'Urea Gran.',
-            val:   '$484.000',          // sigue mock hasta conectar fertilizantes
-            delta: '−1,6% hoy',
-            cls:   'dn',
-            sub:   'ARS/tn · zona núcleo · mock',
-          },
-          {
             label: 'Gasoil G2',
-            val:   fmtKpi(g2Nucleo),   // ← dato real de la API
-            delta: gasoilReady && g2Nucleo ? 'zona núcleo · prom. real' : '…',
+            val:   fmtKpi(g2Nucleo),
+            delta: insumosReady && g2Nucleo ? 'zona núcleo · prom.' : '…',
             cls:   'fl',
-            sub:   'ARS/litro · surtidor',
+            sub:   'ARS/litro · surtidor · real',
           },
           {
-            label: 'Soja/Urea',
-            val:   '0,94',
-            delta: 'bajo umbral 1,0',
-            cls:   'dn',
-            sub:   'tn soja/tn urea · mock',
+            label: 'Nafta Súper',
+            val:   fmtKpi(naftaSuper),
+            delta: insumosReady && naftaSuper ? 'zona núcleo · prom.' : '…',
+            cls:   'fl',
+            sub:   'ARS/litro · surtidor · real',
           },
           {
-            label: 'Maíz/Urea',
-            val:   '0,52',
-            delta: 'hace 1m: 0,54',
-            cls:   'dn',
-            sub:   'tn maíz/tn urea · mock',
+            label: 'Nafta Premium',
+            val:   fmtKpi(naftaPremium),
+            delta: insumosReady && naftaPremium ? 'zona núcleo · prom.' : '…',
+            cls:   'fl',
+            sub:   'ARS/litro · surtidor · real',
+          },
+          {
+            label: 'GNC',
+            val:   fmtKpi(gnc),
+            delta: insumosReady && gnc ? 'promedio país' : '…',
+            cls:   'fl',
+            sub:   'ARS/m³ · surtidor · real',
           },
         ].map(item => (
           <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
@@ -755,7 +752,7 @@ export function InsumosPage({ goPage }) {
       {/* Tab content */}
       <div className="section">
         {tab === 'fertilizantes' && <TabFertilizantes />}
-        {tab === 'combustibles'  && <TabCombustibles prefetch={{ data: gasoilData, ready: gasoilReady }} />}
+        {tab === 'combustibles'  && <TabCombustibles prefetch={{ data: insumosData, ready: insumosReady }} />}
         {tab === 'relaciones'    && <TabRelaciones />}
       </div>
     </div>

@@ -10,7 +10,7 @@
 //   6 = Nafta premium (>95 Ron)
 //  19 = GNC ($/m³)
 
-const CKAN_BASE = 'http://datos.energia.gob.ar/api/3/action/datastore_search';
+const CKAN_BASE = 'https://datos.energia.gob.ar/api/3/action/datastore_search';
 const RES_ID    = '80ac25de-a44a-4445-9215-090cf55cfda5';
 
 const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];

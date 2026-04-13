@@ -364,8 +364,13 @@ function CombustibleLineChart({ series, labels, color }) {
 
       // Area fill
       const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      grad.addColorStop(0, color.replace(')', ',0.18)').replace('rgb', 'rgba'));
-      grad.addColorStop(1, color.replace(')', ',0.01)').replace('rgb', 'rgba'));
+      // Convierte cualquier formato rgb/rgba a rgba con la opacidad deseada
+      const toRgba = (c, alpha) => {
+        const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : c;
+      };
+      grad.addColorStop(0, toRgba(color, 0.18));
+      grad.addColorStop(1, toRgba(color, 0.01));
       ctx.beginPath();
       ctx.moveTo(px(0), py(vals[0]));
       vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });

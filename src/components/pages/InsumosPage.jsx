@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fetchInsumosAll } from '../../services/api';
 
 // ── Mock data ─────────────────────────────────────────────────
@@ -307,6 +307,122 @@ function HistLineChart() {
   );
 }
 
+// ── Canvas chart para combustibles (estética MacroPage) ───────
+
+function CombustibleLineChart({ series, labels, color }) {
+  const canvasRef = useRef(null);
+  const [tooltip, setTooltip] = useState('');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !series?.length) return;
+    const data = series;
+
+    const draw = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width  = rect.width  * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = rect.height;
+      const pad = { t: 18, r: 16, b: 32, l: 58 };
+      const vals  = data.map(Number);
+      const vmin  = Math.min(...vals) * 0.96;
+      const vmax  = Math.max(...vals) * 1.03;
+      const range = vmax - vmin || 1;
+      const n     = data.length;
+      const px    = i => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
+      const py    = v => pad.t + (H - pad.t - pad.b) - ((v - vmin) / range) * (H - pad.t - pad.b);
+
+      // Grid lines
+      for (let i = 0; i <= 4; i++) {
+        const v = vmin + (range * i) / 4;
+        const y = py(v);
+        ctx.strokeStyle = i === 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash(i === 0 ? [] : [3, 5]);
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(90,101,133,0.75)';
+        ctx.font = '9px JetBrains Mono,monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('$' + Math.round(v).toLocaleString('es-AR'), pad.l - 5, y + 3);
+      }
+
+      // X labels
+      ctx.fillStyle = 'rgba(90,101,133,0.6)';
+      ctx.font = '8px JetBrains Mono,monospace';
+      ctx.textAlign = 'center';
+      if (labels?.length) {
+        labels.forEach((l, i) => {
+          if (i === 0 || i === n - 1 || i % Math.max(1, Math.floor(n / 6)) === 0) {
+            ctx.fillText(l, px(i), H - pad.b + 13);
+          }
+        });
+      }
+
+      // Area fill
+      const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
+      grad.addColorStop(0, color.replace(')', ',0.18)').replace('rgb', 'rgba'));
+      grad.addColorStop(1, color.replace(')', ',0.01)').replace('rgb', 'rgba'));
+      ctx.beginPath();
+      ctx.moveTo(px(0), py(vals[0]));
+      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
+      ctx.lineTo(px(n - 1), H - pad.b);
+      ctx.lineTo(px(0), H - pad.b);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(px(0), py(vals[0]));
+      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Last point dot
+      const lv = vals[n - 1];
+      ctx.beginPath();
+      ctx.arc(px(n - 1), py(lv), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+
+    draw();
+    const ro = new ResizeObserver(draw);
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [series, labels, color]);
+
+  const handleMouseMove = e => {
+    if (!series?.length) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const n = series.length;
+    const xS = (rect.width - 74) / (n - 1 || 1);
+    const idx = Math.max(0, Math.min(n - 1, Math.round((e.clientX - rect.left - 58) / xS)));
+    const v = series[idx];
+    const l = labels?.[idx] ?? `Período ${idx + 1}`;
+    if (v != null) setTooltip(`${l}  ·  $ ${Math.round(v).toLocaleString('es-AR')}`);
+  };
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '180px', display: 'block', cursor: 'crosshair' }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setTooltip('')}
+      />
+      <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text2)', minHeight: 14, marginTop: 6, textAlign: 'center' }}>{tooltip}</div>
+    </div>
+  );
+}
+
 // ── Tab: Combustibles ─────────────────────────────────────────
 
 function TabCombustibles({ prefetch = {} }) {
@@ -359,7 +475,24 @@ function TabCombustibles({ prefetch = {} }) {
   const np  = nafta?.premium;
   const gnc = nafta?.gnc;
 
-  const histGasoil = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1460, 1630, g2?.nucleo?.promedio ?? 1630];
+  // Fecha del último dato del informe (no de la consulta a la API)
+  const fechaInforme = fecha
+    ? new Date(fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : null;
+
+  // Histórico mock G2 (12 meses) — se reemplaza con datos reales cuando la API los provea
+  const histG2     = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1460, 1630, g2?.nucleo?.promedio ?? 1630];
+  const histLabels = HIST_MESES;
+
+  // Delta vs valor anterior en historial (último vs penúltimo)
+  const g2Prev  = histG2[histG2.length - 2];
+  const g2Cur   = histG2[histG2.length - 1];
+  const g2Delta = g2Cur != null && g2Prev != null ? g2Cur - g2Prev : null;
+  const g2DeltaPct = g2Delta != null && g2Prev ? ((g2Delta / g2Prev) * 100) : null;
+
+  // Delta pais vs nucleo como señal de dispersión geográfica
+  const g2PaisDelta  = g2?.pais?.promedio  != null && g2?.nucleo?.promedio  != null ? g2.pais.promedio  - g2.nucleo.promedio  : null;
+  const nsPaisDelta  = ns?.pais?.promedio  != null && ns?.nucleo?.promedio  != null ? ns.pais.promedio  - ns.nucleo.promedio  : null;
 
   const cards = [
     {
@@ -367,11 +500,12 @@ function TabCombustibles({ prefetch = {} }) {
       nombre: 'Gasoil G2',
       subtitulo: 'Más usado en agro · 92% consumo campo',
       ambito: 'Zona Núcleo',
-      color: 'var(--accent)',
+      color: 'rgba(91,156,246,0.85)',
       valor: g2?.nucleo?.promedio,
-      mediana: g2?.nucleo?.mediana,
-      min: g2?.nucleo?.min,
-      max: g2?.nucleo?.max,
+      pais: g2?.pais?.promedio,
+      paisDelta: g2PaisDelta,
+      delta: g2Delta,
+      deltaPct: g2DeltaPct,
       n: g2?.nucleo?.n,
     },
     {
@@ -379,11 +513,12 @@ function TabCombustibles({ prefetch = {} }) {
       nombre: 'Gasoil G3',
       subtitulo: 'Premium · Euro V',
       ambito: 'Zona Núcleo',
-      color: '#4d9ef0',
+      color: 'rgba(77,158,240,0.85)',
       valor: g3?.nucleo?.promedio,
-      mediana: g3?.nucleo?.mediana,
-      min: g3?.nucleo?.min,
-      max: g3?.nucleo?.max,
+      pais: g3?.pais?.promedio,
+      paisDelta: g3?.pais?.promedio != null && g3?.nucleo?.promedio != null ? g3.pais.promedio - g3.nucleo.promedio : null,
+      delta: null,
+      deltaPct: null,
       n: g3?.nucleo?.n,
     },
     {
@@ -391,11 +526,12 @@ function TabCombustibles({ prefetch = {} }) {
       nombre: 'Nafta Súper',
       subtitulo: '92–95 RON · uso utilitarios',
       ambito: 'Zona Núcleo',
-      color: '#56c97a',
+      color: 'rgba(86,201,122,0.85)',
       valor: ns?.nucleo?.promedio,
-      mediana: ns?.nucleo?.mediana,
-      min: ns?.nucleo?.min,
-      max: ns?.nucleo?.max,
+      pais: ns?.pais?.promedio,
+      paisDelta: nsPaisDelta,
+      delta: null,
+      deltaPct: null,
       n: ns?.nucleo?.n,
     },
     {
@@ -403,52 +539,105 @@ function TabCombustibles({ prefetch = {} }) {
       nombre: 'Nafta Premium',
       subtitulo: '+95 RON · alta compresión',
       ambito: 'Zona Núcleo',
-      color: '#c792ea',
+      color: 'rgba(199,146,234,0.85)',
       valor: np?.nucleo?.promedio,
-      mediana: np?.nucleo?.mediana,
-      min: np?.nucleo?.min,
-      max: np?.nucleo?.max,
+      pais: np?.pais?.promedio,
+      paisDelta: np?.pais?.promedio != null && np?.nucleo?.promedio != null ? np.pais.promedio - np.nucleo.promedio : null,
+      delta: null,
+      deltaPct: null,
       n: np?.nucleo?.n,
     },
   ];
 
-  const fechaDisplay = fecha
-    ? new Date(fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    : 'vigentes';
-
   return (
     <div>
-      <div className="alert-strip info" style={{ marginBottom: 20 }}>
-        <span className="alert-icon">✓</span>
-        <span className="alert-text">
-          Precios reales en surtidor · <strong>{fuente}</strong> · Vigentes al {fechaDisplay} · Actualización cada hora
-        </span>
-      </div>
-
-      {/* KPI cards — formato .stat consistente con el resto de la app */}
-      <div className="grid grid-4" style={{ marginBottom: 28 }}>
-        {cards.map(c => (
-          <div key={c.id} className="stat" style={{ cursor: 'default' }}>
-            <div className="stat-label">
-              <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0, display: 'inline-block' }} />
-                {c.nombre}
-              </span>
-              <span className="stat-badge info">{c.ambito}</span>
+      {/* Header con fecha del dato del informe */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, padding: '10px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Fuente</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>{fuente ?? 'Secretaría de Energía'}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {fechaInforme && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Último dato del informe</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'var(--acc-bg)', border: '1px solid rgba(91,156,246,.22)', padding: '2px 10px', borderRadius: 5 }}>{fechaInforme}</span>
             </div>
-            <div className="stat-val">{fmt(c.valor)}</div>
-            <div className="stat-delta fl" style={{ marginBottom: 8 }}>ARS / litro · surtidor real</div>
-            <div className="stat-meta">{c.subtitulo}</div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Actualización</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>cada hora</span>
           </div>
-        ))}
+        </div>
       </div>
 
+      {/* KPI cards con delta y fecha */}
+      <div className="grid grid-4" style={{ marginBottom: 28 }}>
+        {cards.map(c => {
+          const deltaUp  = c.delta != null ? c.delta > 0 : null;
+          const deltaTxt = c.deltaPct != null
+            ? (c.deltaPct > 0 ? '+' : '') + c.deltaPct.toFixed(1).replace('.', ',') + '%'
+            : null;
+          return (
+            <div key={c.id} className="stat" style={{ cursor: 'default' }}>
+              {/* Label + fecha */}
+              <div className="stat-label">
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0, display: 'inline-block' }} />
+                  {c.nombre}
+                </span>
+                {fechaInforme && (
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: 8, fontWeight: 700,
+                    color: 'var(--accent)', background: 'var(--acc-bg)',
+                    border: '1px solid rgba(91,156,246,.2)', padding: '1px 6px', borderRadius: 4,
+                  }}>{fechaInforme}</span>
+                )}
+              </div>
+
+              {/* Precio principal */}
+              <div className="stat-val">{fmt(c.valor)}</div>
+
+              {/* Delta vs mes anterior */}
+              {deltaTxt != null ? (
+                <div style={{
+                  fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600,
+                  color: deltaUp ? 'var(--red)' : 'var(--green)',
+                  background: deltaUp ? 'var(--red-bg)' : 'var(--green-bg)',
+                  padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginBottom: 8,
+                }}>
+                  {deltaUp ? '▲' : '▼'} {deltaTxt} vs mes ant.
+                </div>
+              ) : (
+                <div className="stat-delta fl" style={{ marginBottom: 8 }}>ARS / litro</div>
+              )}
+
+              <div className="stat-meta">{c.subtitulo}</div>
+
+              {/* Dispersión núcleo vs país */}
+              {c.paisDelta != null && (
+                <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Promedio país</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--white)' }}>
+                    {fmt(c.pais)}
+                    <span style={{ fontSize: 9, color: c.paisDelta > 0 ? 'var(--red)' : 'var(--green)', marginLeft: 6 }}>
+                      {c.paisDelta > 0 ? '+' : ''}{Math.round(c.paisDelta).toLocaleString('es-AR')}
+                    </span>
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* GNC aparte */}
       {gnc?.pais?.promedio && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
           {[
-            { label: 'GNC · Promedio País',   val: fmt(gnc.pais.promedio),  sub: 'ARS/m³' },
-            { label: 'GNC · Mediana',         val: fmt(gnc.pais.mediana),   sub: 'ARS/m³' },
-            { label: 'GNC · Dispersión',      val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones` },
+            { label: 'GNC · Promedio País',  val: fmt(gnc.pais.promedio),  sub: 'ARS/m³' },
+            { label: 'GNC · Mediana',        val: fmt(gnc.pais.mediana),   sub: 'ARS/m³' },
+            { label: 'GNC · Dispersión',     val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones` },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6 }}>{item.label}</div>
@@ -459,6 +648,27 @@ function TabCombustibles({ prefetch = {} }) {
         </div>
       )}
 
+      {/* Gráfico evolución G2 — estética MacroPage */}
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, padding: '18px 20px', marginBottom: 28 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+              Gasoil G2 · Zona Núcleo · Evolución ARS/litro
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>Últimos 12 meses · hover para ver valor</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 20, height: 2, background: 'rgba(91,156,246,0.85)', borderRadius: 1 }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>Promedio zona núcleo</span>
+          </div>
+        </div>
+        <CombustibleLineChart series={histG2} labels={histLabels} color="rgba(91,156,246,0.85)" />
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginTop: 4, textAlign: 'right' }}>
+          Fuente: {fuente ?? 'Sec. de Energía'} · datos mock históricos · datos reales requieren endpoint de serie temporal
+        </div>
+      </div>
+
+      {/* Tabla detalle */}
       <div className="section-title">Detalle completo por producto y ámbito</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <div className="tbl-scroll">
@@ -503,76 +713,12 @@ function TabCombustibles({ prefetch = {} }) {
         </div>
       </div>
 
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
-            Evolución Gasoil G2 · ARS/litro · zona núcleo · últ. 12 meses
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 20, height: 2, background: 'var(--accent)', borderRadius: 1 }} />
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>Gasoil G2 promedio</span>
-          </div>
-        </div>
-        <GasoilChart data={histGasoil} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
-          {[
-            { label: 'G2 · Zona Núcleo',     val: fmt(g2?.nucleo?.promedio) },
-            { label: 'G3 · Zona Núcleo',     val: fmt(g3?.nucleo?.promedio) },
-            { label: 'Nafta Súper · Núcleo', val: fmt(ns?.nucleo?.promedio) },
-            { label: 'GNC · País',           val: fmt(gnc?.pais?.promedio)  },
-          ].map(item => (
-            <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: 'var(--white)' }}>{item.val}</div>
-            </div>
-          ))}
-        </div>
-      </div>
       <div className="source">Fuente: {fuente} · Zona Núcleo: Santa Fe, Córdoba, Bs. As., Entre Ríos, La Pampa</div>
     </div>
   );
 }
 
-function GasoilChart({ data }) {
-  const W = 900, H = 140, PAD = { t: 10, r: 20, b: 24, l: 52 };
-  const iW = W - PAD.l - PAD.r;
-  const iH = H - PAD.t - PAD.b;
-  const minV = Math.min(...data) * 0.95;
-  const maxV = Math.max(...data) * 1.02;
-  const range = maxV - minV;
-  const toX = i => PAD.l + (i / (data.length - 1)) * iW;
-  const toY = v => PAD.t + iH - ((v - minV) / range) * iH;
-  const pts  = data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
-  const area = `${pts} ${toX(data.length - 1)},${H - PAD.b} ${toX(0)},${H - PAD.b}`;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 140, display: 'block' }}>
-      <defs>
-        <linearGradient id="gasoil-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor="var(--accent)" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0, 0.5, 1].map((t, i) => {
-        const y = PAD.t + iH * t;
-        const v = Math.round(maxV - t * range);
-        return (
-          <g key={i}>
-            <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke="var(--line)" strokeWidth="1" />
-            <text x={PAD.l - 6} y={y + 4} textAnchor="end" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">{(v / 1000).toFixed(1)}k</text>
-          </g>
-        );
-      })}
-      {HIST_MESES.map((m, i) => (
-        <text key={m} x={toX(i)} y={H - 6} textAnchor="middle" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">{m}</text>
-      ))}
-      <polygon points={area} fill="url(#gasoil-grad)" />
-      <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" />
-      {data.map((v, i) => (
-        <circle key={i} cx={toX(i)} cy={toY(v)} r="2.5" fill="var(--accent)" opacity="0.8" />
-      ))}
-    </svg>
-  );
-}
+
 
 // ── Tab: Relaciones ───────────────────────────────────────────
 

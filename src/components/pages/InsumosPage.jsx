@@ -226,7 +226,7 @@ function TabFertilizantes() {
 
       {/* Gráfico historial o placeholder */}
       {activeCard
-        ? <InsumosHistorialChart card={activeCard} />
+        ? <InsumosHistorialChart card={activeCard} onClose={() => setSelectedId(null)} />
         : (
           <div style={{ marginTop: 16, background: 'var(--bg1)', border: '1px dashed var(--line2)', borderRadius: 12, padding: '28px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -286,7 +286,7 @@ function TabFertilizantes() {
 
 const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-function InsumosHistorialChart({ card }) {
+function InsumosHistorialChart({ card, onClose }) {
   const canvasRef = useRef(null);
   const [tooltip, setTooltip] = useState('');
   const [range, setRange]     = useState('MAX');
@@ -445,7 +445,7 @@ function InsumosHistorialChart({ card }) {
           </div>
           <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>{card.ambito} · {card.unidad} · hover para ver valor</div>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {['3M', '6M', '1A', 'MAX'].map(r => (
             <button key={r} onClick={() => setRange(r)}
               style={{
@@ -458,6 +458,20 @@ function InsumosHistorialChart({ card }) {
               {r}
             </button>
           ))}
+          {onClose && (
+            <button onClick={onClose}
+              style={{
+                marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 13, lineHeight: 1,
+                padding: '2px 7px', borderRadius: 4,
+                border: '1px solid var(--line2)', background: 'transparent',
+                color: 'var(--text3)', cursor: 'pointer', transition: 'all .12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = 'var(--red)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.color = 'var(--text3)'; }}
+              title="Cerrar gráfico">
+              ×
+            </button>
+          )}
         </div>
       </div>
       {series.length === 0
@@ -643,7 +657,7 @@ function TabCombustibles({ prefetch = {} }) {
 
       {/* Gráfico historial o placeholder */}
       {activeCard
-        ? <InsumosHistorialChart card={activeCard} />
+        ? <InsumosHistorialChart card={activeCard} onClose={() => setSelectedCard(null)} />
         : (
           <div style={{ marginTop: 16, background: 'var(--bg1)', border: '1px dashed var(--line2)', borderRadius: 12, padding: '28px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

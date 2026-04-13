@@ -16,6 +16,7 @@ const FERTILIZANTES = [
     relStatus: 'warn',
     nota: 'Nitrógeno · aplicación directa',
     hist: [280, 295, 310, 330, 355, 370, 390, 410, 430, 455, 476, 484],
+    uso: 'Cobertura nitrogenada · trigo, maíz, pasturas',
   },
   {
     id: 'map',
@@ -29,6 +30,7 @@ const FERTILIZANTES = [
     relStatus: 'fl',
     nota: 'Fosfato monoamónico · siembra',
     hist: [310, 325, 340, 365, 385, 405, 430, 460, 500, 530, 572, 572],
+    uso: 'Arranque fosforado · siembra fina y gruesa',
   },
   {
     id: 'dap',
@@ -42,6 +44,7 @@ const FERTILIZANTES = [
     relStatus: 'fl',
     nota: 'Fosfato diamónico · referencia',
     hist: [300, 315, 332, 350, 368, 390, 415, 445, 490, 520, 544, 548],
+    uso: 'Alternativa al MAP · mayor N disponible',
   },
   {
     id: 'uan',
@@ -55,14 +58,9 @@ const FERTILIZANTES = [
     relStatus: 'fl',
     nota: 'Solución nitrogenada · fertiriego',
     hist: [170, 180, 195, 210, 225, 240, 255, 275, 290, 302, 312, 312],
+    uso: 'Fertiriego y foliar · trigo y maíz',
   },
 ];
-
-
-// COMBUSTIBLES — datos vienen de /api/insumos (Sec. de Energía)
-// Ver TabCombustibles para el fetch
-
-
 
 const RELACIONES = [
   {
@@ -145,7 +143,6 @@ function Pill({ d, children }) {
   return <span className={`pill ${d}`}>{children}</span>;
 }
 
-// Mini SVG sparkline
 function Spark({ data, color }) {
   if (!data || data.length < 2) return null;
   const min  = Math.min(...data);
@@ -167,35 +164,39 @@ function Spark({ data, color }) {
 function TabFertilizantes() {
   return (
     <div>
-      {/* Overview cards */}
       <div className="grid grid-4" style={{ marginBottom: 28 }}>
         {FERTILIZANTES.map(f => {
           const d = dir(f.varPct);
           const varTxt = (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%';
+          const var12m = Math.round(((f.hist[f.hist.length - 1] - f.hist[0]) / f.hist[0]) * 100);
           return (
             <div key={f.id} className="stat" style={{ cursor: 'default' }}>
-              <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div className="stat-label">
                 <span>{f.nombre}</span>
+                <span className={`stat-badge ${d}`}>{varTxt}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{fmtARS(f.ars)}</div>
-                <span style={{
-                  fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600,
-                  color:      d === 'up' ? 'var(--green)' : d === 'dn' ? 'var(--red)' : 'var(--text3)',
-                  background: d === 'up' ? 'var(--green-bg)' : d === 'dn' ? 'var(--red-bg)' : 'transparent',
-                  padding:    d === 'fl' ? '0' : '2px 8px',
-                  borderRadius: '4px',
-                }}>
-                  {varTxt}
-                </span>
+              <div className="stat-val">{fmtARS(f.ars)}</div>
+              {f.deltaArs !== 0 ? (
+                <div className={`stat-delta ${d}`}>
+                  {d === 'up' ? '▲' : '▼'} {fmtARS(Math.abs(f.deltaArs))} vs sem. ant.
+                </div>
+              ) : (
+                <div className="stat-delta fl">— Sin cambios esta semana</div>
+              )}
+              <div className="stat-meta" style={{ marginTop: 6 }}>{fmtUSD(f.usd)}/tn · Fórmula {f.formula}</div>
+              <div className="stat-meta">{f.uso}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                <Spark data={f.hist} color={d === 'dn' ? 'var(--red)' : d === 'up' ? 'var(--green)' : 'var(--text3)'} />
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginBottom: 2 }}>var. 12m</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: 'var(--red)' }}>+{var12m}%</div>
+                </div>
               </div>
-              <div className="stat-meta">{fmtUSD(f.usd)}/tn · Fórmula {f.formula}</div>
             </div>
           );
         })}
       </div>
 
-      {/* Tabla detallada */}
       <div className="section-title">Detalle · zona núcleo · ARS/tonelada</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <div className="tbl-scroll">
@@ -207,8 +208,8 @@ function TabFertilizantes() {
                 <th className="r">ARS/tn</th>
                 <th className="r">USD/tn</th>
                 <th className="r">Var. %</th>
-                <th className="r">Tendencia</th>
-                <th>Uso</th>
+                <th className="r">Tendencia 12m</th>
+                <th>Uso principal</th>
               </tr>
             </thead>
             <tbody>
@@ -233,7 +234,6 @@ function TabFertilizantes() {
         </div>
       </div>
 
-      {/* Histórico evolución */}
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
@@ -268,51 +268,38 @@ function TabFertilizantes() {
   );
 }
 
-// Mini line chart puro SVG (sin canvas)
 function HistLineChart() {
   const W = 900, H = 180, PAD = { t: 12, r: 20, b: 28, l: 52 };
   const iW = W - PAD.l - PAD.r;
   const iH = H - PAD.t - PAD.b;
-
   const series = [
     { data: FERTILIZANTES[0].hist, color: '#f0d050' },
     { data: FERTILIZANTES[1].hist, color: '#4d9ef0' },
     { data: FERTILIZANTES[2].hist, color: '#56c97a' },
     { data: FERTILIZANTES[3].hist, color: '#e07090' },
   ];
-
   const all   = series.flatMap(s => s.data);
   const minV  = Math.min(...all);
   const maxV  = Math.max(...all);
   const range = maxV - minV || 1;
-
   const toX = i  => PAD.l + (i / (HIST_MESES.length - 1)) * iW;
   const toY = v  => PAD.t + iH - ((v - minV) / range) * iH;
-
   const gridLines = 4;
-
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 180, display: 'block' }}>
-      {/* Grid lines */}
       {Array.from({ length: gridLines + 1 }).map((_, i) => {
         const y = PAD.t + (iH / gridLines) * i;
         const v = Math.round(maxV - (i / gridLines) * range);
         return (
           <g key={i}>
             <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke="var(--line)" strokeWidth="1" />
-            <text x={PAD.l - 6} y={y + 4} textAnchor="end" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">
-              {(v / 1000).toFixed(0)}k
-            </text>
+            <text x={PAD.l - 6} y={y + 4} textAnchor="end" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">{(v / 1000).toFixed(0)}k</text>
           </g>
         );
       })}
-
-      {/* Month labels */}
       {HIST_MESES.map((m, i) => (
         <text key={m} x={toX(i)} y={H - 6} textAnchor="middle" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">{m}</text>
       ))}
-
-      {/* Series lines */}
       {series.map((s, si) => {
         const pts = s.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
         return (
@@ -382,25 +369,55 @@ function TabCombustibles({ prefetch = {} }) {
 
   const histGasoil = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1460, 1630, g2?.nucleo?.promedio ?? 1630];
 
-  // KPI cards: los 4 principales, zona núcleo
   const cards = [
-    { id: 'g2-n',  nombre: 'Gasoil G2 · Zona Núcleo',    subtitulo: 'Más usado en agro',        valor: fmt(g2?.nucleo?.promedio),  meta: `Mediana ${fmt(g2?.nucleo?.mediana)} · n=${fmtN(g2?.nucleo?.n)}` },
-    { id: 'g3-n',  nombre: 'Gasoil G3 · Zona Núcleo',    subtitulo: 'Premium / Euro',            valor: fmt(g3?.nucleo?.promedio),  meta: `Mediana ${fmt(g3?.nucleo?.mediana)} · n=${fmtN(g3?.nucleo?.n)}` },
-    { id: 'ns-n',  nombre: 'Nafta Súper · Zona Núcleo',  subtitulo: '92-95 Ron',                 valor: fmt(ns?.nucleo?.promedio),  meta: `Mediana ${fmt(ns?.nucleo?.mediana)} · n=${fmtN(ns?.nucleo?.n)}` },
-    { id: 'np-n',  nombre: 'Nafta Premium · Zona Núcleo',subtitulo: '+95 Ron',                   valor: fmt(np?.nucleo?.promedio),  meta: `Mediana ${fmt(np?.nucleo?.mediana)} · n=${fmtN(np?.nucleo?.n)}` },
-  ];
-
-  // Tabla completa (gasoil + nafta + GNC, por ámbito)
-  const filas = [
-    { producto: 'Gasoil G2',      unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio,  mediana: g2?.nucleo?.mediana,  min: g2?.nucleo?.min,  max: g2?.nucleo?.max,  n: g2?.nucleo?.n  },
-    { producto: 'Gasoil G2',      unidad: 'ARS/L', ambito: 'País',        precio: g2?.pais?.promedio,    mediana: g2?.pais?.mediana,    min: g2?.pais?.min,    max: g2?.pais?.max,    n: g2?.pais?.n    },
-    { producto: 'Gasoil G3',      unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio,  mediana: g3?.nucleo?.mediana,  min: g3?.nucleo?.min,  max: g3?.nucleo?.max,  n: g3?.nucleo?.n  },
-    { producto: 'Gasoil G3',      unidad: 'ARS/L', ambito: 'País',        precio: g3?.pais?.promedio,    mediana: g3?.pais?.mediana,    min: g3?.pais?.min,    max: g3?.pais?.max,    n: g3?.pais?.n    },
-    { producto: 'Nafta Súper',    unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: ns?.nucleo?.promedio,  mediana: ns?.nucleo?.mediana,  min: ns?.nucleo?.min,  max: ns?.nucleo?.max,  n: ns?.nucleo?.n  },
-    { producto: 'Nafta Súper',    unidad: 'ARS/L', ambito: 'País',        precio: ns?.pais?.promedio,    mediana: ns?.pais?.mediana,    min: ns?.pais?.min,    max: ns?.pais?.max,    n: ns?.pais?.n    },
-    { producto: 'Nafta Premium',  unidad: 'ARS/L', ambito: 'Zona Núcleo', precio: np?.nucleo?.promedio,  mediana: np?.nucleo?.mediana,  min: np?.nucleo?.min,  max: np?.nucleo?.max,  n: np?.nucleo?.n  },
-    { producto: 'Nafta Premium',  unidad: 'ARS/L', ambito: 'País',        precio: np?.pais?.promedio,    mediana: np?.pais?.mediana,    min: np?.pais?.min,    max: np?.pais?.max,    n: np?.pais?.n    },
-    { producto: 'GNC',            unidad: 'ARS/m³',ambito: 'País',        precio: gnc?.pais?.promedio,   mediana: gnc?.pais?.mediana,   min: gnc?.pais?.min,   max: gnc?.pais?.max,   n: gnc?.pais?.n   },
+    {
+      id: 'g2-n',
+      nombre: 'Gasoil G2',
+      subtitulo: 'Más usado en agro · 92% consumo campo',
+      ambito: 'Zona Núcleo',
+      color: 'var(--accent)',
+      valor: g2?.nucleo?.promedio,
+      mediana: g2?.nucleo?.mediana,
+      min: g2?.nucleo?.min,
+      max: g2?.nucleo?.max,
+      n: g2?.nucleo?.n,
+    },
+    {
+      id: 'g3-n',
+      nombre: 'Gasoil G3',
+      subtitulo: 'Premium · Euro V',
+      ambito: 'Zona Núcleo',
+      color: '#4d9ef0',
+      valor: g3?.nucleo?.promedio,
+      mediana: g3?.nucleo?.mediana,
+      min: g3?.nucleo?.min,
+      max: g3?.nucleo?.max,
+      n: g3?.nucleo?.n,
+    },
+    {
+      id: 'ns-n',
+      nombre: 'Nafta Súper',
+      subtitulo: '92–95 RON · uso utilitarios',
+      ambito: 'Zona Núcleo',
+      color: '#56c97a',
+      valor: ns?.nucleo?.promedio,
+      mediana: ns?.nucleo?.mediana,
+      min: ns?.nucleo?.min,
+      max: ns?.nucleo?.max,
+      n: ns?.nucleo?.n,
+    },
+    {
+      id: 'np-n',
+      nombre: 'Nafta Premium',
+      subtitulo: '+95 RON · alta compresión',
+      ambito: 'Zona Núcleo',
+      color: '#c792ea',
+      valor: np?.nucleo?.promedio,
+      mediana: np?.nucleo?.mediana,
+      min: np?.nucleo?.min,
+      max: np?.nucleo?.max,
+      n: np?.nucleo?.n,
+    },
   ];
 
   const fechaDisplay = fecha
@@ -416,21 +433,36 @@ function TabCombustibles({ prefetch = {} }) {
         </span>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — formato .stat consistente con el resto de la app */}
       <div className="grid grid-4" style={{ marginBottom: 28 }}>
         {cards.map(c => (
           <div key={c.id} className="stat" style={{ cursor: 'default' }}>
-            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>{c.nombre}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-              <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>{c.valor}</div>
+            <div className="stat-label">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0, display: 'inline-block' }} />
+                {c.nombre}
+              </span>
+              <span className="stat-badge info">{c.ambito}</span>
             </div>
+            <div className="stat-val">{fmt(c.valor)}</div>
+            <div className="stat-delta fl" style={{ marginBottom: 8 }}>ARS / litro · surtidor real</div>
             <div className="stat-meta">{c.subtitulo}</div>
-            <div className="stat-meta">{c.meta}</div>
+            {c.mediana != null && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 2 }}>Mediana</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--white)' }}>{fmt(c.mediana)}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 2 }}>N est.</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>{fmtN(c.n)}</div>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* GNC aparte — unidad diferente */}
       {gnc?.pais?.promedio && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
           {[
@@ -447,7 +479,6 @@ function TabCombustibles({ prefetch = {} }) {
         </div>
       )}
 
-      {/* Tabla completa */}
       <div className="section-title">Detalle completo por producto y ámbito</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <div className="tbl-scroll">
@@ -465,7 +496,17 @@ function TabCombustibles({ prefetch = {} }) {
               </tr>
             </thead>
             <tbody>
-              {filas.map((f, i) => (
+              {[
+                { producto: 'Gasoil G2',      unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio, mediana: g2?.nucleo?.mediana, min: g2?.nucleo?.min, max: g2?.nucleo?.max, n: g2?.nucleo?.n },
+                { producto: 'Gasoil G2',      unidad: 'ARS/L',  ambito: 'País',        precio: g2?.pais?.promedio,   mediana: g2?.pais?.mediana,   min: g2?.pais?.min,   max: g2?.pais?.max,   n: g2?.pais?.n   },
+                { producto: 'Gasoil G3',      unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio, mediana: g3?.nucleo?.mediana, min: g3?.nucleo?.min, max: g3?.nucleo?.max, n: g3?.nucleo?.n },
+                { producto: 'Gasoil G3',      unidad: 'ARS/L',  ambito: 'País',        precio: g3?.pais?.promedio,   mediana: g3?.pais?.mediana,   min: g3?.pais?.min,   max: g3?.pais?.max,   n: g3?.pais?.n   },
+                { producto: 'Nafta Súper',    unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: ns?.nucleo?.promedio, mediana: ns?.nucleo?.mediana, min: ns?.nucleo?.min, max: ns?.nucleo?.max, n: ns?.nucleo?.n },
+                { producto: 'Nafta Súper',    unidad: 'ARS/L',  ambito: 'País',        precio: ns?.pais?.promedio,   mediana: ns?.pais?.mediana,   min: ns?.pais?.min,   max: ns?.pais?.max,   n: ns?.pais?.n   },
+                { producto: 'Nafta Premium',  unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: np?.nucleo?.promedio, mediana: np?.nucleo?.mediana, min: np?.nucleo?.min, max: np?.nucleo?.max, n: np?.nucleo?.n },
+                { producto: 'Nafta Premium',  unidad: 'ARS/L',  ambito: 'País',        precio: np?.pais?.promedio,   mediana: np?.pais?.mediana,   min: np?.pais?.min,   max: np?.pais?.max,   n: np?.pais?.n   },
+                { producto: 'GNC',            unidad: 'ARS/m³', ambito: 'País',        precio: gnc?.pais?.promedio,  mediana: gnc?.pais?.mediana,  min: gnc?.pais?.min,  max: gnc?.pais?.max,  n: gnc?.pais?.n  },
+              ].map((f, i) => (
                 <tr key={i}>
                   <td className="bold">{f.producto}</td>
                   <td className="dim mono" style={{ fontSize: 10 }}>{f.unidad}</td>
@@ -482,7 +523,6 @@ function TabCombustibles({ prefetch = {} }) {
         </div>
       </div>
 
-      {/* Evolución gasoil G2 zona núcleo */}
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
@@ -496,10 +536,10 @@ function TabCombustibles({ prefetch = {} }) {
         <GasoilChart data={histGasoil} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
           {[
-            { label: 'G2 · Zona Núcleo',    val: fmt(g2?.nucleo?.promedio) },
-            { label: 'G3 · Zona Núcleo',    val: fmt(g3?.nucleo?.promedio) },
-            { label: 'Nafta Súper · Núcleo',val: fmt(ns?.nucleo?.promedio) },
-            { label: 'GNC · País',          val: fmt(gnc?.pais?.promedio)  },
+            { label: 'G2 · Zona Núcleo',     val: fmt(g2?.nucleo?.promedio) },
+            { label: 'G3 · Zona Núcleo',     val: fmt(g3?.nucleo?.promedio) },
+            { label: 'Nafta Súper · Núcleo', val: fmt(ns?.nucleo?.promedio) },
+            { label: 'GNC · País',           val: fmt(gnc?.pais?.promedio)  },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginBottom: 4 }}>{item.label}</div>
@@ -566,45 +606,73 @@ function TabRelaciones() {
         </span>
       </div>
 
-      {/* Gauge cards */}
-      <div className="gauge-grid" style={{ marginBottom: 28 }}>
-        {RELACIONES.slice(0, 3).map(r => (
-          <div key={r.id} className="gauge-card">
-            <div className="gauge-label">{r.label}</div>
-            <div className="gauge-val-row">
-              <span className="gauge-val" style={{ color: r.color }}>{r.valor}</span>
-              <span className="gauge-unit">{r.unidad}</span>
+      {/* Relaciones Grano / Fertilizante — formato .stat */}
+      <div className="section-title" style={{ marginBottom: 12 }}>Relaciones Grano / Fertilizante</div>
+      <div className="grid grid-3" style={{ marginBottom: 28 }}>
+        {RELACIONES.slice(0, 3).map(r => {
+          const badgeCls = r.status === 'warn' ? 'dn' : r.status === 'mid' ? 'info' : 'up';
+          const prevVal  = parseFloat(r.nota.replace('hace 1m: ', '').replace(',', '.'));
+          const currVal  = typeof r.valor === 'number' ? r.valor : parseFloat(String(r.valor).replace(',', '.'));
+          const delta    = !isNaN(prevVal) && !isNaN(currVal) ? currVal - prevVal : null;
+          return (
+            <div key={r.id} className="stat" style={{ cursor: 'default' }}>
+              <div className="stat-label">
+                <span>{r.label}</span>
+                <span className={`stat-badge ${badgeCls}`}>{r.statusLabel}</span>
+              </div>
+              <div className="stat-val" style={{ color: r.color, fontSize: 28 }}>{r.valor}</div>
+              <div className="stat-delta fl" style={{ marginBottom: 6 }}>{r.unidad}</div>
+              {delta !== null && (
+                <div className={`stat-delta ${delta > 0 ? 'up' : delta < 0 ? 'dn' : 'fl'}`}>
+                  {delta > 0 ? '▲' : delta < 0 ? '▼' : '—'} {Math.abs(delta).toFixed(2)} vs mes anterior
+                </div>
+              )}
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Presión relativa</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)' }}>{r.barPct}%</span>
+                </div>
+                <div className="gauge-bar-wrap" style={{ marginBottom: 0 }}>
+                  <div className={`gauge-bar-fill ${r.status === 'warn' ? 'warn' : 'mid'}`} style={{ width: `${r.barPct}%` }} />
+                  {r.refPct && <div className="gauge-bar-ref" style={{ left: `${r.refPct}%` }} />}
+                </div>
+              </div>
+              <div className="stat-meta" style={{ marginTop: 8 }}>{r.desc}</div>
             </div>
-            <span className={`gauge-status ${r.status}`}>{r.statusLabel}</span>
-            <div className="gauge-bar-wrap">
-              <div className="gauge-bar-fill warn" style={{ width: `${r.barPct}%` }} />
-              {r.refPct && <div className="gauge-bar-ref" style={{ left: `${r.refPct}%` }} />}
-            </div>
-            <div className="gauge-meta">{r.nota}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="gauge-grid" style={{ marginBottom: 28 }}>
-        {RELACIONES.slice(3).map(r => (
-          <div key={r.id} className="gauge-card">
-            <div className="gauge-label">{r.label}</div>
-            <div className="gauge-val-row">
-              <span className="gauge-val" style={{ color: r.color }}>{r.valor}</span>
-              <span className="gauge-unit">{r.unidad}</span>
+      {/* Relaciones Hacienda / Combustible — formato .stat */}
+      <div className="section-title" style={{ marginBottom: 12 }}>Relaciones Hacienda / Combustible</div>
+      <div className="grid grid-3" style={{ marginBottom: 28 }}>
+        {RELACIONES.slice(3).map(r => {
+          const badgeCls = r.status === 'warn' ? 'dn' : r.status === 'mid' ? 'info' : 'up';
+          return (
+            <div key={r.id} className="stat" style={{ cursor: 'default' }}>
+              <div className="stat-label">
+                <span>{r.label}</span>
+                <span className={`stat-badge ${badgeCls}`}>{r.statusLabel}</span>
+              </div>
+              <div className="stat-val" style={{ color: r.color, fontSize: 28 }}>{r.valor}</div>
+              <div className="stat-delta fl" style={{ marginBottom: 6 }}>{r.unidad}</div>
+              <div className="stat-meta">{r.nota}</div>
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Nivel</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)' }}>{r.barPct}%</span>
+                </div>
+                <div className="gauge-bar-wrap" style={{ marginBottom: 0 }}>
+                  <div className="gauge-bar-fill mid" style={{ width: `${r.barPct}%` }} />
+                </div>
+              </div>
+              <div className="stat-meta" style={{ marginTop: 8 }}>{r.desc}</div>
             </div>
-            <span className={`gauge-status ${r.status}`}>{r.statusLabel}</span>
-            <div className="gauge-bar-wrap">
-              <div className="gauge-bar-fill mid" style={{ width: `${r.barPct}%` }} />
-            </div>
-            <div className="gauge-meta">{r.nota}</div>
-          </div>
-        ))}
-        {/* Spacer para mantener la grilla */}
+          );
+        })}
         <div />
       </div>
 
-      {/* Tabla detallada con descripción */}
       <div className="section-title">Detalle · todas las relaciones</div>
       <div className="tbl-wrap">
         <table>
@@ -637,7 +705,6 @@ function TabRelaciones() {
         </table>
       </div>
 
-      {/* Nota metodológica */}
       <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 8 }}>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>Metodología</div>
         <div style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
@@ -668,16 +735,20 @@ export function InsumosPage({ goPage }) {
       .finally(() => setInsumosReady(true));
   }, []);
 
-  // KPI shortcuts
-  const g2Nucleo     = insumosData?.gasoil?.g2?.nucleo?.promedio ?? null;
-  const naftaSuper   = insumosData?.nafta?.super?.nucleo?.promedio ?? null;
-  const naftaPremium = insumosData?.nafta?.premium?.nucleo?.promedio ?? null;
-  const gnc          = insumosData?.nafta?.gnc?.pais?.promedio ?? null;
+  const g2Nucleo  = insumosData?.gasoil?.g2?.nucleo?.promedio ?? null;
+  const g3Nucleo  = insumosData?.gasoil?.g3?.nucleo?.promedio ?? null;
   const fmtKpi = v => v == null ? '…' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
+
+  // KPIs superiores: 2 fertilizantes clave + 2 combustibles reales
+  const topKpis = [
+    { label: 'Urea Granulada', val: fmtKpi(484000), sub: 'ARS/tn · fertilizante',   delta: '-1,6%',     deltaDir: 'dn', tag: '46-0-0' },
+    { label: 'MAP',            val: fmtKpi(572000), sub: 'ARS/tn · fertilizante',   delta: '= 0%',      deltaDir: 'fl', tag: '11-52-0' },
+    { label: 'Gasoil G2',      val: insumosReady ? fmtKpi(g2Nucleo) : '…', sub: 'ARS/L · zona núcleo', delta: insumosReady && g2Nucleo ? 'LIVE · Sec. Energía' : 'cargando…', deltaDir: 'fl', tag: null },
+    { label: 'Gasoil G3',      val: insumosReady ? fmtKpi(g3Nucleo) : '…', sub: 'ARS/L · zona núcleo', delta: insumosReady && g3Nucleo ? 'LIVE · Sec. Energía' : 'cargando…', deltaDir: 'fl', tag: null },
+  ];
 
   return (
     <div className="page-enter">
-      {/* Header */}
       <div className="ph">
         <div>
           <div className="ph-title">
@@ -695,48 +766,23 @@ export function InsumosPage({ goPage }) {
         </div>
       </div>
 
-      {/* KPIs resumen — 4 combustibles reales */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
-        {[
-          {
-            label: 'Gasoil G2',
-            val:   fmtKpi(g2Nucleo),
-            delta: insumosReady && g2Nucleo ? 'zona núcleo · prom.' : '…',
-            cls:   'fl',
-            sub:   'ARS/litro · surtidor · real',
-          },
-          {
-            label: 'Nafta Súper',
-            val:   fmtKpi(naftaSuper),
-            delta: insumosReady && naftaSuper ? 'zona núcleo · prom.' : '…',
-            cls:   'fl',
-            sub:   'ARS/litro · surtidor · real',
-          },
-          {
-            label: 'Nafta Premium',
-            val:   fmtKpi(naftaPremium),
-            delta: insumosReady && naftaPremium ? 'zona núcleo · prom.' : '…',
-            cls:   'fl',
-            sub:   'ARS/litro · surtidor · real',
-          },
-          {
-            label: 'GNC',
-            val:   fmtKpi(gnc),
-            delta: insumosReady && gnc ? 'promedio país' : '…',
-            cls:   'fl',
-            sub:   'ARS/m³ · surtidor · real',
-          },
-        ].map(item => (
-          <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 8 }}>{item.label}</div>
-            <div style={{ fontFamily: 'var(--display)', fontSize: 22, fontWeight: 700, color: 'var(--white)', letterSpacing: '-.02em', lineHeight: 1, marginBottom: 4 }}>{item.val}</div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: item.cls === 'dn' ? 'var(--red)' : item.cls === 'up' ? 'var(--green)' : 'var(--text3)' }}>{item.delta}</div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginTop: 2 }}>{item.sub}</div>
+      {/* KPIs resumen superiores — formato .stat consistente */}
+      <div className="grid grid-4" style={{ marginBottom: 28 }}>
+        {topKpis.map(k => (
+          <div key={k.label} className="stat" style={{ cursor: 'default' }}>
+            <div className="stat-label">
+              <span>{k.label}</span>
+              {k.tag && (
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', background: 'var(--bg3)', padding: '2px 6px', borderRadius: 4 }}>{k.tag}</span>
+              )}
+            </div>
+            <div className="stat-val">{k.val}</div>
+            <div className={`stat-delta ${k.deltaDir}`} style={{ marginBottom: 6 }}>{k.delta}</div>
+            <div className="stat-meta">{k.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabs */}
       <div className="tabs">
         {TABS.map(t => (
           <button
@@ -749,7 +795,6 @@ export function InsumosPage({ goPage }) {
         ))}
       </div>
 
-      {/* Tab content */}
       <div className="section">
         {tab === 'fertilizantes' && <TabFertilizantes />}
         {tab === 'combustibles'  && <TabCombustibles prefetch={{ data: insumosData, ready: insumosReady }} />}

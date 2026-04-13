@@ -176,6 +176,7 @@ function TabFertilizantes() {
     color:    FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
     valor:    activeF.ars,
     fuente:   'Fertilizar AC · CIAFA',
+    fecha:    'Feb 2026',
   } : null;
 
   return (
@@ -443,7 +444,14 @@ function InsumosHistorialChart({ card, onClose }) {
               {card.nombre} — historial
             </span>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>{card.ambito} · {card.unidad} · hover para ver valor</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {card.ambito} · {card.unidad}
+            {card.fecha && (
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: 'var(--accent)', background: 'var(--acc-bg)', border: '1px solid rgba(91,156,246,.22)', padding: '1px 8px', borderRadius: 4 }}>
+                último dato: {card.fecha}
+              </span>
+            )}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {['3M', '6M', '1A', 'MAX'].map(r => (
@@ -558,7 +566,7 @@ function TabCombustibles({ prefetch = {} }) {
       pais: g2?.pais?.promedio,
       paisDelta: g2?.pais?.promedio != null && g2?.nucleo?.promedio != null ? g2.pais.promedio - g2.nucleo.promedio : null,
       n: g2?.nucleo?.n,
-      fuente,
+      fuente, fecha: fechaInforme,
     },
     {
       id: 'g3-nucleo', histKey: 'g3-nucleo',
@@ -568,7 +576,7 @@ function TabCombustibles({ prefetch = {} }) {
       pais: g3?.pais?.promedio,
       paisDelta: g3?.pais?.promedio != null && g3?.nucleo?.promedio != null ? g3.pais.promedio - g3.nucleo.promedio : null,
       n: g3?.nucleo?.n,
-      fuente,
+      fuente, fecha: fechaInforme,
     },
     {
       id: 'ns-nucleo', histKey: 'ns-nucleo',
@@ -578,7 +586,7 @@ function TabCombustibles({ prefetch = {} }) {
       pais: ns?.pais?.promedio,
       paisDelta: ns?.pais?.promedio != null && ns?.nucleo?.promedio != null ? ns.pais.promedio - ns.nucleo.promedio : null,
       n: ns?.nucleo?.n,
-      fuente,
+      fuente, fecha: fechaInforme,
     },
     {
       id: 'np-nucleo', histKey: 'np-nucleo',
@@ -588,7 +596,7 @@ function TabCombustibles({ prefetch = {} }) {
       pais: np?.pais?.promedio,
       paisDelta: np?.pais?.promedio != null && np?.nucleo?.promedio != null ? np.pais.promedio - np.nucleo.promedio : null,
       n: np?.nucleo?.n,
-      fuente,
+      fuente, fecha: fechaInforme,
     },
   ];
 

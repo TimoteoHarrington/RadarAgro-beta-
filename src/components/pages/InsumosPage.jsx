@@ -168,7 +168,6 @@ function TabFertilizantes() {
         {FERTILIZANTES.map(f => {
           const d = dir(f.varPct);
           const varTxt = (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%';
-          const var12m = Math.round(((f.hist[f.hist.length - 1] - f.hist[0]) / f.hist[0]) * 100);
           return (
             <div key={f.id} className="stat" style={{ cursor: 'default' }}>
               <div className="stat-label">
@@ -185,13 +184,6 @@ function TabFertilizantes() {
               )}
               <div className="stat-meta" style={{ marginTop: 6 }}>{fmtUSD(f.usd)}/tn · Fórmula {f.formula}</div>
               <div className="stat-meta">{f.uso}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-                <Spark data={f.hist} color={d === 'dn' ? 'var(--red)' : d === 'up' ? 'var(--green)' : 'var(--text3)'} />
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginBottom: 2 }}>var. 12m</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: 'var(--red)' }}>+{var12m}%</div>
-                </div>
-              </div>
             </div>
           );
         })}
@@ -447,18 +439,6 @@ function TabCombustibles({ prefetch = {} }) {
             <div className="stat-val">{fmt(c.valor)}</div>
             <div className="stat-delta fl" style={{ marginBottom: 8 }}>ARS / litro · surtidor real</div>
             <div className="stat-meta">{c.subtitulo}</div>
-            {c.mediana != null && (
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-                <div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 2 }}>Mediana</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--white)' }}>{fmt(c.mediana)}</div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 2 }}>N est.</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>{fmtN(c.n)}</div>
-                </div>
-              </div>
-            )}
           </div>
         ))}
       </div>
@@ -719,13 +699,13 @@ function TabRelaciones() {
 // ── Page ──────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'fertilizantes', label: 'Fertilizantes' },
   { id: 'combustibles',  label: 'Combustibles' },
+  { id: 'fertilizantes', label: 'Fertilizantes' },
   { id: 'relaciones',    label: 'Relaciones I/P' },
 ];
 
 export function InsumosPage({ goPage }) {
-  const [tab,          setTab]          = useState('fertilizantes');
+  const [tab,          setTab]          = useState('combustibles');
   const [insumosData,  setInsumosData]  = useState(null);
   const [insumosReady, setInsumosReady] = useState(false);
 

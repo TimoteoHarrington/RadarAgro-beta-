@@ -161,19 +161,54 @@ function Spark({ data, color }) {
 
 // ── Tab: Fertilizantes ────────────────────────────────────────
 
+// Colores por fertilizante (consistentes con el gráfico combinado anterior)
+const FERT_COLORS = { urea: '#f0d050', map: '#4d9ef0', dap: '#56c97a', uan: '#e07090' };
+
 function TabFertilizantes() {
+  const [selectedId, setSelectedId] = useState(null);
+
+  const activeF = FERTILIZANTES.find(f => f.id === selectedId) ?? null;
+  const activeCard = activeF ? {
+    histKey:  activeF.id,
+    nombre:   activeF.nombre,
+    ambito:   'Zona Núcleo',
+    unidad:   'ARS/tn',
+    color:    FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
+    valor:    activeF.ars,
+    fuente:   'Fertilizar AC · CIAFA',
+  } : null;
+
   return (
     <div>
-      <div className="grid grid-4" style={{ marginBottom: 28 }}>
+      {/* Cards seleccionables */}
+      <div className="grid grid-4" style={{ marginBottom: 0 }}>
         {FERTILIZANTES.map(f => {
           const d = dir(f.varPct);
           const varTxt = (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%';
+          const isSelected = selectedId === f.id;
+          const color = FERT_COLORS[f.id] ?? 'var(--accent)';
           return (
-            <div key={f.id} className="stat" style={{ cursor: 'default' }}>
+            <div key={f.id} className="stat"
+              onClick={() => setSelectedId(isSelected ? null : f.id)}
+              style={{ cursor: 'pointer', borderColor: isSelected ? color : '', transition: 'border-color .15s' }}
+              onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--line2)'; }}
+              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = ''; }}>
+
               <div className="stat-label">
-                <span>{f.nombre}</span>
-                <span className={`stat-badge ${d}`}>{varTxt}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, display: 'inline-block' }} />
+                  {f.nombre}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {isSelected && (
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 7, background: 'var(--acc-bg)', color: 'var(--accent)', padding: '1px 5px', borderRadius: 3, border: '1px solid rgba(91,156,246,.2)' }}>
+                      GRAF ▾
+                    </span>
+                  )}
+                  <span className={`stat-badge ${d}`}>{varTxt}</span>
+                </span>
               </div>
+
               <div className="stat-val">{fmtARS(f.ars)}</div>
               {f.deltaArs !== 0 ? (
                 <div className={`stat-delta ${d}`}>
@@ -182,14 +217,30 @@ function TabFertilizantes() {
               ) : (
                 <div className="stat-delta fl">— Sin cambios esta semana</div>
               )}
-              <div className="stat-meta" style={{ marginTop: 6 }}>{fmtUSD(f.usd)}/tn · Fórmula {f.formula}</div>
+              <div className="stat-meta" style={{ marginTop: 6 }}>{fmtUSD(f.usd)}/tn · {f.formula}</div>
               <div className="stat-meta">{f.uso}</div>
             </div>
           );
         })}
       </div>
 
-      <div className="section-title">Detalle · zona núcleo · ARS/tonelada</div>
+      {/* Gráfico historial o placeholder */}
+      {activeCard
+        ? <InsumosHistorialChart card={activeCard} />
+        : (
+          <div style={{ marginTop: 16, background: 'var(--bg1)', border: '1px dashed var(--line2)', borderRadius: 12, padding: '28px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+              Seleccioná un fertilizante para ver el histórico
+            </span>
+          </div>
+        )
+      }
+
+      {/* Tabla detalle */}
+      <div className="section-title" style={{ marginTop: 28 }}>Detalle · zona núcleo · ARS/tonelada</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <div className="tbl-scroll">
           <table>
@@ -208,14 +259,15 @@ function TabFertilizantes() {
               {FERTILIZANTES.map(f => {
                 const d = dir(f.varPct);
                 return (
-                  <tr key={f.id}>
-                    <td className="bold">{f.nombre}</td>
+                  <tr key={f.id} style={{ cursor: 'pointer', opacity: selectedId && selectedId !== f.id ? 0.6 : 1, transition: 'opacity .15s' }}
+                    onClick={() => setSelectedId(selectedId === f.id ? null : f.id)}>
+                    <td className="bold" style={{ color: FERT_COLORS[f.id] }}>{f.nombre}</td>
                     <td className="dim mono" style={{ fontSize: 11 }}>{f.formula}</td>
                     <td className="r w mono">{fmtARS(f.ars)}</td>
                     <td className="r mono">{fmtUSD(f.usd)}</td>
                     <td className="r"><Pill d={d}>{fmtPct(f.varPct)}</Pill></td>
                     <td className="r">
-                      <Spark data={f.hist} color={d === 'dn' ? 'var(--red)' : d === 'up' ? 'var(--green)' : 'var(--text3)'} />
+                      <Spark data={f.hist} color={FERT_COLORS[f.id] ?? (d === 'dn' ? 'var(--red)' : d === 'up' ? 'var(--green)' : 'var(--text3)')} />
                     </td>
                     <td className="dim" style={{ fontSize: 11 }}>{f.nota}</td>
                   </tr>
@@ -225,98 +277,64 @@ function TabFertilizantes() {
           </table>
         </div>
       </div>
-
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
-            Evolución ARS/tn · Mar 2025 – Feb 2026 · zona núcleo
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {[['Urea', '#f0d050'], ['MAP', '#4d9ef0'], ['DAP', '#56c97a'], ['UAN', '#e07090']].map(([l, c]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 20, height: 2, background: c, borderRadius: 1 }} />
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{l}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <HistLineChart />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
-          {[
-            { label: 'Urea var. 12m', val: '+75,5%', color: '#f0d050' },
-            { label: 'MAP var. 12m',  val: '+84,5%', color: '#4d9ef0' },
-            { label: 'DAP var. 12m',  val: '+82,7%', color: '#56c97a' },
-            { label: 'UAN var. 12m',  val: '+83,5%', color: '#e07090' },
-          ].map(item => (
-            <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: item.color }}>{item.val}</div>
-            </div>
-          ))}
-        </div>
-      </div>
       <div className="source">Fuente: Fertilizar AC · CIAFA · datos mock · Feb 2026</div>
     </div>
   );
 }
 
-function HistLineChart() {
-  const W = 900, H = 180, PAD = { t: 12, r: 20, b: 28, l: 52 };
-  const iW = W - PAD.l - PAD.r;
-  const iH = H - PAD.t - PAD.b;
-  const series = [
-    { data: FERTILIZANTES[0].hist, color: '#f0d050' },
-    { data: FERTILIZANTES[1].hist, color: '#4d9ef0' },
-    { data: FERTILIZANTES[2].hist, color: '#56c97a' },
-    { data: FERTILIZANTES[3].hist, color: '#e07090' },
-  ];
-  const all   = series.flatMap(s => s.data);
-  const minV  = Math.min(...all);
-  const maxV  = Math.max(...all);
-  const range = maxV - minV || 1;
-  const toX = i  => PAD.l + (i / (HIST_MESES.length - 1)) * iW;
-  const toY = v  => PAD.t + iH - ((v - minV) / range) * iH;
-  const gridLines = 4;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 180, display: 'block' }}>
-      {Array.from({ length: gridLines + 1 }).map((_, i) => {
-        const y = PAD.t + (iH / gridLines) * i;
-        const v = Math.round(maxV - (i / gridLines) * range);
-        return (
-          <g key={i}>
-            <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke="var(--line)" strokeWidth="1" />
-            <text x={PAD.l - 6} y={y + 4} textAnchor="end" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">{(v / 1000).toFixed(0)}k</text>
-          </g>
-        );
-      })}
-      {HIST_MESES.map((m, i) => (
-        <text key={m} x={toX(i)} y={H - 6} textAnchor="middle" fontSize="8" fill="var(--text3)" fontFamily="var(--mono)">{m}</text>
-      ))}
-      {series.map((s, si) => {
-        const pts = s.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
-        return (
-          <g key={si}>
-            <polyline points={pts} fill="none" stroke={s.color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" opacity="0.85" />
-            {s.data.map((v, i) => (
-              <circle key={i} cx={toX(i)} cy={toY(v)} r="2.5" fill={s.color} opacity="0.7" />
-            ))}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
+// ── Canvas chart de historial (estética MacroPage) ────────────
 
-// ── Canvas chart para combustibles (estética MacroPage) ───────
+const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-function CombustibleLineChart({ series, labels, color }) {
+function InsumosHistorialChart({ card }) {
   const canvasRef = useRef(null);
   const [tooltip, setTooltip] = useState('');
+  const [range, setRange]     = useState('MAX');
+
+  // Datos mock de historial 12 meses para cada combustible
+  // (cuando la API provea serie temporal, reemplazar aquí)
+  const HIST_DATA = {
+    'g2-nucleo': [840,870,920,980,1040,1080,1120,1160,1200,1460,1630,null],
+    'g3-nucleo': [940,975,1030,1095,1155,1195,1240,1285,1330,1610,1810,null],
+    'ns-nucleo': [740,768,800,855,895,925,960,995,1035,1260,1400,null],
+    'np-nucleo': [990,1025,1065,1125,1190,1230,1280,1330,1380,1625,1810,null],
+    'g2-pais':   [860,892,945,1005,1068,1110,1150,1192,1235,1500,1655,null],
+    'g3-pais':   [965,1002,1058,1124,1186,1228,1272,1318,1365,1652,1855,null],
+    'ns-pais':   [755,784,818,874,916,947,982,1019,1060,1290,1420,null],
+    'np-pais':   [1012,1050,1090,1152,1218,1260,1312,1364,1415,1665,1850,null],
+    'urea':      [280,295,310,330,355,370,390,410,430,455,476,484],
+    'map':       [310,325,340,365,385,405,430,460,500,530,572,572],
+    'dap':       [300,315,332,350,368,390,415,445,490,520,544,548],
+    'uan':       [170,180,195,210,225,240,255,275,290,302,312,312],
+  };
+
+  const rawSeries = HIST_DATA[card?.histKey] ?? [];
+  // Rellenar el último punto null con el valor actual si existe
+  const filledSeries = rawSeries.map((v, i) =>
+    v == null && card?.valor != null ? card.valor : v
+  ).filter(v => v != null);
+
+  const getSlice = () => {
+    if (!filledSeries.length) return [];
+    if (range === '3M') return filledSeries.slice(-3);
+    if (range === '6M') return filledSeries.slice(-6);
+    if (range === '1A') return filledSeries.slice(-12);
+    return filledSeries;
+  };
+
+  const series = getSlice();
+  const labels = HIST_MESES.slice(HIST_MESES.length - filledSeries.length).slice(
+    filledSeries.length - series.length
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !series?.length) return;
-    const data = series;
+    if (!canvas || !series.length) return;
+
+    const toRgba = (c, alpha) => {
+      const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : c;
+    };
 
     const draw = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -326,18 +344,19 @@ function CombustibleLineChart({ series, labels, color }) {
       const ctx = canvas.getContext('2d');
       ctx.scale(dpr, dpr);
       const W = rect.width, H = rect.height;
-      const pad = { t: 18, r: 16, b: 32, l: 58 };
-      const vals  = data.map(Number);
-      const vmin  = Math.min(...vals) * 0.96;
-      const vmax  = Math.max(...vals) * 1.03;
-      const range = vmax - vmin || 1;
-      const n     = data.length;
-      const px    = i => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
-      const py    = v => pad.t + (H - pad.t - pad.b) - ((v - vmin) / range) * (H - pad.t - pad.b);
+      const pad = { t: 18, r: 16, b: 32, l: 62 };
+      const vals = series.map(Number);
+      const vmin = Math.min(...vals) * 0.96;
+      const vmax = Math.max(...vals) * 1.04;
+      const n    = vals.length;
+      const xS   = (W - pad.l - pad.r) / (n - 1 || 1);
+      const yS   = (H - pad.t - pad.b) / (vmax - vmin || 1);
+      const px   = i => pad.l + i * xS;
+      const py   = v => H - pad.b - (v - vmin) * yS;
 
-      // Grid lines
+      // Grid
       for (let i = 0; i <= 4; i++) {
-        const v = vmin + (range * i) / 4;
+        const v = vmin + (vmax - vmin) * i / 4;
         const y = py(v);
         ctx.strokeStyle = i === 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)';
         ctx.lineWidth = 1;
@@ -347,28 +366,22 @@ function CombustibleLineChart({ series, labels, color }) {
         ctx.fillStyle = 'rgba(90,101,133,0.75)';
         ctx.font = '9px JetBrains Mono,monospace';
         ctx.textAlign = 'right';
-        ctx.fillText('$' + Math.round(v).toLocaleString('es-AR'), pad.l - 5, y + 3);
+        ctx.fillText('$\u00a0' + Math.round(v).toLocaleString('es-AR'), pad.l - 5, y + 3);
       }
 
-      // X labels
+      // Eje X
       ctx.fillStyle = 'rgba(90,101,133,0.6)';
       ctx.font = '8px JetBrains Mono,monospace';
       ctx.textAlign = 'center';
-      if (labels?.length) {
-        labels.forEach((l, i) => {
-          if (i === 0 || i === n - 1 || i % Math.max(1, Math.floor(n / 6)) === 0) {
-            ctx.fillText(l, px(i), H - pad.b + 13);
-          }
-        });
-      }
+      labels.forEach((l, i) => {
+        if (i === 0 || i === n - 1 || i % Math.max(1, Math.floor(n / 6)) === 0) {
+          ctx.fillText(l, px(i), H - pad.b + 13);
+        }
+      });
 
-      // Area fill
+      // Área
+      const color = card?.color ?? 'rgba(91,156,246,0.85)';
       const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      // Convierte cualquier formato rgb/rgba a rgba con la opacidad deseada
-      const toRgba = (c, alpha) => {
-        const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-        return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : c;
-      };
       grad.addColorStop(0, toRgba(color, 0.18));
       grad.addColorStop(1, toRgba(color, 0.01));
       ctx.beginPath();
@@ -380,7 +393,7 @@ function CombustibleLineChart({ series, labels, color }) {
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // Line
+      // Línea
       ctx.beginPath();
       ctx.moveTo(px(0), py(vals[0]));
       vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
@@ -389,41 +402,78 @@ function CombustibleLineChart({ series, labels, color }) {
       ctx.lineJoin = 'round';
       ctx.stroke();
 
-      // Last point dot
+      // Punto final
       const lv = vals[n - 1];
       ctx.beginPath();
       ctx.arc(px(n - 1), py(lv), 3.5, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
+      ctx.fillStyle = color;
+      ctx.font = 'bold 10px JetBrains Mono,monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('$\u00a0' + Math.round(lv).toLocaleString('es-AR'), px(n - 1) - 7, py(lv) - 6);
     };
 
     draw();
     const ro = new ResizeObserver(draw);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [series, labels, color]);
+  }, [series, card]);
 
   const handleMouseMove = e => {
-    if (!series?.length) return;
+    if (!series.length) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const n = series.length;
-    const xS = (rect.width - 74) / (n - 1 || 1);
-    const idx = Math.max(0, Math.min(n - 1, Math.round((e.clientX - rect.left - 58) / xS)));
+    const xS = (rect.width - 78) / (series.length - 1 || 1);
+    const idx = Math.max(0, Math.min(series.length - 1, Math.round((e.clientX - rect.left - 62) / xS)));
     const v = series[idx];
-    const l = labels?.[idx] ?? `Período ${idx + 1}`;
-    if (v != null) setTooltip(`${l}  ·  $ ${Math.round(v).toLocaleString('es-AR')}`);
+    const l = labels[idx] ?? `Mes ${idx + 1}`;
+    if (v != null) setTooltip(`${l}  ·  $\u00a0${Math.round(v).toLocaleString('es-AR')} ${card?.unidad ?? 'ARS/L'}`);
   };
 
+  if (!card) return null;
+
   return (
-    <div>
-      <canvas
-        ref={canvasRef}
-        style={{ width: '100%', height: '180px', display: 'block', cursor: 'crosshair' }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setTooltip('')}
-      />
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text2)', minHeight: 14, marginTop: 6, textAlign: 'center' }}>{tooltip}</div>
+    <div style={{ background: 'var(--bg1)', border: '1px solid var(--accent)', borderRadius: 12, padding: '18px 20px', marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: card.color, flexShrink: 0, display: 'inline-block' }} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+              {card.nombre} — historial
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>{card.ambito} · {card.unidad} · hover para ver valor</div>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['3M', '6M', '1A', 'MAX'].map(r => (
+            <button key={r} onClick={() => setRange(r)}
+              style={{
+                fontFamily: 'var(--mono)', fontSize: 9, padding: '3px 10px', borderRadius: 4,
+                border: `1px solid ${r === range ? 'var(--accent)' : 'var(--line2)'}`,
+                background: r === range ? 'var(--acc-bg)' : 'transparent',
+                color: r === range ? 'var(--accent)' : 'var(--text3)',
+                cursor: 'pointer', transition: 'all .12s',
+              }}>
+              {r}
+            </button>
+          ))}
+        </div>
+      </div>
+      {series.length === 0
+        ? <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>Sin datos</div>
+        : <>
+            <canvas ref={canvasRef}
+              style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => setTooltip('')}
+            />
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text2)', minHeight: 14, marginTop: 6, textAlign: 'center' }}>{tooltip}</div>
+          </>
+      }
+      <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginTop: 4, textAlign: 'right' }}>
+        Fuente: {card.fuente ?? 'Sec. de Energía'} · datos mock históricos
+      </div>
     </div>
   );
 }
@@ -434,6 +484,7 @@ function TabCombustibles({ prefetch = {} }) {
   const [data,    setData]    = useState(prefetch.data  ?? null);
   const [loading, setLoading] = useState(!prefetch.ready);
   const [error,   setError]   = useState(null);
+  const [selectedCard, setSelectedCard] = useState(null);
 
   useEffect(() => {
     if (prefetch.ready) {
@@ -480,83 +531,58 @@ function TabCombustibles({ prefetch = {} }) {
   const np  = nafta?.premium;
   const gnc = nafta?.gnc;
 
-  // Fecha del último dato del informe (no de la consulta a la API)
   const fechaInforme = fecha
     ? new Date(fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : null;
 
-  // Histórico mock G2 (12 meses) — se reemplaza con datos reales cuando la API los provea
-  const histG2     = [840, 870, 920, 980, 1040, 1080, 1120, 1160, 1200, 1460, 1630, g2?.nucleo?.promedio ?? 1630];
-  const histLabels = HIST_MESES;
-
-  // Delta vs valor anterior en historial (último vs penúltimo)
-  const g2Prev  = histG2[histG2.length - 2];
-  const g2Cur   = histG2[histG2.length - 1];
-  const g2Delta = g2Cur != null && g2Prev != null ? g2Cur - g2Prev : null;
-  const g2DeltaPct = g2Delta != null && g2Prev ? ((g2Delta / g2Prev) * 100) : null;
-
-  // Delta pais vs nucleo como señal de dispersión geográfica
-  const g2PaisDelta  = g2?.pais?.promedio  != null && g2?.nucleo?.promedio  != null ? g2.pais.promedio  - g2.nucleo.promedio  : null;
-  const nsPaisDelta  = ns?.pais?.promedio  != null && ns?.nucleo?.promedio  != null ? ns.pais.promedio  - ns.nucleo.promedio  : null;
-
   const cards = [
     {
-      id: 'g2-n',
-      nombre: 'Gasoil G2',
-      subtitulo: 'Más usado en agro · 92% consumo campo',
-      ambito: 'Zona Núcleo',
-      color: 'rgba(91,156,246,0.85)',
+      id: 'g2-nucleo', histKey: 'g2-nucleo',
+      nombre: 'Gasoil G2', subtitulo: '92% consumo agro', ambito: 'Zona Núcleo',
+      color: 'rgba(91,156,246,0.85)', unidad: 'ARS/L',
       valor: g2?.nucleo?.promedio,
       pais: g2?.pais?.promedio,
-      paisDelta: g2PaisDelta,
-      delta: g2Delta,
-      deltaPct: g2DeltaPct,
+      paisDelta: g2?.pais?.promedio != null && g2?.nucleo?.promedio != null ? g2.pais.promedio - g2.nucleo.promedio : null,
       n: g2?.nucleo?.n,
+      fuente,
     },
     {
-      id: 'g3-n',
-      nombre: 'Gasoil G3',
-      subtitulo: 'Premium · Euro V',
-      ambito: 'Zona Núcleo',
-      color: 'rgba(77,158,240,0.85)',
+      id: 'g3-nucleo', histKey: 'g3-nucleo',
+      nombre: 'Gasoil G3', subtitulo: 'Premium · Euro V', ambito: 'Zona Núcleo',
+      color: 'rgba(77,158,240,0.85)', unidad: 'ARS/L',
       valor: g3?.nucleo?.promedio,
       pais: g3?.pais?.promedio,
       paisDelta: g3?.pais?.promedio != null && g3?.nucleo?.promedio != null ? g3.pais.promedio - g3.nucleo.promedio : null,
-      delta: null,
-      deltaPct: null,
       n: g3?.nucleo?.n,
+      fuente,
     },
     {
-      id: 'ns-n',
-      nombre: 'Nafta Súper',
-      subtitulo: '92–95 RON · uso utilitarios',
-      ambito: 'Zona Núcleo',
-      color: 'rgba(86,201,122,0.85)',
+      id: 'ns-nucleo', histKey: 'ns-nucleo',
+      nombre: 'Nafta Súper', subtitulo: '92–95 RON', ambito: 'Zona Núcleo',
+      color: 'rgba(86,201,122,0.85)', unidad: 'ARS/L',
       valor: ns?.nucleo?.promedio,
       pais: ns?.pais?.promedio,
-      paisDelta: nsPaisDelta,
-      delta: null,
-      deltaPct: null,
+      paisDelta: ns?.pais?.promedio != null && ns?.nucleo?.promedio != null ? ns.pais.promedio - ns.nucleo.promedio : null,
       n: ns?.nucleo?.n,
+      fuente,
     },
     {
-      id: 'np-n',
-      nombre: 'Nafta Premium',
-      subtitulo: '+95 RON · alta compresión',
-      ambito: 'Zona Núcleo',
-      color: 'rgba(199,146,234,0.85)',
+      id: 'np-nucleo', histKey: 'np-nucleo',
+      nombre: 'Nafta Premium', subtitulo: '+95 RON', ambito: 'Zona Núcleo',
+      color: 'rgba(199,146,234,0.85)', unidad: 'ARS/L',
       valor: np?.nucleo?.promedio,
       pais: np?.pais?.promedio,
       paisDelta: np?.pais?.promedio != null && np?.nucleo?.promedio != null ? np.pais.promedio - np.nucleo.promedio : null,
-      delta: null,
-      deltaPct: null,
       n: np?.nucleo?.n,
+      fuente,
     },
   ];
 
+  const activeCard = cards.find(c => c.id === selectedCard) ?? null;
+
   return (
     <div>
-      {/* Header con fecha del dato del informe */}
+      {/* Header fuente */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, padding: '10px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Fuente</span>
@@ -565,61 +591,40 @@ function TabCombustibles({ prefetch = {} }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {fechaInforme && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Último dato del informe</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Último dato</span>
               <span style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'var(--acc-bg)', border: '1px solid rgba(91,156,246,.22)', padding: '2px 10px', borderRadius: 5 }}>{fechaInforme}</span>
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Actualización</span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>cada hora</span>
-          </div>
         </div>
       </div>
 
-      {/* KPI cards con delta y fecha */}
-      <div className="grid grid-4" style={{ marginBottom: 28 }}>
+      {/* Cards seleccionables — igual que MacroPage */}
+      <div className="grid grid-4" style={{ marginBottom: 0 }}>
         {cards.map(c => {
-          const deltaUp  = c.delta != null ? c.delta > 0 : null;
-          const deltaTxt = c.deltaPct != null
-            ? (c.deltaPct > 0 ? '+' : '') + c.deltaPct.toFixed(1).replace('.', ',') + '%'
-            : null;
+          const isSelected = selectedCard === c.id;
           return (
-            <div key={c.id} className="stat" style={{ cursor: 'default' }}>
-              {/* Label + fecha */}
+            <div key={c.id} className="stat"
+              onClick={() => setSelectedCard(isSelected ? null : c.id)}
+              style={{ cursor: 'pointer', borderColor: isSelected ? 'var(--accent)' : '', transition: 'border-color .15s' }}
+              onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--line2)'; }}
+              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = ''; }}>
+
               <div className="stat-label">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0, display: 'inline-block' }} />
                   {c.nombre}
                 </span>
-                {fechaInforme && (
-                  <span style={{
-                    fontFamily: 'var(--mono)', fontSize: 8, fontWeight: 700,
-                    color: 'var(--accent)', background: 'var(--acc-bg)',
-                    border: '1px solid rgba(91,156,246,.2)', padding: '1px 6px', borderRadius: 4,
-                  }}>{fechaInforme}</span>
+                {isSelected && (
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 7, background: 'var(--acc-bg)', color: 'var(--accent)', padding: '1px 5px', borderRadius: 3, border: '1px solid rgba(91,156,246,.2)' }}>
+                    GRAF ▾
+                  </span>
                 )}
               </div>
 
-              {/* Precio principal */}
               <div className="stat-val">{fmt(c.valor)}</div>
+              <div className="stat-delta fl" style={{ marginBottom: 6 }}>ARS / litro</div>
+              <div className="stat-meta">{c.subtitulo} · {c.ambito}</div>
 
-              {/* Delta vs mes anterior */}
-              {deltaTxt != null ? (
-                <div style={{
-                  fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600,
-                  color: deltaUp ? 'var(--red)' : 'var(--green)',
-                  background: deltaUp ? 'var(--red-bg)' : 'var(--green-bg)',
-                  padding: '2px 8px', borderRadius: 4, display: 'inline-block', marginBottom: 8,
-                }}>
-                  {deltaUp ? '▲' : '▼'} {deltaTxt} vs mes ant.
-                </div>
-              ) : (
-                <div className="stat-delta fl" style={{ marginBottom: 8 }}>ARS / litro</div>
-              )}
-
-              <div className="stat-meta">{c.subtitulo}</div>
-
-              {/* Dispersión núcleo vs país */}
               {c.paisDelta != null && (
                 <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Promedio país</span>
@@ -636,13 +641,28 @@ function TabCombustibles({ prefetch = {} }) {
         })}
       </div>
 
+      {/* Gráfico historial o placeholder */}
+      {activeCard
+        ? <InsumosHistorialChart card={activeCard} />
+        : (
+          <div style={{ marginTop: 16, background: 'var(--bg1)', border: '1px dashed var(--line2)', borderRadius: 12, padding: '28px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+              Seleccioná un combustible para ver el histórico
+            </span>
+          </div>
+        )
+      }
+
       {/* GNC aparte */}
       {gnc?.pais?.promedio && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--line)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginTop: 28, marginBottom: 28 }}>
           {[
-            { label: 'GNC · Promedio País',  val: fmt(gnc.pais.promedio),  sub: 'ARS/m³' },
-            { label: 'GNC · Mediana',        val: fmt(gnc.pais.mediana),   sub: 'ARS/m³' },
-            { label: 'GNC · Dispersión',     val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones` },
+            { label: 'GNC · Promedio País', val: fmt(gnc.pais.promedio), sub: 'ARS/m³' },
+            { label: 'GNC · Mediana',       val: fmt(gnc.pais.mediana),  sub: 'ARS/m³' },
+            { label: 'GNC · Dispersión',    val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones` },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6 }}>{item.label}</div>
@@ -653,28 +673,8 @@ function TabCombustibles({ prefetch = {} }) {
         </div>
       )}
 
-      {/* Gráfico evolución G2 — estética MacroPage */}
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, padding: '18px 20px', marginBottom: 28 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>
-              Gasoil G2 · Zona Núcleo · Evolución ARS/litro
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>Últimos 12 meses · hover para ver valor</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 20, height: 2, background: 'rgba(91,156,246,0.85)', borderRadius: 1 }} />
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>Promedio zona núcleo</span>
-          </div>
-        </div>
-        <CombustibleLineChart series={histG2} labels={histLabels} color="rgba(91,156,246,0.85)" />
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginTop: 4, textAlign: 'right' }}>
-          Fuente: {fuente ?? 'Sec. de Energía'} · datos mock históricos · datos reales requieren endpoint de serie temporal
-        </div>
-      </div>
-
       {/* Tabla detalle */}
-      <div className="section-title">Detalle completo por producto y ámbito</div>
+      <div className="section-title" style={{ marginTop: gnc?.pais?.promedio ? 0 : 28 }}>Detalle completo por producto y ámbito</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <div className="tbl-scroll">
           <table>
@@ -692,15 +692,15 @@ function TabCombustibles({ prefetch = {} }) {
             </thead>
             <tbody>
               {[
-                { producto: 'Gasoil G2',      unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio, mediana: g2?.nucleo?.mediana, min: g2?.nucleo?.min, max: g2?.nucleo?.max, n: g2?.nucleo?.n },
-                { producto: 'Gasoil G2',      unidad: 'ARS/L',  ambito: 'País',        precio: g2?.pais?.promedio,   mediana: g2?.pais?.mediana,   min: g2?.pais?.min,   max: g2?.pais?.max,   n: g2?.pais?.n   },
-                { producto: 'Gasoil G3',      unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio, mediana: g3?.nucleo?.mediana, min: g3?.nucleo?.min, max: g3?.nucleo?.max, n: g3?.nucleo?.n },
-                { producto: 'Gasoil G3',      unidad: 'ARS/L',  ambito: 'País',        precio: g3?.pais?.promedio,   mediana: g3?.pais?.mediana,   min: g3?.pais?.min,   max: g3?.pais?.max,   n: g3?.pais?.n   },
-                { producto: 'Nafta Súper',    unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: ns?.nucleo?.promedio, mediana: ns?.nucleo?.mediana, min: ns?.nucleo?.min, max: ns?.nucleo?.max, n: ns?.nucleo?.n },
-                { producto: 'Nafta Súper',    unidad: 'ARS/L',  ambito: 'País',        precio: ns?.pais?.promedio,   mediana: ns?.pais?.mediana,   min: ns?.pais?.min,   max: ns?.pais?.max,   n: ns?.pais?.n   },
-                { producto: 'Nafta Premium',  unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: np?.nucleo?.promedio, mediana: np?.nucleo?.mediana, min: np?.nucleo?.min, max: np?.nucleo?.max, n: np?.nucleo?.n },
-                { producto: 'Nafta Premium',  unidad: 'ARS/L',  ambito: 'País',        precio: np?.pais?.promedio,   mediana: np?.pais?.mediana,   min: np?.pais?.min,   max: np?.pais?.max,   n: np?.pais?.n   },
-                { producto: 'GNC',            unidad: 'ARS/m³', ambito: 'País',        precio: gnc?.pais?.promedio,  mediana: gnc?.pais?.mediana,  min: gnc?.pais?.min,  max: gnc?.pais?.max,  n: gnc?.pais?.n  },
+                { producto: 'Gasoil G2',     unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: g2?.nucleo?.promedio, mediana: g2?.nucleo?.mediana, min: g2?.nucleo?.min, max: g2?.nucleo?.max, n: g2?.nucleo?.n },
+                { producto: 'Gasoil G2',     unidad: 'ARS/L',  ambito: 'País',        precio: g2?.pais?.promedio,   mediana: g2?.pais?.mediana,   min: g2?.pais?.min,   max: g2?.pais?.max,   n: g2?.pais?.n   },
+                { producto: 'Gasoil G3',     unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: g3?.nucleo?.promedio, mediana: g3?.nucleo?.mediana, min: g3?.nucleo?.min, max: g3?.nucleo?.max, n: g3?.nucleo?.n },
+                { producto: 'Gasoil G3',     unidad: 'ARS/L',  ambito: 'País',        precio: g3?.pais?.promedio,   mediana: g3?.pais?.mediana,   min: g3?.pais?.min,   max: g3?.pais?.max,   n: g3?.pais?.n   },
+                { producto: 'Nafta Súper',   unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: ns?.nucleo?.promedio, mediana: ns?.nucleo?.mediana, min: ns?.nucleo?.min, max: ns?.nucleo?.max, n: ns?.nucleo?.n },
+                { producto: 'Nafta Súper',   unidad: 'ARS/L',  ambito: 'País',        precio: ns?.pais?.promedio,   mediana: ns?.pais?.mediana,   min: ns?.pais?.min,   max: ns?.pais?.max,   n: ns?.pais?.n   },
+                { producto: 'Nafta Premium', unidad: 'ARS/L',  ambito: 'Zona Núcleo', precio: np?.nucleo?.promedio, mediana: np?.nucleo?.mediana, min: np?.nucleo?.min, max: np?.nucleo?.max, n: np?.nucleo?.n },
+                { producto: 'Nafta Premium', unidad: 'ARS/L',  ambito: 'País',        precio: np?.pais?.promedio,   mediana: np?.pais?.mediana,   min: np?.pais?.min,   max: np?.pais?.max,   n: np?.pais?.n   },
+                { producto: 'GNC',           unidad: 'ARS/m³', ambito: 'País',        precio: gnc?.pais?.promedio,  mediana: gnc?.pais?.mediana,  min: gnc?.pais?.min,  max: gnc?.pais?.max,  n: gnc?.pais?.n  },
               ].map((f, i) => (
                 <tr key={i}>
                   <td className="bold">{f.producto}</td>

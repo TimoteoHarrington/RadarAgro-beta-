@@ -503,27 +503,27 @@ function InsumosHistorialChart({ card, onClose }) {
 // ── Tab: Combustibles ─────────────────────────────────────────
 
 function TabCombustibles({ prefetch = {} }) {
-  const [data,    setData]    = useState(prefetch.data  ?? null);
-  const [loading, setLoading] = useState(!prefetch.ready);
-  const [error,   setError]   = useState(null);
+  const [data,    setData]    = useState(prefetch.data?.gasoil ? prefetch.data : null);
+  const [loading, setLoading] = useState(!(prefetch.ready && prefetch.data?.gasoil));
   const [selectedCard, setSelectedCard] = useState(null);
 
   useEffect(() => {
     if (prefetch.ready) {
-      setData(prefetch.data ?? null);
-      if (!prefetch.data) setError('Sin datos de combustibles');
-      setLoading(false);
+      if (prefetch.data?.gasoil) {
+        setData(prefetch.data);
+        setLoading(false);
+      }
+      // Si no hay datos válidos en el prefetch, se queda cargando (la API todavía no respondió)
       return;
     }
     setLoading(true);
     fetchInsumosAll()
       .then(({ data: d, error: e }) => {
-        if (e) { setError(e); return; }
-        if (!d?.gasoil) { setError('Sin datos de combustibles'); return; }
+        if (e || !d?.gasoil) return; // Se queda en loading; no mostrar error
         setData(d);
+        setLoading(false);
       })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(() => { /* Se queda en loading */ });
   }, [prefetch.ready, prefetch.data]);
 
   const fmt  = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
@@ -533,15 +533,6 @@ function TabCombustibles({ prefetch = {} }) {
     return (
       <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>
         Consultando Secretaría de Energía…
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="alert-strip" style={{ marginBottom: 24 }}>
-        <span className="alert-icon">!</span>
-        <span className="alert-text">No se pudo conectar con datos.energia.gob.ar: {error}</span>
       </div>
     );
   }

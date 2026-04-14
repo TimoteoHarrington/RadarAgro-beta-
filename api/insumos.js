@@ -152,22 +152,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('[api/insumos] Error:', err.message);
-
-    // Fallback estático — valores de referencia abril 2026
-    return res.status(200).json({
-      ok:     false,
-      error:  err.message,
-      fuente: 'Sec. de Energía · fallback estático · abr 2026',
-      fecha:  null,
-      gasoil: {
-        g2: { label: 'Gasoil G2',     grado: 2, unidad: 'ARS/litro', pais: { promedio: 1655, mediana: 1620, min: 1320, max: 2100, n: null }, nucleo: { promedio: 1630, mediana: 1600, min: 1400, max: 1900, n: null } },
-        g3: { label: 'Gasoil G3',     grado: 3, unidad: 'ARS/litro', pais: { promedio: 1901, mediana: 1860, min: 1500, max: 2300, n: null }, nucleo: { promedio: 1850, mediana: 1830, min: 1600, max: 2100, n: null } },
-      },
-      nafta: {
-        super:   { label: 'Nafta Súper',   unidad: 'ARS/litro', pais: { promedio: 1420, mediana: 1400, min: 1100, max: 1800, n: null }, nucleo: { promedio: 1400, mediana: 1390, min: 1200, max: 1700, n: null } },
-        premium: { label: 'Nafta Premium', unidad: 'ARS/litro', pais: { promedio: 1720, mediana: 1690, min: 1350, max: 2100, n: null }, nucleo: { promedio: 1700, mediana: 1680, min: 1450, max: 2000, n: null } },
-        gnc:     { label: 'GNC',           unidad: 'ARS/m3',    pais: { promedio: 420,  mediana: 415,  min: 340,  max: 530,  n: null }, nucleo: { promedio: 415,  mediana: 410,  min: 360,  max: 500,  n: null } },
-      },
-    });
+    return res.status(503).json({ ok: false, error: err.message });
   }
 }

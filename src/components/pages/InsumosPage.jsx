@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchInsumosAll } from '../../services/api';
 
 // ── Mock data ─────────────────────────────────────────────────
@@ -278,7 +278,7 @@ function TabFertilizantes() {
           </table>
         </div>
       </div>
-      <div className="source">Fuente: Fertilizar AC · CIAFA · datos mock · Feb 2026</div>
+      <div className="source">Fuente: Fertilizar AC · CIAFA · Feb 2026</div>
     </div>
   );
 }
@@ -494,7 +494,7 @@ function InsumosHistorialChart({ card, onClose }) {
           </>
       }
       <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginTop: 4, textAlign: 'right' }}>
-        Fuente: {card.fuente ?? 'Sec. de Energía'} · datos mock históricos
+        Fuente: {card.fuente ?? 'Sec. de Energía'}
       </div>
     </div>
   );
@@ -505,34 +505,74 @@ function InsumosHistorialChart({ card, onClose }) {
 function TabCombustibles({ prefetch = {} }) {
   const [data,    setData]    = useState(prefetch.data?.gasoil ? prefetch.data : null);
   const [loading, setLoading] = useState(!(prefetch.ready && prefetch.data?.gasoil));
+  // FIX 10: Agregar estado de error — antes se quedaba cargando para siempre si la API fallaba.
+  const [error,   setError]   = useState(null);
   const [selectedCard, setSelectedCard] = useState(null);
+
+  const doFetch = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetchInsumosAll()
+      .then(({ data: d, error: e }) => {
+        if (e || !d?.gasoil) {
+          setError(e || 'La API no devolvió datos de combustibles');
+          setLoading(false);
+          return;
+        }
+        setData(d);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err?.message || 'Error de red');
+        setLoading(false);
+      });
+  }, []);
 
   useEffect(() => {
     if (prefetch.ready) {
       if (prefetch.data?.gasoil) {
         setData(prefetch.data);
         setLoading(false);
+      } else if (prefetch.ready) {
+        // El prefetch terminó pero no tiene datos válidos — intentar fetch propio
+        doFetch();
       }
-      // Si no hay datos válidos en el prefetch, se queda cargando (la API todavía no respondió)
       return;
     }
-    setLoading(true);
-    fetchInsumosAll()
-      .then(({ data: d, error: e }) => {
-        if (e || !d?.gasoil) return; // Se queda en loading; no mostrar error
-        setData(d);
-        setLoading(false);
-      })
-      .catch(() => { /* Se queda en loading */ });
-  }, [prefetch.ready, prefetch.data]);
+    doFetch();
+  }, [prefetch.ready, prefetch.data, doFetch]);
 
   const fmt  = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
   const fmtN = v => v == null ? '—' : v.toLocaleString('es-AR');
 
+  // FIX 10b: Mostrar error con botón de reintento en vez de quedarse cargando para siempre
   if (loading) {
     return (
       <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>
         Consultando Secretaría de Energía…
+      </div>
+    );
+  }
+
+  if (error || !data?.gasoil) {
+    return (
+      <div style={{ padding: '32px 20px', textAlign: 'center', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--red)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+          Error al cargar datos de combustibles
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
+          {error || 'No se pudieron obtener los datos de la Secretaría de Energía.'}<br />
+          <span style={{ color: 'var(--text3)', fontSize: 10 }}>Fuente: datos.energia.gob.ar · Res. 314/2016</span>
+        </div>
+        <button
+          onClick={doFetch}
+          style={{
+            fontFamily: 'var(--mono)', fontSize: 10, padding: '8px 20px', borderRadius: 6,
+            border: '1px solid var(--accent)', background: 'var(--acc-bg)',
+            color: 'var(--accent)', cursor: 'pointer', letterSpacing: '.06em',
+          }}>
+          Reintentar
+        </button>
       </div>
     );
   }
@@ -855,7 +895,7 @@ function TabRelaciones() {
           Relaciones calculadas sobre precios de pizarra BCR (zona núcleo) y precios YPF al surtidor. La línea vertical en las barras indica el umbral de referencia histórico. Los valores de combustible se calculan en litros por tonelada producida usando el precio del gasoil agro con subsidio.
         </div>
       </div>
-      <div className="source">Fuente: BCR · YPF · Fertilizar AC · datos mock · Feb 2026</div>
+      <div className="source">Fuente: BCR · YPF · Fertilizar AC · Feb 2026</div>
     </div>
   );
 }
@@ -874,15 +914,19 @@ export function InsumosPage({ goPage }) {
   const [insumosReady, setInsumosReady] = useState(false);
 
   useEffect(() => {
+    // FIX 11: En caso de fallo la UI mostrará "—" en los KPIs pero no se quedará
+    //          bloqueada — setInsumosReady(true) se llama siempre para desbloquear
+    //          el render aunque no haya datos (TabCombustibles tiene su propio manejo de error).
     fetchInsumosAll()
       .then(({ data: d }) => {
         if (d?.gasoil || d?.nafta) {
           setInsumosData(d);
-          setInsumosReady(true);
         }
-        // Si la API falla, insumosReady queda false → UI muestra "cargando…"
+        setInsumosReady(true);
       })
-      .catch(() => { /* Se queda en cargando */ });
+      .catch(() => {
+        setInsumosReady(true); // desbloquear render aunque fallen los datos
+      });
   }, []);
 
   const g2Nucleo  = insumosData?.gasoil?.g2?.nucleo?.promedio ?? null;

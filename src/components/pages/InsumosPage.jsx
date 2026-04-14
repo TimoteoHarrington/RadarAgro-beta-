@@ -875,8 +875,14 @@ export function InsumosPage({ goPage }) {
 
   useEffect(() => {
     fetchInsumosAll()
-      .then(({ data: d }) => { if (d?.gasoil || d?.nafta) setInsumosData(d); })
-      .finally(() => setInsumosReady(true));
+      .then(({ data: d }) => {
+        if (d?.gasoil || d?.nafta) {
+          setInsumosData(d);
+          setInsumosReady(true);
+        }
+        // Si la API falla, insumosReady queda false → UI muestra "cargando…"
+      })
+      .catch(() => { /* Se queda en cargando */ });
   }, []);
 
   const g2Nucleo  = insumosData?.gasoil?.g2?.nucleo?.promedio ?? null;
@@ -903,9 +909,7 @@ export function InsumosPage({ goPage }) {
         </div>
         <div className="ph-right">
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em' }}>
-            {insumosReady
-              ? (insumosData ? 'LIVE · Sec. de Energía' : 'FALLBACK · sin conexión')
-              : 'cargando…'}
+            {insumosReady && insumosData ? 'LIVE · Sec. de Energía' : 'cargando…'}
           </div>
         </div>
       </div>

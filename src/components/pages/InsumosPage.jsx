@@ -577,7 +577,7 @@ function TabCombustibles({ prefetch = {} }) {
     );
   }
 
-  const { gasoil, nafta, fuente, fecha } = data;
+  const { gasoil, nafta, fuente, fecha, stale } = data;
   const g2  = gasoil?.g2;
   const g3  = gasoil?.g3;
   const ns  = nafta?.super;
@@ -635,8 +635,8 @@ function TabCombustibles({ prefetch = {} }) {
 
   return (
     <div>
-      {/* Header fuente */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, padding: '10px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10 }}>
+      {/* Header fuente — muestra aviso si los datos son del caché (portal caído) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: data?.stale ? 8 : 20, padding: '10px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Fuente</span>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>{fuente ?? 'Secretaría de Energía'}</span>
@@ -650,6 +650,17 @@ function TabCombustibles({ prefetch = {} }) {
           )}
         </div>
       </div>
+      {data?.stale && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, padding: '8px 14px', background: 'rgba(224,176,48,0.08)', border: '1px solid rgba(224,176,48,0.25)', borderRadius: 8 }}>
+          <span style={{ fontSize: 13 }}>⚠</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'rgba(224,176,48,0.9)', letterSpacing: '.04em' }}>
+            Secretaría de Energía no disponible ahora — mostrando última consulta exitosa
+          </span>
+          <button onClick={doFetch} style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 9, padding: '3px 10px', borderRadius: 4, border: '1px solid rgba(224,176,48,0.4)', background: 'transparent', color: 'rgba(224,176,48,0.85)', cursor: 'pointer' }}>
+            Reintentar
+          </button>
+        </div>
+      )}
 
       {/* Cards seleccionables — igual que MacroPage */}
       <div className="grid grid-4" style={{ marginBottom: 0 }}>

@@ -137,18 +137,132 @@ export async function fetchINDEC() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Insumos — via proxy /api/insumos (Vercel Function)
+// Insumos — fetch directo al browser desde CKAN
 // Fuente: Secretaría de Energía · Res. 314/2016 · datos.energia.gob.ar
+// El proxy de Vercel (/api/insumos) no funciona porque datos.energia.gob.ar
+// bloquea egress desde datacenters de nube (Vercel/AWS).
+// CKAN tiene CORS abierto para browsers, así que el fetch va directo.
 // ─────────────────────────────────────────────────────────────
+
+const CKAN_INSUMOS_URL =
+  'https://datos.energia.gob.ar/api/3/action/datastore_search' +
+  '?resource_id=80ac25de-a44a-4445-9215-090cf55cfda5&limit=32000';
+
+const ZONA_NUCLEO_INSUMOS = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
+
+const PRODUCTOS_INSUMOS = {
+  2:  { label: 'Nafta Súper',   unidad: 'ARS/litro' },
+  3:  { label: 'Gasoil G2',     unidad: 'ARS/litro', grado: 2 },
+  4:  { label: 'Gasoil G3',     unidad: 'ARS/litro', grado: 3 },
+  6:  { label: 'Nafta Premium', unidad: 'ARS/litro' },
+  19: { label: 'GNC',           unidad: 'ARS/m3'    },
+};
+
+function _getField(row, ...keys) {
+  for (const k of keys) {
+    if (row[k] != null && row[k] !== '') return row[k];
+  }
+  return null;
+}
+
+function _estadisticas(arr) {
+  if (!arr.length) return { promedio: null, mediana: null, min: null, max: null, n: 0 };
+  const sorted = [...arr].sort((a, b) => a - b);
+  const n = sorted.length;
+  const mediana = n % 2 === 0
+    ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2
+    : sorted[Math.floor(n / 2)];
+  const promedio = arr.reduce((s, v) => s + v, 0) / n;
+  return {
+    promedio: Math.round(promedio * 10) / 10,
+    mediana:  Math.round(mediana  * 10) / 10,
+    min: sorted[0],
+    max: sorted[n - 1],
+    n,
+  };
+}
+
+function _buildInsumosPayload(records) {
+  const buckets = {};
+  for (const row of records) {
+    const rawId = _getField(row, 'id_producto', 'idProducto', 'id_prod');
+    const id = rawId != null ? parseInt(String(rawId), 10) : NaN;
+    if (isNaN(id) || !PRODUCTOS_INSUMOS[id]) continue;
+
+    const rawPrecio = _getField(row, 'precio', 'precio_producto', 'Precio');
+    const precio = rawPrecio != null
+      ? parseFloat(String(rawPrecio).replace(',', '.'))
+      : NaN;
+    if (isNaN(precio) || precio <= 0) continue;
+
+    const prov = String(_getField(row, 'provincia', 'Provincia', 'id_provincia') ?? '');
+    if (!buckets[id]) buckets[id] = { todos: [], nucleo: [] };
+    buckets[id].todos.push(precio);
+    if (ZONA_NUCLEO_INSUMOS.some(zn => prov.toLowerCase().includes(zn.toLowerCase()))) {
+      buckets[id].nucleo.push(precio);
+    }
+  }
+
+  if (!buckets[3]?.todos?.length) {
+    throw new Error('Sin registros de Gasoil G2 en la respuesta de CKAN');
+  }
+
+  let fechaRef = null;
+  for (const row of records.slice(0, 30)) {
+    const f = _getField(row, 'fecha_vigencia', 'vigencia', 'fecha', 'fecha_inicio');
+    if (f) { fechaRef = f; break; }
+  }
+
+  const buildProducto = (id) => {
+    const info   = PRODUCTOS_INSUMOS[id];
+    const bucket = buckets[id] ?? { todos: [], nucleo: [] };
+    return {
+      label:  info.label,
+      unidad: info.unidad,
+      ...(info.grado != null ? { grado: info.grado } : {}),
+      pais:   _estadisticas(bucket.todos),
+      nucleo: _estadisticas(bucket.nucleo),
+    };
+  };
+
+  return {
+    ok:     true,
+    fuente: 'Sec. de Energía · Res. 314/2016 · datos.energia.gob.ar',
+    fecha:  fechaRef,
+    gasoil: { g2: buildProducto(3), g3: buildProducto(4) },
+    nafta:  { super: buildProducto(2), premium: buildProducto(6), gnc: buildProducto(19) },
+  };
+}
+
+async function _fetchInsumosDirecto() {
+  let res;
+  try {
+    res = await fetch(CKAN_INSUMOS_URL);
+  } catch (err) {
+    return { data: null, error: `Error de red al contactar datos.energia.gob.ar: ${err.message}` };
+  }
+  if (!res.ok) {
+    return { data: null, error: `CKAN respondió HTTP ${res.status}` };
+  }
+  const json = await res.json();
+  if (!json?.success || !Array.isArray(json.result?.records)) {
+    return { data: null, error: 'Respuesta de CKAN inválida o sin registros' };
+  }
+  try {
+    const payload = _buildInsumosPayload(json.result.records);
+    return { data: payload, error: null };
+  } catch (err) {
+    return { data: null, error: err.message };
+  }
+}
 
 /**
  * Precios de gasoil en surtidor (vigentes), zona núcleo y país.
+ * Fetch directo al browser desde CKAN (sin proxy Vercel).
  * Retorna { ok, fuente, fecha, gasoil: { g2, g3 } }
- * Cada variante tiene: { label, grado, pais, nucleo }
- * Cada scope tiene: { promedio, mediana, min, max, n }
  */
 export async function fetchInsumosGasoil() {
-  return get('/api/insumos');
+  return _fetchInsumosDirecto();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -191,17 +305,16 @@ export async function fetchCBOTAll() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Insumos — todos los combustibles — via proxy /api/insumos
-// Extiende fetchInsumosGasoil con nafta y GNC.
+// Insumos — todos los combustibles — fetch directo al browser
 // Retorna { ok, fuente, fecha, gasoil: { g2, g3 }, nafta: { super, premium, gnc } }
 // ─────────────────────────────────────────────────────────────
 
 /**
  * Precios completos de combustibles en surtidor (gasoil, nafta, GNC).
- * Retrocompatible: el campo `gasoil` sigue igual que antes.
+ * Fetch directo al browser desde CKAN. Retrocompatible: `gasoil` sigue igual.
  */
 export async function fetchInsumosAll() {
-  return get('/api/insumos');
+  return _fetchInsumosDirecto();
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -1,17 +1,10 @@
 // api/insumos.js — Vercel Edge Function
 export const config = { runtime: 'edge' };
 
-// Documentación de la API: http://datos.energia.gob.ar/acerca/ckan
-// Endpoint: datastore_search
-// Recurso: Precios en Surtidor - Resolución 314/2016 (Vigentes)
-// ID Oficial: 80ac25de-a44a-4445-9215-090cf55cfda5
-const RESOURCE_ID = '80ac25de-a44a-4445-9215-090cf55cfda5';
+// ESTA ES TU URL ORIGINAL: Sabemos que el CDN no bloquea a Vercel
+const CSV_URL = 'https://datos.energia.gob.ar/dataset/1c181390-5045-475e-94dc-410429be4b17/resource/f8dda0d5-2a9f-4d34-b79b-4e63de3995df/download/precios-historicos.csv';
 
-// Usamos limit=12000 para obtener una muestra nacional representativa sin ahogar la memoria.
-// Usamos sort=fecha_vigencia desc para asegurarnos de que la muestra sean los precios actuales.
-const CKAN_API_URL = `https://datos.energia.gob.ar/api/3/action/datastore_search?resource_id=${RESOURCE_ID}&limit=12000&sort=fecha_vigencia%20desc`;
-
-const ZONA_NUCLEO = ['santa fe', 'córdoba', 'cordoba', 'buenos aires', 'entre ríos', 'entre rios', 'la pampa'];
+const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
 
 const PRODUCTOS = {
   2:  { label: 'Nafta Súper',   unidad: 'ARS/litro' },
@@ -21,52 +14,114 @@ const PRODUCTOS = {
   21: { label: 'Gasoil G3',     unidad: 'ARS/litro' },
 };
 
+// Tu parser original (veloz y soporta comillas)
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuote = !inQuote; }
+    else if (ch === ',' && !inQuote) { result.push(cur); cur = ''; }
+    else { cur += ch; }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  const ar = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (ar) return new Date(`${ar[3]}-${ar[2]}-${ar[1]}`);
+  const iso = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return new Date(iso[1]);
+  return null;
+}
+
 export default async function handler(req) {
-  const corsHeaders = {
+  const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
   };
 
-  // Manejo de preflight CORS
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
   try {
-    // 1. Fetch a la API con un Timeout preventivo de 15s (Vercel Edge corta a los 30s)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(CKAN_API_URL, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'RadarAgro/1.0'
-      },
-      signal: controller.signal
+    const response = await fetch(CSV_URL, {
+      headers: { 'User-Agent': 'RadarAgro/1.0' }
     });
 
-    clearTimeout(timeoutId);
+    if (!response.ok) throw new Error(`El CDN devolvió HTTP ${response.status}`);
 
-    if (!response.ok) {
-      throw new Error(`API de Secretaría caída o bloqueada (HTTP ${response.status})`);
+    // LA MAGIA: Leemos el archivo como un Stream, sin cargarlo en memoria
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    
+    let buffer = '';
+    let isFirstLine = true;
+    let headers = [];
+    
+    // Solo guardaremos el último registro válido de cada surtidor
+    const latest = new Map();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      let lines = buffer.split('\n');
+      
+      // Guardamos la última línea en el buffer por si vino cortada
+      buffer = lines.pop(); 
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const cols = parseCSVLine(line);
+
+        if (isFirstLine) {
+          headers = cols.map(h => h.trim().toLowerCase().replace(/^\uFEFF/, ''));
+          isFirstLine = false;
+          continue;
+        }
+
+        const idProdRaw = cols[headers.indexOf('idproducto')] || cols[headers.indexOf('id_producto')];
+        const idProd = parseInt(idProdRaw, 10);
+        
+        if (!PRODUCTOS[idProd]) continue;
+
+        const precioRaw = cols[headers.indexOf('precio')] || '';
+        const precio = parseFloat(precioRaw.replace(',', '.'));
+        if (isNaN(precio) || precio <= 0) continue;
+
+        const fechaStr = cols[headers.indexOf('fecha_vigencia')] || cols[headers.indexOf('vigencia')] || cols[headers.indexOf('fecha')];
+        const fecha = parseDate(fechaStr);
+        if (!fecha || isNaN(fecha.getTime())) continue;
+
+        const idEmpresa = cols[headers.indexOf('idempresa')];
+        const provincia = cols[headers.indexOf('provincia')] || '';
+
+        // Clave única: Empresa + Producto + Provincia
+        const key = `${idEmpresa}-${idProd}-${provincia}`;
+        const prev = latest.get(key);
+
+        // Actualizamos si este registro es más nuevo
+        if (!prev || fecha > prev.fecha) {
+          latest.set(key, { 
+            idProd, 
+            precio, 
+            provincia, 
+            fecha,
+            isoDate: fecha.toISOString()
+          });
+        }
+      }
     }
 
-    const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.error?.message || 'Error interno en la API CKAN');
-    }
-
-    const records = data.result.records;
-
-    if (!records || records.length === 0) {
-      throw new Error('La API respondió, pero el datastore no envió registros.');
-    }
-
-    // 2. Procesamiento enfocado
+    // Ahora que terminamos de streamear (memoria intacta), agrupamos los datos
     const buckets = {
       2: { pais: [], nucleo: [] },
       3: { pais: [], nucleo: [] },
@@ -75,103 +130,55 @@ export default async function handler(req) {
       21: { pais: [], nucleo: [] }
     };
 
-    let fechaMasReciente = null;
+    let ultimaFechaRef = null;
 
-    for (let i = 0; i < records.length; i++) {
-      const row = records[i];
-      // Según esquema CKAN, el campo puede ser id_producto o idproducto
-      const idStr = row.idproducto || row.id_producto;
-      if (!idStr) continue;
+    for (const row of latest.values()) {
+      const { idProd, precio, provincia, isoDate } = row;
+      buckets[idProd].pais.push(precio);
       
-      const id = parseInt(idStr, 10);
-      if (!PRODUCTOS[id]) continue;
-
-      let precio = row.precio;
-      if (typeof precio === 'string') {
-        precio = parseFloat(precio.replace(',', '.'));
+      if (ZONA_NUCLEO.some(zn => provincia.toLowerCase().includes(zn.toLowerCase()))) {
+        buckets[idProd].nucleo.push(precio);
       }
 
-      if (isNaN(precio) || precio <= 0) continue;
-
-      const provincia = (row.provincia || '').toLowerCase();
-
-      buckets[id].pais.push(precio);
-      
-      if (ZONA_NUCLEO.some(z => provincia.includes(z))) {
-        buckets[id].nucleo.push(precio);
-      }
-
-      // Buscar la fecha más actual de la muestra
-      if (row.fecha_vigencia) {
-        if (!fechaMasReciente || row.fecha_vigencia > fechaMasReciente) {
-          fechaMasReciente = row.fecha_vigencia;
-        }
+      if (!ultimaFechaRef || isoDate > ultimaFechaRef) {
+        ultimaFechaRef = isoDate;
       }
     }
 
-    // 3. Cálculos matemáticos
-    const calcularStats = (arr) => {
-      if (arr.length === 0) return { promedio: null, mediana: null, min: null, max: null, n: 0 };
-      
-      arr.sort((a, b) => a - b);
-      const n = arr.length;
-      
-      let suma = 0;
-      for (let i = 0; i < n; i++) suma += arr[i];
-      const promedio = suma / n;
-
-      const mediana = n % 2 === 0 
-        ? (arr[n / 2 - 1] + arr[n / 2]) / 2 
-        : arr[Math.floor(n / 2)];
-
+    const estadisticas = (arr) => {
+      if (!arr.length) return { promedio: null, mediana: null, min: null, max: null, n: 0 };
+      const sorted = [...arr].sort((a, b) => a - b);
+      const n = sorted.length;
+      const mediana = n % 2 === 0 ? (sorted[n/2 - 1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
       return {
-        promedio: Number(promedio.toFixed(2)),
-        mediana: Number(mediana.toFixed(2)),
-        min: arr[0],
-        max: arr[n - 1],
-        n: n
+        promedio: Math.round(arr.reduce((s, v) => s + v, 0) / n * 10) / 10,
+        mediana: Math.round(mediana * 10) / 10,
+        min: sorted[0],
+        max: sorted[n - 1],
+        n
       };
     };
 
-    const formatearProducto = (id) => {
-      return {
-        ...PRODUCTOS[id],
-        pais: calcularStats(buckets[id].pais),
-        nucleo: calcularStats(buckets[id].nucleo)
-      };
-    };
-
-    const resultadoFinal = {
-      ok: true,
-      fuente: 'Sec. de Energía · Res. 314/2016',
-      fecha: fechaMasReciente,
-      gasoil: {
-        g2: formatearProducto(19),
-        g3: formatearProducto(21)
-      },
-      nafta: {
-        super: formatearProducto(2),
-        premium: formatearProducto(3),
-        gnc: formatearProducto(6)
-      }
-    };
-
-    return new Response(JSON.stringify(resultadoFinal), {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        // Cachear en la CDN de Vercel para no fusilar la API gubernamental en cada render
-        'Cache-Control': 's-maxage=1800, stale-while-revalidate=3600'
-      }
+    const prod = (id) => ({
+      ...PRODUCTOS[id],
+      pais: estadisticas(buckets[id].pais),
+      nucleo: estadisticas(buckets[id].nucleo),
     });
 
-  } catch (error) {
-    console.error("[RadarAgro] Falló la integración:", error.message);
-    // Devolvemos status 200 para que el Frontend de React pueda atrapar el mensaje de error "ok: false"
-    // sin que Vercel reviente la conexión de red con un 500 duro.
-    return new Response(
-      JSON.stringify({ ok: false, error: error.message }), 
-      { status: 200, headers: corsHeaders }
-    );
+    return new Response(JSON.stringify({
+      ok: true,
+      fuente: 'Sec. de Energía · Res. 314/2016',
+      fecha: ultimaFechaRef,
+      gasoil: { g2: prod(19), g3: prod(21) },
+      nafta: { super: prod(2), premium: prod(3), gnc: prod(6) }
+    }), { 
+      status: 200, 
+      // Cache agresivo para que los demás usuarios no tengan que esperar a que el stream se procese
+      headers: { ...cors, 'Cache-Control': 's-maxage=7200, stale-while-revalidate=14400' }
+    });
+
+  } catch (err) {
+    console.error('Error procesando CSV en stream:', err);
+    return new Response(JSON.stringify({ ok: false, error: err.message }), { status: 200, headers: cors });
   }
 }

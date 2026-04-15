@@ -1,7 +1,12 @@
-// api/insumos.js — Vercel Serverless Function
+// api/insumos.js — Vercel Edge Function
 // Precios de combustibles en surtidor — Secretaría de Energía (Res. 314/2016)
 // Fuente: https://datos.energia.gob.ar/api/3/action/datastore_search
 //   resource_id: 80ac25de-a44a-4445-9215-090cf55cfda5 (vigentes)
+//
+// ⚠️  DEBE correr como Edge Runtime (NO Node.js serverless).
+//     datos.energia.gob.ar bloquea IPs de datacenters AWS/Vercel Node con
+//     "host_not_allowed". Las Edge Functions usan IPs de Cloudflare que sí
+//     son aceptadas por CKAN.
 //
 // id_producto:
 //   2 = Nafta súper (92-95 Ron)
@@ -10,11 +15,10 @@
 //   6 = Nafta premium (>95 Ron)
 //  19 = GNC ($/m³)
 
+export const config = { runtime: 'edge' };
+
 const CKAN_BASE = 'https://datos.energia.gob.ar/api/3/action/datastore_search';
 const RES_ID    = '80ac25de-a44a-4445-9215-090cf55cfda5';
-
-// El portal suele tener entre 3.000 y 15.000 registros vigentes.
-// CKAN soporta hasta limit=32000 por request; si hay más, paginamos.
 const PAGE_SIZE = 32000;
 
 const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
@@ -27,41 +31,33 @@ const PRODUCTOS = {
   19: { label: 'GNC',           grupo: 'gnc',    unidad: 'ARS/m3'    },
 };
 
-// ── Fetch con timeout ─────────────────────────────────────────
-async function fetchJSON(url, timeoutMs = 25000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent':      'RadarAgro/1.0 (https://radaragro.app)',
-        'Accept':          'application/json',
-        'Accept-Language': 'es-AR,es;q=0.9',
-      },
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    }
-    const json = await res.json();
-    if (!json?.success) {
-      const detail = json?.error?.message || JSON.stringify(json?.error) || 'sin detalle';
-      throw new Error(`CKAN error: ${detail}`);
-    }
-    return json;
-  } catch (err) {
-    clearTimeout(timer);
-    throw err;
+// ── Fetch con timeout ─────────────────────────────────────────────────────────
+async function fetchJSON(url) {
+  const signal = typeof AbortSignal.timeout === 'function'
+    ? AbortSignal.timeout(25000)
+    : undefined;
+  const res = await fetch(url, {
+    signal,
+    headers: {
+      'User-Agent':      'RadarAgro/1.0 (https://radaragro.app)',
+      'Accept':          'application/json',
+      'Accept-Language': 'es-AR,es;q=0.9',
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  const json = await res.json();
+  if (!json?.success) {
+    const detail = json?.error?.message || JSON.stringify(json?.error) || 'sin detalle';
+    throw new Error(`CKAN error: ${detail}`);
   }
+  return json;
 }
 
-// ── Descarga todos los registros con paginación ───────────────
-// La API CKAN devuelve `result.total` con el total real. Si hay más
-// registros que PAGE_SIZE, hacemos requests adicionales con `offset`.
+// ── Descarga todos los registros con paginación ───────────────────────────────
 async function fetchAllRecords() {
-  const firstUrl = `${CKAN_BASE}?resource_id=${RES_ID}&limit=${PAGE_SIZE}&offset=0`;
-  const firstPage = await fetchJSON(firstUrl);
+  const firstPage = await fetchJSON(
+    `${CKAN_BASE}?resource_id=${RES_ID}&limit=${PAGE_SIZE}&offset=0`
+  );
 
   const total   = firstPage.result.total;
   const records = [...firstPage.result.records];
@@ -70,7 +66,6 @@ async function fetchAllRecords() {
     throw new Error(`CKAN devolvió 0 registros (total reportado: ${total})`);
   }
 
-  // Si hay más páginas, fetchearlas en paralelo
   if (total > records.length) {
     const offsets = [];
     for (let offset = records.length; offset < total; offset += PAGE_SIZE) {
@@ -81,16 +76,13 @@ async function fetchAllRecords() {
         fetchJSON(`${CKAN_BASE}?resource_id=${RES_ID}&limit=${PAGE_SIZE}&offset=${offset}`)
       )
     );
-    for (const page of pages) {
-      records.push(...page.result.records);
-    }
+    for (const page of pages) records.push(...page.result.records);
   }
 
   return records;
 }
 
-// ── Normalización de campos ───────────────────────────────────
-// El dataset tiene variaciones históricas en nombres de columna.
+// ── Normalización de campos ───────────────────────────────────────────────────
 function getField(row, ...keys) {
   for (const k of keys) {
     if (row[k] != null && row[k] !== '') return row[k];
@@ -98,7 +90,7 @@ function getField(row, ...keys) {
   return null;
 }
 
-// ── Procesamiento ─────────────────────────────────────────────
+// ── Procesamiento ─────────────────────────────────────────────────────────────
 function procesarTodos(records) {
   const buckets = {};
   for (const row of records) {
@@ -113,7 +105,6 @@ function procesarTodos(records) {
     if (isNaN(precio) || precio <= 0) continue;
 
     const prov = String(getField(row, 'provincia', 'Provincia', 'id_provincia') ?? '');
-
     if (!buckets[id]) buckets[id] = { todos: [], nucleo: [] };
     buckets[id].todos.push(precio);
     if (ZONA_NUCLEO.some(zn => prov.toLowerCase().includes(zn.toLowerCase()))) {
@@ -125,8 +116,8 @@ function procesarTodos(records) {
 
 function estadisticas(arr) {
   if (!arr.length) return { promedio: null, mediana: null, min: null, max: null, n: 0 };
-  const sorted = [...arr].sort((a, b) => a - b);
-  const n      = sorted.length;
+  const sorted  = [...arr].sort((a, b) => a - b);
+  const n       = sorted.length;
   const mediana = n % 2 === 0
     ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2
     : sorted[Math.floor(n / 2)];
@@ -155,7 +146,6 @@ function buildProducto(id, buckets) {
 function buildPayload(records) {
   const buckets = procesarTodos(records);
 
-  // Gasoil G2 es el producto clave — si no hay datos es un error real
   if (!buckets[3]?.todos?.length) {
     const idsEncontrados = Object.keys(buckets).join(', ') || 'ninguno';
     throw new Error(
@@ -164,7 +154,6 @@ function buildPayload(records) {
     );
   }
 
-  // Fecha de referencia: primer registro con campo de fecha
   let fechaRef = null;
   for (const row of records.slice(0, 30)) {
     const f = getField(row, 'fecha_vigencia', 'vigencia', 'fecha', 'fecha_inicio');
@@ -187,25 +176,32 @@ function buildPayload(records) {
   };
 }
 
-// ── Handler ───────────────────────────────────────────────────
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+// ── Handler Edge ──────────────────────────────────────────────────────────────
+export default async function handler(req) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': 's-maxage=3600, stale-while-revalidate=10800',
+    'Content-Type':  'application/json',
+  };
 
-  // Cache en CDN de Vercel: 1 hora, stale-while-revalidate 3 horas
-  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=10800');
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
 
   let records;
   try {
     records = await fetchAllRecords();
   } catch (err) {
     console.error('[api/insumos] Error fetcheando CKAN:', err.message);
-    return res.status(503).json({
-      ok:    false,
-      error: `No se pudo obtener datos de la Secretaría de Energía: ${err.message}`,
-    });
+    return new Response(
+      JSON.stringify({
+        ok:    false,
+        error: `No se pudo obtener datos de la Secretaría de Energía: ${err.message}`,
+      }),
+      { status: 503, headers: corsHeaders }
+    );
   }
 
   let payload;
@@ -213,11 +209,14 @@ export default async function handler(req, res) {
     payload = buildPayload(records);
   } catch (err) {
     console.error('[api/insumos] Error procesando records:', err.message);
-    return res.status(502).json({
-      ok:    false,
-      error: `Datos recibidos pero no procesables: ${err.message}`,
-    });
+    return new Response(
+      JSON.stringify({
+        ok:    false,
+        error: `Datos recibidos pero no procesables: ${err.message}`,
+      }),
+      { status: 502, headers: corsHeaders }
+    );
   }
 
-  return res.status(200).json(payload);
+  return new Response(JSON.stringify(payload), { status: 200, headers: corsHeaders });
 }

@@ -142,17 +142,76 @@ export async function fetchCBOTAll() {
 }
 
 
-// En tu archivo src/services/api.js
+// Reemplazar la función existente en src/services/api.js
 export async function fetchInsumosAll() {
-  const result = await get('/api/insumos');
+  // BYPASS: Le pegamos a la Secretaría directamente desde el navegador del usuario (IP residencial)
+  const CKAN_URL = 'https://datos.energia.gob.ar/api/3/action/datastore_search?resource_id=80ac25de-a44a-4445-9215-090cf55cfda5&limit=15000&sort=fecha_vigencia%20desc';
   
-  // Validar tanto errores nativos del fetch como errores reportados por nuestro backend
-  if (result.error || (result.data && result.data.ok === false)) {
-    return { data: null, error: result.error || result.data.error };
+  try {
+    const res = await fetch(CKAN_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    
+    if (!json.success || !json.result?.records) {
+       throw new Error("CKAN devolvió error o vino vacío");
+    }
+    
+    // Si la conexión fue exitosa, procesamos los promedios en el cliente
+    const records = json.result.records;
+    const ZONA_NUCLEO = ['santa fe', 'córdoba', 'cordoba', 'buenos aires', 'entre ríos', 'entre rios', 'la pampa'];
+    const PRODUCTOS = { 2: 'super', 3: 'premium', 6: 'gnc', 19: 'g2', 21: 'g3' };
+    
+    const buckets = { super: { p: [], n: [] }, premium: { p: [], n: [] }, gnc: { p: [], n: [] }, g2: { p: [], n: [] }, g3: { p: [], n: [] } };
+    let latestDate = null;
+
+    records.forEach(row => {
+       const id = parseInt(row.idproducto || row.id_producto, 10);
+       const key = PRODUCTOS[id];
+       if (!key) return;
+
+       let precio = parseFloat(String(row.precio).replace(',', '.'));
+       if (isNaN(precio) || precio <= 0) return;
+
+       const prov = (row.provincia || '').toLowerCase();
+       buckets[key].p.push(precio);
+       if (ZONA_NUCLEO.some(z => prov.includes(z))) buckets[key].n.push(precio);
+
+       if (row.fecha_vigencia && (!latestDate || row.fecha_vigencia > latestDate)) {
+         latestDate = row.fecha_vigencia;
+       }
+    });
+
+    const calcStats = (arr) => {
+      if (!arr.length) return { promedio: null, mediana: null, min: null, max: null, n: 0 };
+      arr.sort((a,b) => a-b);
+      const n = arr.length;
+      const sum = arr.reduce((a,b) => a+b, 0);
+      const med = n % 2 === 0 ? (arr[n/2-1] + arr[n/2]) / 2 : arr[Math.floor(n/2)];
+      return { promedio: sum / n, mediana: med, min: arr[0], max: arr[n-1], n };
+    };
+
+    const build = (k) => ({ pais: calcStats(buckets[k].p), nucleo: calcStats(buckets[k].n) });
+
+    const payload = {
+      ok: true,
+      fuente: 'Sec. de Energía (Directo)',
+      fecha: latestDate || new Date().toISOString(),
+      gasoil: { g2: build('g2'), g3: build('g3') },
+      nafta: { super: build('super'), premium: build('premium'), gnc: build('gnc') }
+    };
+
+    return { data: payload, error: null };
+
+  } catch (err) {
+    console.warn("Fallo el bypass directo, intentando vía Vercel...", err);
+    // PLAN B: Si por alguna razón el usuario tiene un firewall en su compu, 
+    // intentamos usar el proxy de Vercel como último recurso.
+    const fallback = await get('/api/insumos');
+    if (fallback.error || (fallback.data && fallback.data.ok === false)) {
+      return { data: null, error: fallback.error || fallback.data?.error || "Error de conexión" };
+    }
+    return { data: fallback.data, error: null };
   }
-  
-  // Retornar la estructura exacta que InsumosPage.jsx necesita
-  return { data: result.data, error: null };
 }
 // ─────────────────────────────────────────────────────────────
 // Precios FOB oficiales MAGyP — via proxy /api/fob

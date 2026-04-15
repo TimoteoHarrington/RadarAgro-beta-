@@ -130,7 +130,17 @@ const RELACIONES = [
   },
 ];
 
-const HIST_MESES = ['Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Ene', 'Feb'];
+// Genera dinámicamente los últimos 12 meses (ej. termina en 'Abr' si estamos en Abril)
+const HIST_MESES = (() => {
+  const nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const hoy = new Date();
+  const meses = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    meses.push(nombres[d.getMonth()]);
+  }
+  return meses;
+})();
 
 // ── Helpers ───────────────────────────────────────────────────
 

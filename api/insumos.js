@@ -93,11 +93,21 @@ export default async function handler(req) {
       if (!fechaRef || row.fechaStr > fechaRef) fechaRef = row.fechaStr;
     }
 
-    const calc = (arr) => {
-      if (!arr.length) return { promedio: null, n: 0 };
-      const sum = arr.reduce((a,b) => a+b, 0);
-      return { promedio: sum/arr.length, n: arr.length };
-    };
+      const calc = (arr) => {
+    if (!arr.length) return { promedio: null, mediana: null, min: null, max: null, n: 0 };
+    // Ordenamos el array de menor a mayor para sacar min, max y mediana
+    arr.sort((a,b) => a-b);
+    const n = arr.length;
+    const sum = arr.reduce((a,b) => a+b, 0);
+    const med = n % 2 === 0 ? (arr[n/2-1] + arr[n/2]) / 2 : arr[Math.floor(n/2)];
+    
+    return { 
+      promedio: sum/n, 
+      mediana: med, 
+      min: arr[0], 
+      max: arr[n-1], 
+      n: n }; 
+    }
 
     const build = (id) => ({ pais: calc(buckets[id].p), nucleo: calc(buckets[id].n) });
 

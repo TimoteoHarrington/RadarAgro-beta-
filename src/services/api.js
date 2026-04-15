@@ -145,22 +145,16 @@ export async function fetchCBOTAll() {
  * Precios completos de combustibles en surtidor (gasoil, nafta, GNC).
  * Via proxy /api/insumos (Vercel Edge Function → CKAN).
  */
-// En tu archivo src/services/api.js reemplazar solo esta función:
 
 export async function fetchInsumosAll() {
-  const { data, error } = await get('/api/insumos');
+  const result = await get('/api/insumos');
   
-  if (error) {
-    console.error("Error fetching insumos:", error);
-    return { data: null, error };
+  // Si hay error de red o el backend devolvió ok: false
+  if (result.error || (result.data && !result.data.ok)) {
+    return { data: null, error: result.error || result.data.error };
   }
-
-  // Si el backend respondió con ok: true, devolvemos el nodo 'data'
-  if (data && data.ok) {
-    return { data: data.data, error: null };
-  }
-
-  return { data: null, error: data?.error || 'Error desconocido' };
+  
+  return result; // Retorna { data: { gasoil, nafta... }, error: null }
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -1,14 +1,13 @@
 // api/insumos.js — Vercel Edge Function
 export const config = { runtime: 'edge' };
 
-// Usamos HTTP (sin S) para evitar el error de certificado (ERR_CERT_COMMON_NAME_INVALID)
-const CSV_URL = 'http://datos.energia.gob.ar/dataset/1c181390-5045-475e-94dc-410429be4b17/resource/f8dda0d5-2a9f-4d34-b79b-4e63de3995df/download/precios-historicos.csv';
+// 1. Usamos HTTP (esquiva el SSL roto del gobierno)
+// 2. Usamos el CSV de VIGENTES (pesa 2MB, esquiva el 504 Timeout de Vercel)
+const CSV_VIGENTES = 'http://datos.energia.gob.ar/dataset/1c181390-5045-475e-94dc-410429be4b17/resource/80ac25de-a44a-4445-9215-090cf55cfda5/download/precios-en-surtidor-resolucin-3142016.csv';
 
 const ZONA_NUCLEO = ['santa fe', 'córdoba', 'cordoba', 'buenos aires', 'entre ríos', 'entre rios', 'la pampa'];
 
-const PRODUCTOS = {
-  2: 'super', 3: 'premium', 6: 'gnc', 19: 'g2', 21: 'g3'
-};
+const PRODUCTOS = { 2: 'super', 3: 'premium', 6: 'gnc', 19: 'g2', 21: 'g3' };
 
 function parseCSVLine(line) {
   const result = [];
@@ -35,48 +34,52 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
   try {
-    const response = await fetch(CSV_URL, { headers: { 'User-Agent': 'RadarAgro/1.0' } });
-    if (!response.ok) throw new Error(`CDN Energía: HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000); // 12s de margen
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    let isFirstLine = true;
+    const response = await fetch(CSV_VIGENTES, { 
+      headers: { 'User-Agent': 'RadarAgro/1.0' },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeout);
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    // Como pesa 2MB, podemos usar .text() que es muchísimo más rápido que el Stream para el CPU
+    const text = await response.text();
+    const lines = text.split('\n');
+    
     let headers = [];
     const ultimosPrecios = new Map();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const cols = parseCSVLine(line);
 
-      buffer += decoder.decode(value, { stream: true });
-      let lines = buffer.split('\n');
-      buffer = lines.pop(); 
+      if (i === 0) {
+        headers = cols.map(h => h.trim().toLowerCase().replace(/^\uFEFF/, ''));
+        continue;
+      }
 
-      for (let line of lines) {
-        line = line.trim();
-        if (!line) continue;
-        const cols = parseCSVLine(line);
+      const idProd = parseInt(cols[headers.indexOf('idproducto')] || cols[headers.indexOf('id_producto')], 10);
+      if (!PRODUCTOS[idProd]) continue;
 
-        if (isFirstLine) {
-          headers = cols.map(h => h.trim().toLowerCase().replace(/^\uFEFF/, ''));
-          isFirstLine = false;
-          continue;
-        }
+      const precio = parseFloat((cols[headers.indexOf('precio')] || '').replace(',', '.'));
+      const fechaStr = cols[headers.indexOf('fecha_vigencia')] || cols[headers.indexOf('vigencia')] || cols[headers.indexOf('fecha')];
+      
+      if (isNaN(precio) || precio <= 0 || !fechaStr) continue;
 
-        const idProd = parseInt(cols[headers.indexOf('idproducto')] || cols[headers.indexOf('id_producto')], 10);
-        if (!PRODUCTOS[idProd]) continue;
+      const idEmpresa = cols[headers.indexOf('idempresa')];
+      const provincia = (cols[headers.indexOf('provincia')] || '').toLowerCase();
+      
+      const key = `${idEmpresa}-${idProd}-${provincia}`;
+      const prev = ultimosPrecios.get(key);
 
-        const precio = parseFloat((cols[headers.indexOf('precio')] || '').replace(',', '.'));
-        const fechaStr = cols[headers.indexOf('fecha_vigencia')] || cols[headers.indexOf('vigencia')] || cols[headers.indexOf('fecha')];
-        if (isNaN(precio) || precio <= 0 || !fechaStr) continue;
-
-        const key = `${cols[headers.indexOf('idempresa')]}-${idProd}-${cols[headers.indexOf('provincia')]}`;
-        const prev = ultimosPrecios.get(key);
-
-        if (!prev || fechaStr > prev.fechaStr) {
-          ultimosPrecios.set(key, { idProd, precio, provincia: (cols[headers.indexOf('provincia')] || '').toLowerCase(), fechaStr });
-        }
+      if (!prev || fechaStr > prev.fechaStr) {
+        ultimosPrecios.set(key, { idProd, precio, provincia, fechaStr });
       }
     }
 
@@ -100,8 +103,8 @@ export default async function handler(req) {
 
     return new Response(JSON.stringify({
       ok: true,
-      fuente: 'Secretaría de Energía · Procesamiento por Stream',
-      fecha: fechaRef,
+      fuente: 'Sec. de Energía · CSV Vigentes',
+      fecha: fechaRef || new Date().toISOString(),
       gasoil: { g2: build('g2'), g3: build('g3') },
       nafta: { super: build('super'), premium: build('premium'), gnc: build('gnc') }
     }), { 
@@ -110,6 +113,7 @@ export default async function handler(req) {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ ok: false, error: "Servicio de Energía no disponible." }), { status: 200, headers: cors });
+    console.error('Error procesando CSV Vigentes:', err);
+    return new Response(JSON.stringify({ ok: false, error: "Timeout o error en Sec. de Energía." }), { status: 200, headers: cors });
   }
 }

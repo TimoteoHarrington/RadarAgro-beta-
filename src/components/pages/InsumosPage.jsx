@@ -736,7 +736,7 @@ function TabCombustibles({ prefetch = {} }) {
           {[
             { label: 'GNC · Promedio País', val: fmt(gnc.pais.promedio), sub: 'ARS/m³' },
             { label: 'GNC · Mediana',       val: fmt(gnc.pais.mediana),  sub: 'ARS/m³' },
-            { label: 'GNC · Dispersión',    val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones` },
+            { label: 'GNC · Dispersión',    val: gnc.pais.min != null ? `${fmt(gnc.pais.min)} – ${fmt(gnc.pais.max)}` : '—', sub: `n = ${fmtN(gnc.pais.n)} estaciones (act. 30d)` },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--bg1)', padding: '14px 18px' }}>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6 }}>{item.label}</div>
@@ -761,8 +761,7 @@ function TabCombustibles({ prefetch = {} }) {
                 <th className="r">Mediana</th>
                 <th className="r">Mínimo</th>
                 <th className="r">Máximo</th>
-                <th className="r">N est.</th>
-              </tr>
+                <th className="r" title="Estaciones que actualizaron precios en los últimos 30 días">N est. (30d)</th>              </tr>
             </thead>
             <tbody>
               {[
@@ -792,8 +791,7 @@ function TabCombustibles({ prefetch = {} }) {
         </div>
       </div>
 
-      <div className="source">Fuente: {fuente} · Zona Núcleo: Santa Fe, Córdoba, Bs. As., Entre Ríos, La Pampa</div>
-    </div>
+    <div className="source">Fuente: {fuente} · Se excluyen estaciones sin actualizar en los últimos 30 días para evitar sesgos. Zona Núcleo: SF, CBA, BA, ER, LP.</div>    </div>
   );
 }
 

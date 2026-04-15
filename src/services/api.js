@@ -142,13 +142,18 @@ export async function fetchCBOTAll() {
 }
 
 
-// ─────────────────────────────────────────────────────────────
-// Precios Insumos Combustibles
-// ─────────────────────────────────────────────────────────────
+// En tu archivo src/services/api.js
 export async function fetchInsumosAll() {
-  return get('/api/insumos');
+  const result = await get('/api/insumos');
+  
+  // Validar tanto errores nativos del fetch como errores reportados por nuestro backend
+  if (result.error || (result.data && result.data.ok === false)) {
+    return { data: null, error: result.error || result.data.error };
+  }
+  
+  // Retornar la estructura exacta que InsumosPage.jsx necesita
+  return { data: result.data, error: null };
 }
-
 // ─────────────────────────────────────────────────────────────
 // Precios FOB oficiales MAGyP — via proxy /api/fob
 // ─────────────────────────────────────────────────────────────

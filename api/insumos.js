@@ -1,9 +1,8 @@
 // api/insumos.js — Vercel Edge Function
 export const config = { runtime: 'edge' };
 
-// Usamos el recurso de PRECIOS VIGENTES (Res 314) que es mucho más liviano
+// Usamos el recurso de PRECIOS VIGENTES: mucho más liviano (JSON)
 const API_VIGENTES = "https://datos.energia.gob.ar/api/3/action/datastore_search?resource_id=80ac25f3-5151-469a-91d1-425f16429532";
-
 const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
 
 export default async function handler(req) {
@@ -17,20 +16,20 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    // Agregamos un limit alto para traer todo el país y procesar nosotros
-    const response = await fetch(`${API_VIGENTES}&limit=5000`, {
+    // 1. Fetch con User-Agent para evitar bloqueos de la Secretaría
+    const response = await fetch(`${API_VIGENTES}&limit=4000`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json'
       }
     });
 
-    if (!response.ok) throw new Error(`Secretaría respondió con status ${response.status}`);
+    if (!response.ok) throw new Error(`Error de red: ${response.status}`);
 
     const json = await response.json();
     const records = json.result.records;
 
-    // Procesamos promedios nacionales y zona núcleo
+    // 2. Procesamiento ultra-rápido de promedios
     const data = procesarCombustibles(records);
 
     return new Response(JSON.stringify({
@@ -41,6 +40,7 @@ export default async function handler(req) {
     }), { status: 200, headers: corsHeaders });
 
   } catch (err) {
+    console.error("Error en /api/insumos:", err.message);
     return new Response(JSON.stringify({ ok: false, error: err.message }), { 
       status: 500, 
       headers: corsHeaders 
@@ -49,35 +49,32 @@ export default async function handler(req) {
 }
 
 function procesarCombustibles(records) {
-  const mapeo = {
-    "19": "g2", "21": "g3", "2": "super", "3": "premium", "6": "gnc"
-  };
-
-  const inicial = () => ({ sum: 0, count: 0, nucleoSum: 0, nucleoCount: 0 });
-  const stats = { g2: inicial(), g3: inicial(), super: inicial(), premium: inicial(), gnc: inicial() };
+  const ids = { "19": "g2", "21": "g3", "2": "super", "3": "premium", "6": "gnc" };
+  const init = () => ({ sum: 0, count: 0, nSum: 0, nCount: 0 });
+  const stats = { g2: init(), g3: init(), super: init(), premium: init(), gnc: init() };
 
   records.forEach(r => {
-    const prodKey = mapeo[r.idproducto];
+    const key = ids[r.idproducto];
     const precio = parseFloat(r.precio);
-    if (!prodKey || isNaN(precio)) return;
+    if (!key || isNaN(precio)) return;
 
-    stats[prodKey].sum += precio;
-    stats[prodKey].count++;
+    stats[key].sum += precio;
+    stats[key].count++;
 
     const prov = r.provincia || '';
     if (ZONA_NUCLEO.some(z => prov.toLowerCase().includes(z.toLowerCase()))) {
-      stats[prodKey].nucleoSum += precio;
-      stats[prodKey].nucleoCount++;
+      stats[key].nSum += precio;
+      stats[key].nCount++;
     }
   });
 
-  const final = (key) => ({
-    pais: { promedio: stats[key].count > 0 ? stats[key].sum / stats[key].count : null },
-    nucleo: { promedio: stats[key].nucleoCount > 0 ? stats[key].nucleoSum / stats[key].nucleoCount : null }
+  const getRes = (k) => ({
+    pais: { promedio: stats[k].count > 0 ? stats[k].sum / stats[k].count : null },
+    nucleo: { promedio: stats[k].nCount > 0 ? stats[k].nSum / stats[k].nCount : null }
   });
 
   return {
-    gasoil: { g2: final('g2'), g3: final('g3') },
-    nafta: { super: final('super'), premium: final('premium'), gnc: final('gnc') }
+    gasoil: { g2: getRes('g2'), g3: getRes('g3') },
+    nafta: { super: getRes('super'), premium: getRes('premium'), gnc: getRes('gnc') }
   };
 }

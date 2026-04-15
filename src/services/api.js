@@ -146,15 +146,17 @@ export async function fetchCBOTAll() {
  * Via proxy /api/insumos (Vercel Edge Function → CKAN).
  */
 
+// Reemplazar la función existente en src/services/api.js
 export async function fetchInsumosAll() {
   const result = await get('/api/insumos');
   
-  // Si hay error de red o el backend devolvió ok: false
-  if (result.error || (result.data && !result.data.ok)) {
+  // Validamos que el backend no haya reportado un error interno
+  if (result.error || (result.data && result.data.ok === false)) {
     return { data: null, error: result.error || result.data.error };
   }
   
-  return result; // Retorna { data: { gasoil, nafta... }, error: null }
+  // Retornamos el objeto completo para que InsumosPage.jsx pueda extraer gasoil/nafta
+  return result; 
 }
 
 // ─────────────────────────────────────────────────────────────

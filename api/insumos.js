@@ -25,12 +25,14 @@ const CKAN_VIGENTES =
 
 const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
 
+// IDs según Secretaría de Energía · Res. 314/2016
+// Verificados contra el datastore: 80ac25de-a44a-4445-9215-090cf55cfda5
 const PRODUCTOS = {
-  2:  { label: 'Nafta Súper',   unidad: 'ARS/litro' },
-  3:  { label: 'Gasoil G2',     unidad: 'ARS/litro', grado: 2 },
-  4:  { label: 'Gasoil G3',     unidad: 'ARS/litro', grado: 3 },
-  6:  { label: 'Nafta Premium', unidad: 'ARS/litro' },
-  19: { label: 'GNC',           unidad: 'ARS/m3' },
+  2:  { label: 'Nafta Súper',   unidad: 'ARS/litro' },   // "Nafta (súper) entre 92 y 95 Ron"
+  3:  { label: 'Nafta Premium', unidad: 'ARS/litro' },   // "Nafta (premium) de más de 95 Ron"
+  6:  { label: 'GNC',           unidad: 'ARS/m3'    },   // "GNC"
+  19: { label: 'Gasoil G2',     unidad: 'ARS/litro' },   // "Gas Oil Grado 2"
+  21: { label: 'Gasoil G3',     unidad: 'ARS/litro' },   // "Gas Oil Grado 3"
 };
 
 const FETCH_HEADERS = {
@@ -182,7 +184,7 @@ function buildPayload(records) {
     }
   }
 
-  if (!buckets[3]?.todos?.length) {
+  if (!buckets[19]?.todos?.length) {
     throw new Error(
       `Sin datos de Gasoil G2. IDs presentes: [${Object.keys(buckets).join(', ') || 'ninguno'}]`
     );
@@ -205,8 +207,8 @@ function buildPayload(records) {
     ok:     true,
     fuente: 'Sec. de Energía · Res. 314/2016 · datos.energia.gob.ar',
     fecha:  fechaRef,
-    gasoil: { g2: prod(3), g3: prod(4) },
-    nafta:  { super: prod(2), premium: prod(6), gnc: prod(19) },
+    gasoil: { g2: prod(19), g3: prod(21) },
+    nafta:  { super: prod(2), premium: prod(3), gnc: prod(6) },
   };
 }
 

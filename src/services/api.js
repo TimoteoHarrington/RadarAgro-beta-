@@ -145,20 +145,15 @@ export async function fetchCBOTAll() {
  * Precios completos de combustibles en surtidor (gasoil, nafta, GNC).
  * Via proxy /api/insumos (Vercel Edge Function → CKAN).
  */
-
-// Reemplazar la función existente en src/services/api.js
+// En src/services/api.js reemplaza la función fetchInsumosAll:
 export async function fetchInsumosAll() {
-  const result = await get('/api/insumos');
-  
-  // Validamos que el backend no haya reportado un error interno
-  if (result.error || (result.data && result.data.ok === false)) {
-    return { data: null, error: result.error || result.data.error };
+  const res = await get('/api/insumos');
+  // Si el backend falló o la API interna devolvió ok: false, manejamos el error
+  if (res.error || (res.data && !res.data.ok)) {
+    return { data: null, error: res.error || res.data.error };
   }
-  
-  // Retornamos el objeto completo para que InsumosPage.jsx pueda extraer gasoil/nafta
-  return result; 
+  return res; 
 }
-
 // ─────────────────────────────────────────────────────────────
 // Precios FOB oficiales MAGyP — via proxy /api/fob
 // ─────────────────────────────────────────────────────────────

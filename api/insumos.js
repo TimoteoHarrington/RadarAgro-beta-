@@ -1,80 +1,64 @@
 // api/insumos.js — Vercel Edge Function
 export const config = { runtime: 'edge' };
 
-// Usamos el recurso de PRECIOS VIGENTES: mucho más liviano (JSON)
-const API_VIGENTES = "https://datos.energia.gob.ar/api/3/action/datastore_search?resource_id=80ac25f3-5151-469a-91d1-425f16429532";
+// Recurso liviano de Precios Vigentes (Res 314)
+const API_URL = "https://datos.energia.gob.ar/api/3/action/datastore_search?resource_id=80ac25f3-5151-469a-91d1-425f16429532";
 const ZONA_NUCLEO = ['Santa Fe', 'Córdoba', 'Buenos Aires', 'Entre Ríos', 'La Pampa'];
 
 export default async function handler(req) {
-  const corsHeaders = {
+  const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
   };
 
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
   try {
-    // 1. Fetch con User-Agent para evitar bloqueos de la Secretaría
-    const response = await fetch(`${API_VIGENTES}&limit=4000`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
-      }
+    const res = await fetch(`${API_URL}&limit=5000`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 RadarAgro/1.0', 'Accept': 'application/json' }
     });
 
-    if (!response.ok) throw new Error(`Error de red: ${response.status}`);
+    if (!res.ok) throw new Error(`Portal Energía Down: ${res.status}`);
 
-    const json = await response.json();
+    const json = await res.json();
     const records = json.result.records;
 
-    // 2. Procesamiento ultra-rápido de promedios
-    const data = procesarCombustibles(records);
+    // Procesamiento simplificado
+    const data = procesar(records);
 
     return new Response(JSON.stringify({
       ok: true,
-      fuente: 'Secretaría de Energía · Res. 314/2016',
-      fecha: new Date().toISOString(),
+      fuente: 'Secretaría de Energía',
       ...data
-    }), { status: 200, headers: corsHeaders });
+    }), { status: 200, headers: cors });
 
   } catch (err) {
-    console.error("Error en /api/insumos:", err.message);
-    return new Response(JSON.stringify({ ok: false, error: err.message }), { 
-      status: 500, 
-      headers: corsHeaders 
-    });
+    return new Response(JSON.stringify({ ok: false, error: err.message }), { status: 500, headers: cors });
   }
 }
 
-function procesarCombustibles(records) {
+function procesar(records) {
   const ids = { "19": "g2", "21": "g3", "2": "super", "3": "premium", "6": "gnc" };
-  const init = () => ({ sum: 0, count: 0, nSum: 0, nCount: 0 });
-  const stats = { g2: init(), g3: init(), super: init(), premium: init(), gnc: init() };
+  const init = () => ({ sum: 0, c: 0, nSum: 0, nC: 0 });
+  const s = { g2: init(), g3: init(), super: init(), premium: init(), gnc: init() };
 
   records.forEach(r => {
-    const key = ids[r.idproducto];
-    const precio = parseFloat(r.precio);
-    if (!key || isNaN(precio)) return;
-
-    stats[key].sum += precio;
-    stats[key].count++;
-
+    const k = ids[r.idproducto];
+    const p = parseFloat(r.precio);
+    if (!k || isNaN(p)) return;
+    s[k].sum += p; s[k].c++;
     const prov = r.provincia || '';
     if (ZONA_NUCLEO.some(z => prov.toLowerCase().includes(z.toLowerCase()))) {
-      stats[key].nSum += precio;
-      stats[key].nCount++;
+      s[k].nSum += p; s[k].nC++;
     }
   });
 
-  const getRes = (k) => ({
-    pais: { promedio: stats[k].count > 0 ? stats[k].sum / stats[k].count : null },
-    nucleo: { promedio: stats[k].nCount > 0 ? stats[k].nSum / stats[k].nCount : null }
+  const get = (k) => ({
+    pais: { promedio: s[k].c > 0 ? s[k].sum / s[k].c : null },
+    nucleo: { promedio: s[k].nC > 0 ? s[k].nSum / s[k].nC : null }
   });
 
-  return {
-    gasoil: { g2: getRes('g2'), g3: getRes('g3') },
-    nafta: { super: getRes('super'), premium: getRes('premium'), gnc: getRes('gnc') }
-  };
+  return { gasoil: { g2: get('g2'), g3: get('g3') }, nafta: { super: get('super'), premium: get('premium'), gnc: get('gnc') } };
 }

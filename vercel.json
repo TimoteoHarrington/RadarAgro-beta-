@@ -1,13 +1,12 @@
 {
   "functions": {
-    "api/bcra.js":             { "maxDuration": 30 },
-    "api/indec.js":            { "maxDuration": 30 },
-    "api/mundo.js":            { "maxDuration": 25 },
-    "api/cotizaciones.js":     { "maxDuration": 20 },
-    "api/insumos.js":          { "runtime": "edge" },
-    "api/fob.js":              { "maxDuration": 20 },
-    "api/hacienda.js":         { "maxDuration": 30 },
-    "api/riesgo-pais-latam.js":{ "maxDuration": 25 }
+    "api/bcra.js":              { "maxDuration": 30 },
+    "api/indec.js":             { "maxDuration": 30 },
+    "api/mundo.js":             { "maxDuration": 25 },
+    "api/cotizaciones.js":      { "maxDuration": 20 },
+    "api/fob.js":               { "maxDuration": 20 },
+    "api/hacienda.js":          { "maxDuration": 30 },
+    "api/riesgo-pais-latam.js": { "maxDuration": 25 }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },

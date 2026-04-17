@@ -1,56 +1,157 @@
-// GranosPage.jsx — Redesigned with full API coverage from Downtack PDF
-import React, { useState } from 'react';
+// GranosPage.jsx — Live data via /api/fob (MAGyP) + /api/mundo (CBOT)
+import React, { useState, useEffect } from 'react';
 import { ApiErrorBanner } from '../ui/StatCard';
+import { fetchFOB } from '../../services/api';
 
+// ── Datos estáticos de fallback ──────────────────────────────
+// Se usan cuando la API falla o para secciones sin endpoint disponible
+// (pizarras por ciudad, Matba-Rofex, SIO).
 import {
-  GRANOS_OVERVIEW, GRANOS_PIZARRAS, GRANOS_FOB_FAS,
-  GRANOS_FUTUROS, GRANOS_SIO, GRANOS_SUBPRODUCTOS,
-  HIST_MESES, HIST_SOJA, HIST_MAIZ, HIST_TRIGO, HIST_GIRASOL, HIST_SORGO,
+  GRANOS_OVERVIEW as OVERVIEW_STATIC,
+  GRANOS_PIZARRAS,
+  GRANOS_FOB_FAS as FOB_FAS_STATIC,
+  GRANOS_FUTUROS,
+  GRANOS_SIO,
+  GRANOS_SUBPRODUCTOS,
+  HIST_MESES, HIST_SOJA, HIST_MAIZ, HIST_TRIGO, HIST_GIRASOL,
   HIST_HARINA_SOJA, HIST_ACEITE_SOJA,
   HIST_BASIS_SOJA, HIST_BASIS_MAIZ, HIST_BASIS_TRIGO,
-  CBOT_DATA,
 } from '../../data/granos.js';
 
+// ── Meta de granos: relación FAS/FOB y claves de API ─────────
+// fasRatio derivado del mock: FAS/FOB histórico de cada cereal
+const GRANOS_META = [
+  { id:'soja',    nombre:'Soja',    cbotId:'soy',   fobKey:'soja',    fasRatio:0.778, retencion:'33%', color:'green' },
+  { id:'maiz',    nombre:'Maíz',    cbotId:'corn',  fobKey:'maiz',    fasRatio:0.899, retencion:'12%', color:'gold'  },
+  { id:'trigo',   nombre:'Trigo',   cbotId:'wheat', fobKey:'trigo',   fasRatio:0.902, retencion:'12%', color:'blue'  },
+  { id:'girasol', nombre:'Girasol', cbotId:null,    fobKey:'girasol', fasRatio:0.932, retencion:'7%',  color:'gold'  },
+  { id:'sorgo',   nombre:'Sorgo',   cbotId:null,    fobKey:'sorgo',   fasRatio:0.915, retencion:'12%', color:'flat'  },
+  { id:'cebada',  nombre:'Cebada',  cbotId:null,    fobKey:'cebada',  fasRatio:0.916, retencion:'12%', color:'green' },
+];
+
 // ── Helpers ──────────────────────────────────────────────────
-const fmtARS = v => v == null ? 'S/C' : '$\u00a0' + v.toLocaleString('es-AR');
-const fmtUSD = v => v == null ? '—' : 'USD\u00a0' + v.toLocaleString('es-AR');
+const fmtARS = v => v == null ? 'S/C' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
+const fmtUSD = v => v == null ? '—'   : 'USD\u00a0' + v.toLocaleString('es-AR');
 const fmtPct = v => {
-  if (v === 0) return '= 0%';
+  if (v == null) return '—';
+  if (v === 0)   return '= 0%';
   return (v > 0 ? '+' : '') + v.toFixed(1) + '%';
 };
-const dir = v => v > 0 ? 'up' : v < 0 ? 'dn' : 'fl';
+const dir = v => v == null ? 'fl' : v > 0 ? 'up' : v < 0 ? 'dn' : 'fl';
 
 function Pill({ d, children }) {
   return <span className={`pill ${d}`}>{children}</span>;
 }
 
-// ── Mini sparkline SVG ────────────────────────────────────────
-function Spark({ pts, color }) {
+// Badge "EN VIVO"
+function LiveBadge() {
   return (
-    <svg viewBox="0 0 80 40" style={{ width: 60, height: 24, display: 'block' }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontFamily: 'var(--mono)', fontSize: 8, fontWeight: 600,
+      letterSpacing: '.08em', textTransform: 'uppercase',
+      color: 'var(--green)', background: 'var(--green-bg)',
+      padding: '2px 7px', borderRadius: 4,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
+      EN VIVO
+    </span>
+  );
+}
+
+// Badge datos de referencia (static fallback)
+function RefBadge({ fecha }) {
+  return (
+    <span style={{
+      fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)',
+      background: 'var(--bg3)', padding: '2px 7px', borderRadius: 4,
+    }}>
+      REFERENCIA{fecha ? ` · ${fecha}` : ''}
+    </span>
+  );
+}
+
+// ── Skeleton loader ───────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div className="stat" style={{ cursor: 'default', opacity: 0.5 }}>
+      <div style={{ height: 14, background: 'var(--bg3)', borderRadius: 4, width: '60%', marginBottom: 16 }} />
+      <div style={{ height: 28, background: 'var(--bg3)', borderRadius: 4, width: '80%', marginBottom: 10 }} />
+      <div style={{ height: 12, background: 'var(--bg3)', borderRadius: 4, width: '50%' }} />
+    </div>
+  );
+}
+
+// ── Mini Line Chart ───────────────────────────────────────────
+function MiniLineChart({ series, labels, height = 200 }) {
+  const w = 900, h = height;
+  const pad = { t: 14, r: 20, b: 28, l: 42 };
+  const allVals = series.flatMap(s => s.data);
+  const minV = Math.min(...allVals);
+  const maxV = Math.max(...allVals);
+  const rangeV = maxV - minV || 1;
+  const n = labels.length;
+
+  const xPos = i => pad.l + (i / (n - 1)) * (w - pad.l - pad.r);
+  const yPos = v => pad.t + (1 - (v - minV) / rangeV) * (h - pad.t - pad.b);
+  const mkPath = data => data.map((v, i) => `${i === 0 ? 'M' : 'L'}${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
+  const mkArea = data => {
+    const base = yPos(minV);
+    return mkPath(data) + ` L${xPos(n-1).toFixed(1)},${base} L${xPos(0).toFixed(1)},${base} Z`;
+  };
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height, display: 'block' }}>
+      {[0, 0.25, 0.5, 0.75, 1].map(t => {
+        const y = pad.t + (1 - t) * (h - pad.t - pad.b);
+        const v = minV + t * rangeV;
+        return (
+          <g key={t}>
+            <line x1={pad.l} y1={y} x2={w - pad.r} y2={y} stroke="var(--line)" strokeWidth="1" />
+            <text x={pad.l - 6} y={y + 4} textAnchor="end" fontSize={8} fill="var(--text3)" fontFamily="monospace">{Math.round(v)}</text>
+          </g>
+        );
+      })}
+      {labels.map((l, i) => (
+        <text key={i} x={xPos(i)} y={h - 4} textAnchor="middle" fontSize={8} fill="var(--text3)" fontFamily="monospace">{l}</text>
+      ))}
+      {series.map(s => (
+        <g key={s.label}>
+          <path d={mkArea(s.data)} fill={s.color} opacity={0.07} />
+          <path d={mkPath(s.data)} fill="none" stroke={s.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={xPos(n-1)} cy={yPos(s.data[n-1])} r={3} fill={s.color} />
+        </g>
+      ))}
     </svg>
   );
 }
 
 // ── Overview cards strip ──────────────────────────────────────
-function OverviewCards({ moneda }) {
+function OverviewCards({ moneda, overview, loading }) {
+  if (loading) {
+    return (
+      <div className="grid grid-3" style={{ marginBottom: 28 }}>
+        {[0,1,2,3,4,5].map(i => <SkeletonCard key={i} />)}
+      </div>
+    );
+  }
   return (
     <div className="grid grid-3" style={{ marginBottom: 28 }}>
-      {GRANOS_OVERVIEW.map(g => {
+      {overview.map(g => {
         const precio = moneda === 'ARS' ? fmtARS(g.precioARS) : fmtUSD(g.precioUSD);
         const d = dir(g.variacionPct);
-        const varTxt = (g.variacionPct > 0 ? '+' : '') + g.variacionPct.toFixed(1).replace('.', ',') + '%';
+        const varTxt = g.variacionPct != null
+          ? (g.variacionPct > 0 ? '+' : '') + g.variacionPct.toFixed(1).replace('.', ',') + '%'
+          : '—';
         return (
           <div key={g.id} className="stat" style={{ cursor: 'default' }}>
-            {/* Label */}
             <div style={{
-              fontSize: '14px', fontWeight: 400, color: 'var(--text2)',
-              marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+              fontSize: '13px', fontWeight: 400, color: 'var(--text2)',
+              marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              <span>{g.nombre} · Rosario</span>
+              <span>{g.nombre}</span>
+              {g.isLive ? <LiveBadge /> : <RefBadge />}
             </div>
-            {/* Precio + variación */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
               <div className="stat-val" style={{ fontSize: '22px', marginBottom: 0 }}>
                 {precio}
@@ -66,7 +167,9 @@ function OverviewCards({ moneda }) {
               </span>
             </div>
             <div className="stat-meta">
-              FOB: USD {g.fob}/tn · FAS: USD {g.fas}/tn
+              FOB: {g.fob != null ? `USD ${g.fob}` : '—'}/tn
+              {' · '}
+              FAS: {g.fas != null ? `USD ${g.fas}` : '—'}/tn
             </div>
           </div>
         );
@@ -75,11 +178,28 @@ function OverviewCards({ moneda }) {
   );
 }
 
-// ── TAB: Pizarras ────────────────────────────────────────────
-function TabPizarras({ moneda }) {
-  const tc = 1246; // tipo de cambio mock
+// ── TAB: Pizarras ─────────────────────────────────────────────
+function TabPizarras({ moneda, fobData, cbotSoja, cbotMaiz, cbotTrigo, tc }) {
+  const tcVal = tc ?? 1246;
+
+  const basisItems = [
+    { name: 'Soja',  fob: fobData?.precios?.soja  ?? 366, cbot: cbotSoja?.price  ?? 419, isLive: !!(fobData?.precios?.soja  && cbotSoja?.price)  },
+    { name: 'Maíz',  fob: fobData?.precios?.maiz  ?? 202, cbot: cbotMaiz?.price  ?? 186, isLive: !!(fobData?.precios?.maiz  && cbotMaiz?.price)  },
+    { name: 'Trigo', fob: fobData?.precios?.trigo ?? 199, cbot: cbotTrigo?.price ?? 204, isLive: !!(fobData?.precios?.trigo && cbotTrigo?.price) },
+  ].map(item => ({
+    ...item,
+    basis:    Math.round(item.fob - item.cbot),
+    basisPct: ((item.fob - item.cbot) / item.cbot * 100).toFixed(1),
+  }));
+
   return (
     <div>
+      <div className="alert-strip info" style={{ marginBottom: 16 }}>
+        <span className="alert-icon">ℹ</span>
+        <span className="alert-text">
+          Pizarras por ciudad disponibles próximamente. Precios FOB en vivo en la pestaña <strong>FOB / FAS</strong>.
+        </span>
+      </div>
       <div className="tbl-wrap">
         <div className="tbl-scroll">
           <table>
@@ -96,14 +216,14 @@ function TabPizarras({ moneda }) {
             </thead>
             <tbody>
               {GRANOS_PIZARRAS.map(row => {
-                const fmt = v => moneda === 'ARS' ? fmtARS(v) : (v ? fmtUSD(Math.round(v / tc)) : 'S/C');
+                const fmt = v => moneda === 'ARS' ? fmtARS(v) : (v ? fmtUSD(Math.round(v / tcVal)) : 'S/C');
                 return (
                   <tr key={row.producto}>
                     <td className="bold">{row.producto}</td>
                     <td className="r w">{fmt(row.rosario)}</td>
-                    <td className={`r ${row.bsas ? 'mono' : 'dim'}`}>{fmt(row.bsas)}</td>
-                    <td className={`r ${row.bahia ? 'mono' : 'dim'}`}>{fmt(row.bahia)}</td>
-                    <td className={`r ${row.queq  ? 'mono' : 'dim'}`}>{fmt(row.queq)}</td>
+                    <td className={`r ${row.bsas    ? 'mono' : 'dim'}`}>{fmt(row.bsas)}</td>
+                    <td className={`r ${row.bahia   ? 'mono' : 'dim'}`}>{fmt(row.bahia)}</td>
+                    <td className={`r ${row.queq    ? 'mono' : 'dim'}`}>{fmt(row.queq)}</td>
                     <td className={`r ${row.cordoba ? 'mono' : 'dim'}`}>{fmt(row.cordoba)}</td>
                     <td className="r"><Pill d={row.varDir}>{fmtPct(row.varPct)}</Pill></td>
                   </tr>
@@ -113,32 +233,51 @@ function TabPizarras({ moneda }) {
           </table>
         </div>
       </div>
-      <div className="source">Fuente: BCR — Cámara Arbitral de Cereales · 30-03-2026</div>
+      <div className="source" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Fuente: BCR — Cámara Arbitral de Cereales</span>
+        <RefBadge />
+      </div>
 
-      {/* Basis Analysis */}
+      {/* Basis Analysis — en vivo */}
       <div style={{ marginTop: 24 }}>
-        <div className="section-title">Análisis Basis — BCR Rosario vs CBOT</div>
+        <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Análisis Basis — FOB MAGyP vs CBOT
+          {basisItems.some(b => b.isLive) ? <LiveBadge /> : <RefBadge />}
+        </div>
         <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-            Basis = Precio local (BCR) − Precio internacional (CBOT). Basis negativo = descuento por retenciones + logística.
+            Basis = Precio FOB local (MAGyP) − Precio CBOT spot. Basis negativo = descuento por retenciones + logística.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr 1px 1fr', background: 'var(--line)' }}>
-            {[
-              { name: 'Soja',  bcr: 'USD 366', cbot: 'USD 419', basis: '−USD 53', bc: 'var(--red)',   nota: '−12,6% vs CBOT · ret. 33%+flete' },
-              { name: 'Maíz',  bcr: 'USD 202', cbot: 'USD 186', basis: '+USD 16', bc: 'var(--green)', nota: '+8,6% sobre CBOT · demanda local' },
-              { name: 'Trigo', bcr: 'USD 199', cbot: 'USD 204', basis: '−USD 5',  bc: 'var(--text3)', nota: '−2,5% · diferencial pequeño' },
-            ].map((item, i) => (
-              <React.Fragment key={item.name}>
-                <div style={{ background: 'var(--bg1)', padding: '18px 20px' }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10 }}>{item.name}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span style={{ fontSize: 12, color: 'var(--text2)' }}>BCR Rosario</span><span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>{item.bcr}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><span style={{ fontSize: 12, color: 'var(--text2)' }}>CBOT MAR-26</span><span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>{item.cbot}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line)' }}><span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Basis</span><span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: item.bc }}>{item.basis}</span></div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>{item.nota}</div>
-                </div>
-                {i < 2 && <div style={{ background: 'var(--line)' }} />}
-              </React.Fragment>
-            ))}
+            {basisItems.map((item, i) => {
+              const bc = item.basis > 0 ? 'var(--green)' : item.basis < 0 ? 'var(--red)' : 'var(--text3)';
+              const sign = item.basis > 0 ? '+' : '';
+              return (
+                <React.Fragment key={item.name}>
+                  <div style={{ background: 'var(--bg1)', padding: '18px 20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase' }}>{item.name}</div>
+                      {item.isLive ? <LiveBadge /> : <RefBadge />}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>FOB MAGyP</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>USD {item.fob}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>CBOT Spot</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>USD {Math.round(item.cbot)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Basis</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: bc }}>
+                        {sign}USD {item.basis} ({sign}{item.basisPct}%)
+                      </span>
+                    </div>
+                  </div>
+                  {i < 2 && <div style={{ background: 'var(--line)' }} />}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -146,14 +285,58 @@ function TabPizarras({ moneda }) {
   );
 }
 
-// ── TAB: FOB / FAS ───────────────────────────────────────────
-function TabFobFas() {
+// ── TAB: FOB / FAS — EN VIVO ──────────────────────────────────
+function TabFobFas({ fobData, fobStatus, mundo }) {
+  const isLive = fobStatus === 'ok' && fobData?.ok !== false;
+
+  const rows = React.useMemo(() => {
+    const getCbot = id => mundo?.items?.find(i => i.id === id);
+
+    if (!fobData?.precios) return FOB_FAS_STATIC.map(r => ({ ...r, isLive: false }));
+
+    const p = fobData.precios;
+    const liveRows = [
+      { id:'soja',         nombre:'Soja',           fob: p.soja,           retencion:'33%', nota:'Puerto Rosario',          fasRatio:0.778, cbotId:'soy'     },
+      { id:'soja-harina',  nombre:'Harina Soja',     fob: p.harina_soja,    retencion:'—',   nota:'Subproducto · 47% prot.', fasRatio:null,  cbotId:'soymeal' },
+      { id:'soja-aceite',  nombre:'Aceite Soja',     fob: p.aceite_soja,    retencion:'—',   nota:'USD/tn · Exportación',    fasRatio:null,  cbotId:'soyoil'  },
+      { id:'maiz',         nombre:'Maíz',            fob: p.maiz,           retencion:'12%', nota:'Puerto Rosario',          fasRatio:0.899, cbotId:'corn'    },
+      { id:'trigo',        nombre:'Trigo',           fob: p.trigo,          retencion:'12%', nota:'Puerto Rosario',          fasRatio:0.902, cbotId:'wheat'   },
+      { id:'girasol',      nombre:'Girasol',         fob: p.girasol,        retencion:'7%',  nota:'Bahía Blanca',            fasRatio:0.932, cbotId:null      },
+      { id:'pellets-gir',  nombre:'Pellets Girasol', fob: p.pellets_girasol,retencion:'—',   nota:'Subproducto',             fasRatio:null,  cbotId:null      },
+      { id:'cebada',       nombre:'Cebada',          fob: p.cebada,         retencion:'12%', nota:'Puerto Rosario',          fasRatio:0.916, cbotId:null      },
+    ].filter(r => r.fob != null);
+
+    return liveRows.map(row => {
+      const cbot   = row.cbotId ? getCbot(row.cbotId) : null;
+      const varFob = cbot?.change != null ? Math.round(cbot.change * 10) / 10 : null;
+      const fas    = (row.fob && row.fasRatio) ? Math.round(row.fob * row.fasRatio) : null;
+      const varFas = varFob != null ? Math.round(varFob * 0.9 * 10) / 10 : null;
+      return { ...row, fas, varFob, varFas, isLive: true };
+    });
+  }, [fobData, mundo]);
+
+  if (fobStatus === 'loading') {
+    return (
+      <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text3)' }}>
+        <div style={{ fontSize: 13 }}>Cargando precios FOB desde MAGyP…</div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="alert-strip info" style={{ marginBottom: 20 }}>
         <span className="alert-icon">ℹ</span>
-        <span className="alert-text">Precios <strong>FOB</strong> (Free On Board) y <strong>FAS</strong> (Free Alongside Ship) expresados en <strong>USD/tn</strong> · Puerto Rosario salvo indicación · Fuente: Downtack</span>
+        <span className="alert-text">
+          Precios <strong>FOB</strong> y <strong>FAS</strong> en <strong>USD/tn</strong>.
+          {' '}
+          {isLive
+            ? <>Fuente: <strong>MAGyP · Ley 21.453</strong> · <LiveBadge /> · Fecha: <strong>{fobData?.fecha ?? '—'}</strong></>
+            : <>Fuente: Downtack · <RefBadge /></>
+          }
+        </span>
       </div>
+
       <div className="tbl-wrap">
         <div className="tbl-scroll">
           <table>
@@ -169,13 +352,21 @@ function TabFobFas() {
               </tr>
             </thead>
             <tbody>
-              {GRANOS_FOB_FAS.map(row => (
+              {rows.map(row => (
                 <tr key={row.id}>
                   <td className="bold">{row.nombre}</td>
                   <td className="r w mono">{row.fob != null ? `USD ${row.fob}` : '—'}</td>
-                  <td className="r">{row.varFob != null ? <Pill d={dir(row.varFob)}>{fmtPct(row.varFob)}</Pill> : <span className="dim">—</span>}</td>
+                  <td className="r">
+                    {row.varFob != null
+                      ? <Pill d={dir(row.varFob)}>{fmtPct(row.varFob)}</Pill>
+                      : <span className="dim">—</span>}
+                  </td>
                   <td className="r mono">{row.fas != null ? `USD ${row.fas}` : <span className="dim">—</span>}</td>
-                  <td className="r">{row.varFas != null ? <Pill d={dir(row.varFas)}>{fmtPct(row.varFas)}</Pill> : <span className="dim">—</span>}</td>
+                  <td className="r">
+                    {row.varFas != null
+                      ? <Pill d={dir(row.varFas)}>{fmtPct(row.varFas)}</Pill>
+                      : <span className="dim">—</span>}
+                  </td>
                   <td className="r mono dim">{row.retencion}</td>
                   <td className="dim" style={{ fontSize: 11 }}>{row.nota}</td>
                 </tr>
@@ -184,15 +375,38 @@ function TabFobFas() {
           </table>
         </div>
       </div>
-      <div className="source">Fuente: Downtack / BCR · 30-03-2026</div>
+
+      {!isLive && fobStatus === 'error' && (
+        <div className="alert-strip error" style={{ marginTop: 12 }}>
+          <span className="alert-icon">⚠</span>
+          <span className="alert-text">No se pudo conectar con MAGyP. Mostrando datos de referencia.</span>
+        </div>
+      )}
+
+      <div className="source" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>{isLive ? `Fuente: MAGyP · Ley 21.453 · ${fobData?.fecha ?? ''}` : 'Fuente: Downtack / BCR · referencia'}</span>
+        {isLive ? <LiveBadge /> : <RefBadge />}
+      </div>
     </div>
   );
 }
 
-// ── TAB: Futuros ─────────────────────────────────────────────
-function TabFuturos() {
+// ── TAB: Futuros ──────────────────────────────────────────────
+function TabFuturos({ mundo }) {
   const [activeCereal, setActiveCereal] = useState('soja');
   const cereal = GRANOS_FUTUROS.find(c => c.id === activeCereal) || GRANOS_FUTUROS[0];
+
+  const cbotIdMap = { soja:'soy', maiz:'corn', trigo:'wheat', 'soja-harina-fut':'soymeal', 'soja-aceite-fut':'soyoil' };
+  const cbotItem  = mundo?.items?.find(i => i.id === cbotIdMap[activeCereal]);
+
+  const enrichedUs = cereal.us.map((f, idx) => {
+    if (idx === 0 && cbotItem?.price != null) {
+      const livePrice  = Math.round(cbotItem.price * 100) / 100;
+      const liveChange = cbotItem.change != null ? Math.round(cbotItem.change * 100) / 100 : f.varPct;
+      return { ...f, precio: livePrice, varPct: liveChange, varDir: dir(liveChange), isLive: true };
+    }
+    return { ...f, isLive: false };
+  });
 
   return (
     <div>
@@ -209,9 +423,10 @@ function TabFuturos() {
       </div>
 
       <div className="grid grid-2">
-        {/* Matba-Rofex */}
         <div>
-          <div className="section-title">Matba-Rofex (ARS/tn)</div>
+          <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Matba-Rofex (ARS/tn) <RefBadge />
+          </div>
           {cereal.matba.length === 0
             ? <div style={{ color: 'var(--text3)', fontSize: 13, padding: '16px 0' }}>Sin contratos disponibles en Matba para este producto.</div>
             : (
@@ -231,19 +446,34 @@ function TabFuturos() {
               </div>
             )
           }
-          <div className="source">Fuente: Matba-Rofex · 30-03-2026</div>
+          <div className="source">Fuente: Matba-Rofex · datos de referencia</div>
         </div>
 
-        {/* CBOT / US */}
         <div>
-          <div className="section-title">Chicago / CBOT (USD/tn)</div>
+          <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            Chicago / CBOT (USD/tn)
+            {cbotItem?.price != null ? <LiveBadge /> : <RefBadge />}
+          </div>
           <div className="tbl-wrap">
             <table>
-              <thead><tr><th>Contrato</th><th className="r">USD/tn</th><th className="r">Var. %</th><th className="r">Máx.</th><th className="r">Mín.</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Contrato</th>
+                  <th className="r">USD/tn</th>
+                  <th className="r">Var. %</th>
+                  <th className="r">Máx.</th>
+                  <th className="r">Mín.</th>
+                </tr>
+              </thead>
               <tbody>
-                {cereal.us.map(f => (
+                {enrichedUs.map(f => (
                   <tr key={f.contrato}>
-                    <td className="bold">{f.contrato}</td>
+                    <td className="bold">
+                      {f.contrato}
+                      {f.isLive && (
+                        <span style={{ marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--green)' }}>● SPOT</span>
+                      )}
+                    </td>
                     <td className="r w mono">{f.precio}</td>
                     <td className="r"><Pill d={f.varDir}>{fmtPct(f.varPct)}</Pill></td>
                     <td className="r dim mono">{f.max}</td>
@@ -253,20 +483,26 @@ function TabFuturos() {
               </tbody>
             </table>
           </div>
-          <div className="source">Fuente: CME Group (CBOT) · 30-03-2026</div>
+          <div className="source" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Fuente: CME Group · Yahoo Finance</span>
+            {cbotItem?.price != null ? <LiveBadge /> : <RefBadge />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ── TAB: SIO Promedios ───────────────────────────────────────
+// ── TAB: SIO Promedios ────────────────────────────────────────
 function TabSIO() {
   return (
     <div>
       <div className="alert-strip info" style={{ marginBottom: 20 }}>
         <span className="alert-icon">ℹ</span>
-        <span className="alert-text">Indicadores del <strong>Sistema de Información de Operaciones (SIO)</strong> del MINAGRI y Bolsa de Cereales. Promedios de operaciones registradas.</span>
+        <span className="alert-text">
+          Indicadores del <strong>SIO</strong> (MINAGRI / Bolsa de Cereales).{' '}
+          <RefBadge /> — API SIO en desarrollo.
+        </span>
       </div>
       <div className="tbl-wrap">
         <div className="tbl-scroll">
@@ -283,11 +519,11 @@ function TabSIO() {
             <tbody>
               {GRANOS_SIO.map(g => {
                 const rows = [];
-                if (g.promedio) rows.push({ label: 'Promedio SIO', precio: g.promedio.precio, var: g.promedio.var, varDir: g.promedio.varDir, nota: g.promedio.nota });
-                if (g.camara)   rows.push({ label: 'Cámara SIO',   precio: g.camara.precio,   var: g.camara.var,   varDir: g.camara.varDir,   nota: g.camara.nota });
-                if (g.fabrica)  rows.push({ label: 'Fábrica SIO',  precio: g.fabrica.precio,  var: g.fabrica.var,  varDir: g.fabrica.varDir,  nota: g.fabrica.nota });
-                if (g.ros)      rows.push({ label: 'ROS/Disp.',    precio: g.ros.ars,          var: null,           varDir: 'fl',              nota: g.ros.nota });
-                if (g.ba)       rows.push({ label: 'BA/Disp.',     precio: g.ba.ars,           var: null,           varDir: 'fl',              nota: g.ba.nota });
+                if (g.promedio) rows.push({ label:'Promedio SIO', precio:g.promedio.precio, var:g.promedio.var, varDir:g.promedio.varDir, nota:g.promedio.nota });
+                if (g.camara)   rows.push({ label:'Cámara SIO',   precio:g.camara.precio,   var:g.camara.var,   varDir:g.camara.varDir,   nota:g.camara.nota   });
+                if (g.fabrica)  rows.push({ label:'Fábrica SIO',  precio:g.fabrica.precio,  var:g.fabrica.var,  varDir:g.fabrica.varDir,  nota:g.fabrica.nota  });
+                if (g.ros)      rows.push({ label:'ROS/Disp.',    precio:g.ros.ars,          var:null,           varDir:'fl',              nota:g.ros.nota      });
+                if (g.ba)       rows.push({ label:'BA/Disp.',     precio:g.ba.ars,           var:null,           varDir:'fl',              nota:g.ba.nota       });
                 return rows.map((row, i) => (
                   <tr key={`${g.id}-${i}`}>
                     {i === 0 && <td className="bold" rowSpan={rows.length}>{g.nombre}</td>}
@@ -302,67 +538,93 @@ function TabSIO() {
           </table>
         </div>
       </div>
-      <div className="source">Fuente: SIO MINAGRI · BCR · 30-03-2026</div>
+      <div className="source">Fuente: SIO MINAGRI · BCR · datos de referencia</div>
     </div>
   );
 }
 
-// ── TAB: Subproductos ────────────────────────────────────────
-function TabSubproductos() {
+// ── TAB: Subproductos ─────────────────────────────────────────
+function TabSubproductos({ fobData, mundo }) {
   const s = GRANOS_SUBPRODUCTOS.soja;
   const g = GRANOS_SUBPRODUCTOS.girasol;
+
+  const harinaFobLive = fobData?.precios?.harina_soja ?? null;
+  const aceiteFobLive = fobData?.precios?.aceite_soja  ?? null;
+  const harinaFutItem = mundo?.items?.find(i => i.id === 'soymeal');
+  const aceiteFutItem = mundo?.items?.find(i => i.id === 'soyoil');
+  const sojaFobLive   = fobData?.precios?.soja ?? null;
+
+  const harinaFob = harinaFobLive ?? s.harinaFob.precio;
+  const aceiteFob = aceiteFobLive ?? s.aceiteFob.precio;
+  const harinaFut = harinaFutItem?.price != null ? Math.round(harinaFutItem.price) : s.harinaFutUs.precio;
+  const aceiteFut = aceiteFutItem?.price != null ? aceiteFutItem.price.toFixed(2) : s.aceiteFutUs.precio;
+  const sojaFob   = sojaFobLive ?? 396;
+
+  const crushMargin = Math.round(harinaFob * 0.79 + aceiteFob * 0.19 - sojaFob);
+  const liveAny     = harinaFobLive || aceiteFobLive || harinaFutItem || aceiteFutItem;
+
+  const subCards = [
+    { label:'Harina Soja FOB',     valor:`USD ${harinaFob}`,  unidad:'USD/tn', var: harinaFutItem?.change ?? s.harinaFob.var, isLive:!!harinaFobLive },
+    { label:'Aceite Soja FOB',     valor:`USD ${aceiteFob}`,  unidad:'USD/tn', var: aceiteFutItem?.change ?? s.aceiteFob.var, isLive:!!aceiteFobLive },
+    { label:'Harina Soja Fut. US', valor:`USD ${harinaFut}`,  unidad:'USD/tn', var: harinaFutItem?.change ?? s.harinaFutUs.var, isLive:!!harinaFutItem },
+    { label:'Aceite Soja Fut. US', valor:`${aceiteFut}¢`,     unidad:'USc/lb', var: aceiteFutItem?.change ?? s.aceiteFutUs.var, isLive:!!aceiteFutItem },
+  ];
+
   return (
     <div>
-      <div className="section-title">Complejo Sojero</div>
+      <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        Complejo Sojero {liveAny ? <LiveBadge /> : <RefBadge />}
+      </div>
       <div className="grid grid-4" style={{ marginBottom: 24 }}>
-        {[
-          { label: 'Harina Soja FOB',      valor: `USD ${s.harinaFob.precio}`,   unidad: s.harinaFob.unidad,   var: s.harinaFob.var,   varDir: s.harinaFob.varDir },
-          { label: 'Aceite Soja FOB',      valor: `USD ${s.aceiteFob.precio}`,   unidad: s.aceiteFob.unidad,   var: s.aceiteFob.var,   varDir: s.aceiteFob.varDir },
-          { label: 'Harina Soja Fut. US',  valor: `USD ${s.harinaFutUs.precio}`, unidad: s.harinaFutUs.unidad, var: s.harinaFutUs.var, varDir: s.harinaFutUs.varDir },
-          { label: 'Aceite Soja Fut. US',  valor: `${s.aceiteFutUs.precio}¢`,    unidad: 'USc/lb',             var: s.aceiteFutUs.var, varDir: s.aceiteFutUs.varDir },
-        ].map(item => (
-          <div key={item.label} className="stat" style={{ cursor: 'default' }}>
-            <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span>{item.label}</span>
+        {subCards.map(item => {
+          const d = dir(item.var);
+          return (
+            <div key={item.label} className="stat" style={{ cursor: 'default' }}>
+              <div style={{ fontSize:'13px', fontWeight:400, color:'var(--text2)', marginBottom:'8px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span>{item.label}</span>
+                {item.isLive ? <LiveBadge /> : <RefBadge />}
+              </div>
+              <div style={{ display:'flex', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
+                <div className="stat-val" style={{ fontSize:'20px', marginBottom:0 }}>{item.valor}</div>
+                <span style={{ fontFamily:'var(--mono)', fontSize:'11px', fontWeight:600, color: d==='up'?'var(--green)':d==='dn'?'var(--red)':'var(--text3)', background: d==='up'?'var(--green-bg)':d==='dn'?'var(--red-bg)':'transparent', padding: d==='fl'?'0':'2px 8px', borderRadius:'4px' }}>
+                  {fmtPct(item.var)}
+                </span>
+              </div>
+              <div className="stat-meta">{item.unidad}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-              <div className="stat-val" style={{ fontSize: '20px', marginBottom: 0 }}>{item.valor}</div>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: item.varDir === 'up' ? 'var(--green)' : item.varDir === 'dn' ? 'var(--red)' : 'var(--text3)', background: item.varDir === 'up' ? 'var(--green-bg)' : item.varDir === 'dn' ? 'var(--red-bg)' : 'transparent', padding: item.varDir === 'fl' ? '0' : '2px 8px', borderRadius: '4px' }}>
-                {fmtPct(item.var)}
-              </span>
-            </div>
-            <div className="stat-meta">{item.unidad}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Crush margin */}
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 12 }}>Relación Crush Soja</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: 'var(--line)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, padding:'16px 20px', marginBottom:24 }}>
+        <div style={{ fontFamily:'var(--mono)', fontSize:9, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--text3)', marginBottom:12 }}>
+          Relación Crush Soja {sojaFobLive ? '— en vivo' : ''}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:1, background:'var(--line)', borderRadius:8, overflow:'hidden' }}>
           {[
-            { label: 'Crushing Margin', valor: `USD ${s.crush}`, sub: 'USD/tn procesada' },
-            { label: 'Relación H/A',    valor: `${s.relacionHarinaAceite}×`, sub: 'Harina/Aceite precio' },
-            { label: 'Soja Grano FOB',  valor: 'USD 396', sub: 'vs USD 298 harina' },
+            { label:'Crush Margin',   valor:`USD ${crushMargin}`, sub:'USD/tn procesada' },
+            { label:'Harina/Aceite',  valor:`${(harinaFob/aceiteFob).toFixed(2)}×`, sub:'ratio precio' },
+            { label:'Soja Grano FOB', valor:`USD ${sojaFob}`, sub:`vs USD ${Math.round(harinaFob)} harina` },
           ].map(item => (
-            <div key={item.label} style={{ background: 'var(--bg1)', padding: '12px 16px', textAlign: 'center' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.06em', marginBottom: 6 }}>{item.label}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{item.valor}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', marginTop: 3 }}>{item.sub}</div>
+            <div key={item.label} style={{ background:'var(--bg1)', padding:'12px 16px', textAlign:'center' }}>
+              <div style={{ fontFamily:'var(--mono)', fontSize:9, color:'var(--text3)', letterSpacing:'.06em', marginBottom:6 }}>{item.label}</div>
+              <div style={{ fontFamily:'var(--mono)', fontSize:18, fontWeight:700, color:'var(--accent)' }}>{item.valor}</div>
+              <div style={{ fontFamily:'var(--mono)', fontSize:9, color:'var(--text3)', marginTop:3 }}>{item.sub}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Histórico harina y aceite */}
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 28 }}>
-        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>Evolución Subproductos Soja · USD/tn · 12 meses</div>
-          <div style={{ display: 'flex', gap: 16 }}>
+      <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, overflow:'hidden', marginBottom:28 }}>
+        <div style={{ padding:'14px 20px 12px', borderBottom:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ fontFamily:'var(--mono)', fontSize:9, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--text3)' }}>
+            Evolución Subproductos Soja · USD/tn · 12 meses
+          </div>
+          <div style={{ display:'flex', gap:16 }}>
             {[['Harina Soja','#56c97a'],['Aceite Soja ÷10','#4d9ef0']].map(([l,c]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 20, height: 2, background: c, borderRadius: 1 }} />
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{l}</span>
+              <div key={l} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <div style={{ width:20, height:2, background:c, borderRadius:1 }} />
+                <span style={{ fontFamily:'var(--mono)', fontSize:9, color:'var(--text3)' }}>{l}</span>
               </div>
             ))}
           </div>
@@ -377,43 +639,58 @@ function TabSubproductos() {
         />
       </div>
 
-      <div className="section-title" style={{ marginTop: 28 }}>Complejo Girasol</div>
+      <div className="section-title" style={{ marginTop:28 }}>Complejo Girasol</div>
       <div className="grid grid-2">
-        <div className="stat" style={{ cursor: 'default' }}>
-          <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span>Aceite Girasol FOB</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-            <div className="stat-val" style={{ fontSize: '20px', marginBottom: 0 }}>USD {g.aceiteFob.precio}</div>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 600, color: dir(g.aceiteFob.var) === 'up' ? 'var(--green)' : dir(g.aceiteFob.var) === 'dn' ? 'var(--red)' : 'var(--text3)', background: dir(g.aceiteFob.var) === 'up' ? 'var(--green-bg)' : dir(g.aceiteFob.var) === 'dn' ? 'var(--red-bg)' : 'transparent', padding: dir(g.aceiteFob.var) === 'fl' ? '0' : '2px 8px', borderRadius: '4px' }}>
+        <div className="stat" style={{ cursor:'default' }}>
+          <div style={{ fontSize:'13px', fontWeight:400, color:'var(--text2)', marginBottom:'8px' }}>Aceite Girasol FOB</div>
+          <div style={{ display:'flex', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
+            <div className="stat-val" style={{ fontSize:'20px', marginBottom:0 }}>USD {g.aceiteFob.precio}</div>
+            <span style={{ fontFamily:'var(--mono)', fontSize:'11px', fontWeight:600, color:dir(g.aceiteFob.var)==='up'?'var(--green)':'var(--red)', background:dir(g.aceiteFob.var)==='up'?'var(--green-bg)':'var(--red-bg)', padding:'2px 8px', borderRadius:'4px' }}>
               {fmtPct(g.aceiteFob.var)}
             </span>
           </div>
           <div className="stat-meta">USD/tn · Exportación</div>
         </div>
-        <div className="stat" style={{ cursor: 'default' }}>
-          <div style={{ fontSize: '13px', fontWeight: 400, color: 'var(--text2)', marginBottom: '8px' }}>Girasol Grano FOB</div>
-          <div className="stat-val" style={{ fontSize: '20px', marginBottom: '10px' }}>USD 440</div>
+        <div className="stat" style={{ cursor:'default' }}>
+          <div style={{ fontSize:'13px', fontWeight:400, color:'var(--text2)', marginBottom:'8px' }}>Girasol Grano FOB</div>
+          <div className="stat-val" style={{ fontSize:'20px', marginBottom:'10px' }}>
+            {fobData?.precios?.girasol ? `USD ${fobData.precios.girasol}` : 'USD 440'}
+          </div>
           <div className="stat-meta">Retención 7% · Bahía Blanca</div>
         </div>
       </div>
-      <div className="source" style={{ marginTop: 10 }}>Fuente: Downtack / BCR / CME Group · 30-03-2026</div>
+      <div className="source" style={{ marginTop:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span>Fuente: MAGyP / BCR / CME Group</span>
+        {liveAny ? <LiveBadge /> : <RefBadge />}
+      </div>
     </div>
   );
 }
 
 // ── TAB: Histórico ────────────────────────────────────────────
-function TabHistorico() {
+function TabHistorico({ fobData, mundo }) {
   const [vista, setVista] = useState('granos');
+
+  const getCbot   = id => mundo?.items?.find(i => i.id === id);
+  const cbotSoja  = getCbot('soy');
+  const cbotMaiz  = getCbot('corn');
+  const cbotTrigo = getCbot('wheat');
+
+  // Actualizar último punto del histórico con datos en vivo
+  const histSoja  = cbotSoja?.price  ? [...HIST_SOJA.slice(0,-1),  Math.round(cbotSoja.price)]  : HIST_SOJA;
+  const histMaiz  = cbotMaiz?.price  ? [...HIST_MAIZ.slice(0,-1),  Math.round(cbotMaiz.price)]  : HIST_MAIZ;
+  const histTrigo = cbotTrigo?.price ? [...HIST_TRIGO.slice(0,-1), Math.round(cbotTrigo.price)] : HIST_TRIGO;
+  const hasLive   = !!(cbotSoja || cbotMaiz || cbotTrigo);
+
   const seriesGranos = [
-    { data: HIST_SOJA,    color: '#56c97a', label: 'Soja' },
-    { data: HIST_MAIZ,    color: '#f0b840', label: 'Maíz' },
-    { data: HIST_TRIGO,   color: '#4d9ef0', label: 'Trigo' },
-    { data: HIST_GIRASOL.map(v => v / 2), color: '#f07070', label: 'Girasol ÷2' },
+    { data: histSoja,                    color: '#56c97a', label: 'Soja'      },
+    { data: histMaiz,                    color: '#f0b840', label: 'Maíz'      },
+    { data: histTrigo,                   color: '#4d9ef0', label: 'Trigo'     },
+    { data: HIST_GIRASOL.map(v => v/2), color: '#f07070', label: 'Girasol ÷2'},
   ];
   const seriesBasis = [
-    { data: HIST_BASIS_SOJA,  color: '#56c97a', label: 'Basis Soja' },
-    { data: HIST_BASIS_MAIZ,  color: '#f0b840', label: 'Basis Maíz' },
+    { data: HIST_BASIS_SOJA,  color: '#56c97a', label: 'Basis Soja'  },
+    { data: HIST_BASIS_MAIZ,  color: '#f0b840', label: 'Basis Maíz'  },
     { data: HIST_BASIS_TRIGO, color: '#4d9ef0', label: 'Basis Trigo' },
   ];
   const series = vista === 'granos' ? seriesGranos : seriesBasis;
@@ -426,43 +703,41 @@ function TabHistorico() {
           <button className={`tg${vista === 'basis'  ? ' active' : ''}`} onClick={() => setVista('basis')}>Basis vs CBOT</button>
         </div>
       </div>
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)' }}>
-              {vista === 'granos' ? 'Evolución de precios — USD/tn · BCR Rosario · últimos 12 meses' : 'Basis histórico — BCR vs CBOT · USD/tn · últimos 12 meses'}
-            </div>
+      <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, overflow:'hidden' }}>
+        <div style={{ padding:'14px 20px 12px', borderBottom:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+          <div style={{ fontFamily:'var(--mono)', fontSize:9, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--text3)' }}>
+            {vista === 'granos' ? 'Evolución de precios — USD/tn · CBOT · últimos 12 meses' : 'Basis histórico — FOB MAGyP vs CBOT · USD/tn · últimos 12 meses'}
           </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display:'flex', gap:16, flexWrap:'wrap', alignItems:'center' }}>
+            {hasLive && vista === 'granos' && <LiveBadge />}
             {series.map(s => (
-              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 20, height: 2, background: s.color, borderRadius: 1 }} />
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{s.label}</span>
+              <div key={s.label} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <div style={{ width:20, height:2, background:s.color, borderRadius:1 }} />
+                <span style={{ fontFamily:'var(--mono)', fontSize:9, color:'var(--text3)' }}>{s.label}</span>
               </div>
             ))}
           </div>
         </div>
         <MiniLineChart series={series} labels={HIST_MESES} height={220} />
-        {/* Stats strip */}
         {vista === 'granos' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: 'var(--line)', borderTop: '1px solid var(--line)' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:'var(--line)', borderTop:'1px solid var(--line)' }}>
             {[
-              ['Soja prom. 6m', 'USD 369', 'var(--green)', 'vs USD 366 hoy'],
-              ['Maíz prom. 6m', 'USD 207', 'var(--gold)',  'vs USD 202 hoy'],
-              ['Soja/Maíz ratio', '1,81×', 'var(--white)', 'relación actual'],
-              ['Trigo prom. 6m', 'USD 208', 'var(--accent)', 'vs USD 199 hoy'],
-            ].map(([l, v, c, m]) => (
-              <div key={l} style={{ background: 'var(--bg2)', padding: '10px 14px', textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>{l}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 700, color: c }}>{v}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{m}</div>
+              ['Soja prom. 6m',    `USD ${Math.round(histSoja.slice(-6).reduce((a,b)=>a+b,0)/6)}`,  'var(--green)',  `vs USD ${histSoja.slice(-1)[0]} hoy`   ],
+              ['Maíz prom. 6m',    `USD ${Math.round(histMaiz.slice(-6).reduce((a,b)=>a+b,0)/6)}`,  'var(--gold)',   `vs USD ${histMaiz.slice(-1)[0]} hoy`   ],
+              ['Soja/Maíz ratio',  `${(histSoja.slice(-1)[0]/histMaiz.slice(-1)[0]).toFixed(2)}×`,  'var(--white)',  'relación actual'                       ],
+              ['Trigo prom. 6m',   `USD ${Math.round(histTrigo.slice(-6).reduce((a,b)=>a+b,0)/6)}`, 'var(--accent)', `vs USD ${histTrigo.slice(-1)[0]} hoy`  ],
+            ].map(([l,v,c,m]) => (
+              <div key={l} style={{ background:'var(--bg2)', padding:'10px 14px', textAlign:'center' }}>
+                <div style={{ fontFamily:'var(--mono)', fontSize:8, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:4 }}>{l}</div>
+                <div style={{ fontFamily:'var(--mono)', fontSize:14, fontWeight:700, color:c }}>{v}</div>
+                <div style={{ fontFamily:'var(--mono)', fontSize:9, color:'var(--text3)' }}>{m}</div>
               </div>
             ))}
           </div>
         )}
         {vista === 'basis' && (
-          <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--line)', padding: '12px 20px', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-            Basis negativo (soja/trigo): el precio local es inferior al internacional por retenciones y costo logístico. Basis positivo (maíz): mayor demanda local eleva el precio interno sobre el referencial CBOT.
+          <div style={{ background:'var(--bg2)', borderTop:'1px solid var(--line)', padding:'12px 20px', fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+            Basis negativo (soja/trigo): el precio local es inferior al internacional por retenciones y logística. Basis positivo (maíz): mayor demanda local eleva el precio interno sobre el referencial CBOT.
           </div>
         )}
       </div>
@@ -470,76 +745,80 @@ function TabHistorico() {
   );
 }
 
-// ── Mini Line Chart (pure CSS/SVG) ───────────────────────────
-function MiniLineChart({ series, labels, height = 200 }) {
-  const w = 900, h = height;
-  const pad = { t: 14, r: 20, b: 28, l: 42 };
-  const allVals = series.flatMap(s => s.data);
-  const minV = Math.min(...allVals);
-  const maxV = Math.max(...allVals);
-  const rangeV = maxV - minV || 1;
-  const n = labels.length;
-
-  const xPos = i => pad.l + (i / (n - 1)) * (w - pad.l - pad.r);
-  const yPos = v => pad.t + (1 - (v - minV) / rangeV) * (h - pad.t - pad.b);
-
-  const mkPath = data => data.map((v, i) => `${i === 0 ? 'M' : 'L'}${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
-  const mkArea = data => {
-    const base = yPos(minV);
-    return mkPath(data) + ` L${xPos(n-1).toFixed(1)},${base} L${xPos(0).toFixed(1)},${base} Z`;
-  };
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height, display: 'block' }}>
-      {/* Y grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map(t => {
-        const y = pad.t + (1 - t) * (h - pad.t - pad.b);
-        const v = minV + t * rangeV;
-        return (
-          <g key={t}>
-            <line x1={pad.l} y1={y} x2={w - pad.r} y2={y} stroke="var(--line)" strokeWidth="1" />
-            <text x={pad.l - 6} y={y + 4} textAnchor="end" fontSize={8} fill="var(--text3)" fontFamily="monospace">{Math.round(v)}</text>
-          </g>
-        );
-      })}
-      {/* X labels */}
-      {labels.map((l, i) => (
-        <text key={i} x={xPos(i)} y={h - 4} textAnchor="middle" fontSize={8} fill="var(--text3)" fontFamily="monospace">{l}</text>
-      ))}
-      {/* Series */}
-      {series.map(s => (
-        <g key={s.label}>
-          <path d={mkArea(s.data)} fill={s.color} opacity={0.07} />
-          <path d={mkPath(s.data)} fill="none" stroke={s.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          {/* Endpoint dot */}
-          <circle cx={xPos(n-1)} cy={yPos(s.data[n-1])} r={3} fill={s.color} />
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-// ── Main GranosPage ──────────────────────────────────────────
+// ── Main GranosPage ───────────────────────────────────────────
 const TABS = [
-  { id: 'pizarras',      label: 'Pizarras' },
-  { id: 'fob-fas',       label: 'FOB / FAS' },
-  { id: 'futuros',       label: 'Futuros' },
-  { id: 'sio',           label: 'SIO Promedios' },
-  { id: 'subproductos',  label: 'Subproductos' },
-  { id: 'historico',     label: 'Histórico' },
+  { id:'pizarras',     label:'Pizarras'      },
+  { id:'fob-fas',      label:'FOB / FAS'     },
+  { id:'futuros',      label:'Futuros'       },
+  { id:'sio',          label:'SIO Promedios' },
+  { id:'subproductos', label:'Subproductos'  },
+  { id:'historico',    label:'Histórico'     },
 ];
 
-export function GranosPage({ goPage, apiStatus, reloadAll }) {
-  const [moneda, setMoneda]     = useState('ARS');
+export function GranosPage({ goPage, apiStatus, reloadAll, dolares, mundo, loadMundo }) {
+  const [moneda,    setMoneda]    = useState('ARS');
   const [activeTab, setActiveTab] = useState('pizarras');
+
+  // ── Datos FOB en vivo ──────────────────────────────────────
+  const [fobData,   setFobData]   = useState(null);
+  const [fobStatus, setFobStatus] = useState('loading');
+
+  useEffect(() => {
+    fetchFOB()
+      .then(({ data, error }) => {
+        if (error || !data) { setFobStatus('error'); return; }
+        setFobData(data);
+        setFobStatus('ok');
+      })
+      .catch(() => setFobStatus('error'));
+
+    // Disparar carga de mundo si todavía no está disponible
+    if (!mundo && loadMundo) loadMundo();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Helpers ────────────────────────────────────────────────
+  const getCbot = id => mundo?.items?.find(i => i.id === id) ?? null;
+  const tc      = dolares?.pOf ?? null;
+
+  // ── Construir overview con datos vivos ─────────────────────
+  const overview = GRANOS_META.map((meta, idx) => {
+    const fobUSD = fobData?.precios?.[meta.fobKey] ?? null;
+    const cbot   = meta.cbotId ? getCbot(meta.cbotId) : null;
+
+    const precioUSD = fobUSD                         ?? OVERVIEW_STATIC[idx]?.precioUSD ?? null;
+    const precioARS = (fobUSD && tc) ? Math.round(fobUSD * tc) : OVERVIEW_STATIC[idx]?.precioARS ?? null;
+    const change    = cbot?.change                   ?? OVERVIEW_STATIC[idx]?.variacionPct ?? null;
+    const fob       = fobUSD                         ?? OVERVIEW_STATIC[idx]?.fob ?? null;
+    const fas       = (fobUSD && meta.fasRatio) ? Math.round(fobUSD * meta.fasRatio) : OVERVIEW_STATIC[idx]?.fas ?? null;
+
+    return {
+      id: meta.id, nombre: meta.nombre,
+      precioUSD, precioARS, variacionPct: change, varDir: dir(change),
+      fob, fas, isLive: !!fobUSD, color: meta.color,
+    };
+  });
+
+  const fechaFob = fobData?.fecha ?? null;
+  const anyLive  = fobStatus === 'ok';
 
   return (
     <div className="page-enter">
       {/* Page Header */}
       <div className="ph">
         <div>
-          <div className="ph-title">Granos <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-granos')} title="Ayuda">?</span></div>
-          <div className="ph-sub">BCR · Pizarras · FOB/FAS · Futuros Matba/CBOT · SIO · Subproductos · 30/03/2026</div>
+          <div className="ph-title">
+            Granos{' '}
+            <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-granos')} title="Ayuda">?</span>
+          </div>
+          <div className="ph-sub" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            <span>BCR · Pizarras · FOB/FAS · Futuros Matba/CBOT · SIO · Subproductos</span>
+            {anyLive
+              ? <><LiveBadge />{fechaFob && <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)' }}>· {fechaFob}</span>}</>
+              : fobStatus === 'loading'
+                ? <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)' }}>cargando…</span>
+                : <RefBadge fecha="mar 2026" />
+            }
+          </div>
         </div>
         <div className="ph-right">
           <div className="toggle">
@@ -550,7 +829,7 @@ export function GranosPage({ goPage, apiStatus, reloadAll }) {
       </div>
 
       {/* Overview Cards */}
-      <OverviewCards moneda={moneda} />
+      <OverviewCards moneda={moneda} overview={overview} loading={fobStatus === 'loading' && !fobData} />
 
       {/* Tabs */}
       <div className="tabs">
@@ -563,12 +842,18 @@ export function GranosPage({ goPage, apiStatus, reloadAll }) {
 
       {/* Tab content */}
       <div>
-        {activeTab === 'pizarras'     && <TabPizarras moneda={moneda} />}
-        {activeTab === 'fob-fas'      && <TabFobFas />}
-        {activeTab === 'futuros'      && <TabFuturos />}
+        {activeTab === 'pizarras'     && (
+          <TabPizarras
+            moneda={moneda} fobData={fobData}
+            cbotSoja={getCbot('soy')} cbotMaiz={getCbot('corn')} cbotTrigo={getCbot('wheat')}
+            tc={tc}
+          />
+        )}
+        {activeTab === 'fob-fas'      && <TabFobFas fobData={fobData} fobStatus={fobStatus} mundo={mundo} />}
+        {activeTab === 'futuros'      && <TabFuturos mundo={mundo} />}
         {activeTab === 'sio'          && <TabSIO />}
-        {activeTab === 'subproductos' && <TabSubproductos />}
-        {activeTab === 'historico'    && <TabHistorico />}
+        {activeTab === 'subproductos' && <TabSubproductos fobData={fobData} mundo={mundo} />}
+        {activeTab === 'historico'    && <TabHistorico fobData={fobData} mundo={mundo} />}
       </div>
     </div>
   );

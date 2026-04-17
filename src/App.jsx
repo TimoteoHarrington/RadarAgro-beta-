@@ -63,7 +63,8 @@ export default function App() {
             />}
           />
           <Route path="/granos" element={
-            <GranosPage goPage={goPage} apiStatus={apiStatus} reloadAll={reloadAll} />}
+            <GranosPage goPage={goPage} apiStatus={apiStatus} reloadAll={reloadAll}
+              dolares={dolares} mundo={mundo} loadMundo={loadMundo} />}
           />
           <Route path="/hacienda" element={
             <HaciendaPage goPage={goPage} />}

@@ -544,7 +544,7 @@ function GroupSection({ group, items, selected, onSelect, clickable = true, comp
       <div className="section-title">
         {group}
       </div>
-      <div className={compact ? 'grid grid-4' : 'grid grid-3'} style={compact ? { gap: '8px' } : {}}>
+      <div className="grid grid-4" style={compact ? { gap: '8px' } : {}}>
         {items.map(item => (
           <SymbolCard
             key={item.id}

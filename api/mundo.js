@@ -45,9 +45,9 @@ const SYMBOLS = [
   { id: 'vix',     symbol: '%5EVIX',     name: 'VIX',           icon: '📊', group: 'Índices' },
   // ── Tasas EE.UU. ──
   { id: 'us2y',    symbol: '%5EIRX',     name: 'UST 2Y',        icon: '🇺🇸', group: 'Tasas' },
+  { id: 'us5y',    symbol: '%5EFVX',     name: 'UST 5Y',        icon: '🇺🇸', group: 'Tasas' },
   { id: 'tnx',     symbol: '%5ETNX',     name: 'UST 10Y',       icon: '🇺🇸', group: 'Tasas' },
   { id: 'us30y',   symbol: '%5ETYX',     name: 'UST 30Y',       icon: '🇺🇸', group: 'Tasas' },
-  { id: 'fed',     symbol: '%5EIRX',     name: 'Fed Funds',     icon: '🏛️', group: 'Tasas' },
   // ── Crypto ──
   { id: 'btc',     symbol: 'BTC-USD',    name: 'Bitcoin',       icon: '₿',  group: 'Crypto' },
   { id: 'eth',     symbol: 'ETH-USD',    name: 'Ethereum',      icon: 'Ξ',  group: 'Crypto' },

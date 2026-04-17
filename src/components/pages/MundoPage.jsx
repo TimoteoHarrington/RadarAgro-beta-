@@ -262,10 +262,53 @@ function DetailChart({ points }) {
 }
 
 // ── Symbol Card ─────────────────────────────────────────────────
-function SymbolCard({ item, onClick, isSelected, clickable = true }) {
+function SymbolCard({ item, onClick, isSelected, clickable = true, compact = false }) {
   const chg   = fmtChange(item.change);
   const price = item.price != null ? fmtPrice(item.price, item.group) : 'S/D';
   const [hovered, setHovered] = useState(false);
+
+  // Modo compacto: card más chica para vista "Todos"
+  if (compact) {
+    return (
+      <div
+        className="stat"
+        style={{
+          cursor: 'default',
+          padding: '10px 14px',
+          borderRadius: '8px',
+          transition: 'border-color .15s',
+        }}
+      >
+        {/* Nombre + badge variación en la misma línea */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: '4px', gap: '6px',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {item.name}
+          </span>
+          {item.change != null ? (
+            <span style={{
+              fontFamily: 'var(--mono)', fontSize: '9px', fontWeight: 600, flexShrink: 0,
+              color:       chg.cls === 'up' ? 'var(--green)' : chg.cls === 'dn' ? 'var(--red)' : 'var(--text3)',
+              background:  chg.cls === 'up' ? 'var(--green-bg)' : chg.cls === 'dn' ? 'var(--red-bg)' : 'transparent',
+              padding:     chg.cls === 'fl' ? '0' : '1px 5px',
+              borderRadius: '3px',
+            }}>
+              {chg.txt}
+            </span>
+          ) : null}
+        </div>
+        {/* Precio */}
+        <div style={{
+          fontFamily: 'var(--display)', fontSize: '15px', fontWeight: 700,
+          color: 'var(--white)', letterSpacing: '-.02em', lineHeight: 1,
+        }}>
+          {price}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -488,15 +531,15 @@ function DetailPanel({ item, onClose, isDefault = false }) {
 }
 
 // ── Group Section ───────────────────────────────────────────────
-function GroupSection({ group, items, selected, onSelect, clickable = true }) {
+function GroupSection({ group, items, selected, onSelect, clickable = true, compact = false }) {
   const groupSelected = selected && items.find(i => i.id === selected.id) ? selected : null;
 
   return (
-    <div className="section">
+    <div className="section" style={compact ? { marginBottom: '20px' } : {}}>
       <div className="section-title">
         {group}
       </div>
-      <div className="grid grid-3">
+      <div className={compact ? 'grid grid-4' : 'grid grid-3'} style={compact ? { gap: '8px' } : {}}>
         {items.map(item => (
           <SymbolCard
             key={item.id}
@@ -504,6 +547,7 @@ function GroupSection({ group, items, selected, onSelect, clickable = true }) {
             onClick={onSelect}
             isSelected={selected?.id === item.id}
             clickable={clickable}
+            compact={compact}
           />
         ))}
       </div>
@@ -623,6 +667,7 @@ export function MundoPage({ goPage, mundo, loadMundo }) {
           selected={selected}
           onSelect={handleSelect}
           clickable={filter !== 'Todos'}
+          compact={filter === 'Todos'}
         />
       ))}
 

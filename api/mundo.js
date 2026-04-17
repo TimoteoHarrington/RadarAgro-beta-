@@ -31,6 +31,7 @@ const SYMBOLS = [
   { id: 'usdclp',  symbol: 'CLP%3DX',    name: 'USD/CLP',       icon: '🇨🇱', group: 'Monedas' },
   { id: 'usdmxn',  symbol: 'MXN%3DX',    name: 'USD/MXN',       icon: '🇲🇽', group: 'Monedas' },
   // ── Índices ──
+  { id: 'merval',  symbol: '%5EMERV',    name: 'Merval',        icon: '🇦🇷', group: 'Índices' },
   { id: 'spx',     symbol: 'ES%3DF',     name: 'S&P 500',       icon: '📈', group: 'Índices' },
   { id: 'nasdaq',  symbol: 'NQ%3DF',     name: 'Nasdaq 100',    icon: '💻', group: 'Índices' },
   { id: 'dow',     symbol: 'YM%3DF',     name: 'Dow Jones',     icon: '🏦', group: 'Índices' },

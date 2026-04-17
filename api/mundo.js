@@ -24,26 +24,34 @@ const SYMBOLS = [
   { id: 'gold',    symbol: 'GC%3DF',     name: 'Oro',           icon: '🥇', group: 'Metales' },
   { id: 'silver',  symbol: 'SI%3DF',     name: 'Plata',         icon: '🥈', group: 'Metales' },
   { id: 'copper',  symbol: 'HG%3DF',     name: 'Cobre',         icon: '🔶', group: 'Metales' },
+  { id: 'plat',    symbol: 'PL%3DF',     name: 'Platino',       icon: '⬜', group: 'Metales' },
   // ── Monedas ──
   { id: 'eurusd',  symbol: 'EURUSD%3DX', name: 'EUR/USD',       icon: '🇪🇺', group: 'Monedas' },
+  { id: 'gbpusd',  symbol: 'GBPUSD%3DX', name: 'GBP/USD',       icon: '🇬🇧', group: 'Monedas' },
+  { id: 'usdjpy',  symbol: 'JPY%3DX',    name: 'USD/JPY',       icon: '🇯🇵', group: 'Monedas' },
   { id: 'usdcny',  symbol: 'CNY%3DX',    name: 'USD/CNY',       icon: '🇨🇳', group: 'Monedas' },
   { id: 'usdbrl',  symbol: 'BRL%3DX',    name: 'USD/BRL',       icon: '🇧🇷', group: 'Monedas' },
   { id: 'usdclp',  symbol: 'CLP%3DX',    name: 'USD/CLP',       icon: '🇨🇱', group: 'Monedas' },
   { id: 'usdmxn',  symbol: 'MXN%3DX',    name: 'USD/MXN',       icon: '🇲🇽', group: 'Monedas' },
+  { id: 'usdcop',  symbol: 'COP%3DX',    name: 'USD/COP',       icon: '🇨🇴', group: 'Monedas' },
   // ── Índices ──
   { id: 'merval',  symbol: '%5EMERV',    name: 'Merval',        icon: '🇦🇷', group: 'Índices' },
   { id: 'spx',     symbol: 'ES%3DF',     name: 'S&P 500',       icon: '📈', group: 'Índices' },
   { id: 'nasdaq',  symbol: 'NQ%3DF',     name: 'Nasdaq 100',    icon: '💻', group: 'Índices' },
   { id: 'dow',     symbol: 'YM%3DF',     name: 'Dow Jones',     icon: '🏦', group: 'Índices' },
   { id: 'bovespa', symbol: '%5EBVSP',    name: 'Bovespa',       icon: '🇧🇷', group: 'Índices' },
+  { id: 'dax',     symbol: '%5EGDAXI',   name: 'DAX',           icon: '🇩🇪', group: 'Índices' },
+  { id: 'nikkei',  symbol: '%5EN225',    name: 'Nikkei 225',    icon: '🇯🇵', group: 'Índices' },
   { id: 'vix',     symbol: '%5EVIX',     name: 'VIX',           icon: '📊', group: 'Índices' },
   // ── Tasas EE.UU. ──
   { id: 'us2y',    symbol: '%5EIRX',     name: 'UST 2Y',        icon: '🇺🇸', group: 'Tasas' },
   { id: 'tnx',     symbol: '%5ETNX',     name: 'UST 10Y',       icon: '🇺🇸', group: 'Tasas' },
   { id: 'us30y',   symbol: '%5ETYX',     name: 'UST 30Y',       icon: '🇺🇸', group: 'Tasas' },
+  { id: 'fed',     symbol: '%5EIRX',     name: 'Fed Funds',     icon: '🏛️', group: 'Tasas' },
   // ── Crypto ──
   { id: 'btc',     symbol: 'BTC-USD',    name: 'Bitcoin',       icon: '₿',  group: 'Crypto' },
   { id: 'eth',     symbol: 'ETH-USD',    name: 'Ethereum',      icon: 'Ξ',  group: 'Crypto' },
+  { id: 'sol',     symbol: 'SOL-USD',    name: 'Solana',        icon: '◎',  group: 'Crypto' },
   { id: 'usdt',    symbol: 'USDT-USD',   name: 'USDT',          icon: '💵', group: 'Crypto' },
 ];
 

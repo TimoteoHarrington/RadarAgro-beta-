@@ -7,11 +7,16 @@ import { fetchMundoChart } from '../../services/api';
 const fmtPrice = (v, group) => {
   if (v == null) return '—';
   if (group === 'Tasas')   return v.toFixed(3).replace('.', ',') + '%';
-  if (group === 'Monedas') return v.toFixed(4).replace('.', ',');
+  if (group === 'Monedas') return v >= 100
+    ? v.toLocaleString('es-AR', { maximumFractionDigits: 0 })
+    : v.toFixed(4).replace('.', ',');
   if (group === 'Crypto')  return v > 1000
     ? '$' + Math.round(v).toLocaleString('es-AR')
     : '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (group === 'Agro')    return 'u$s ' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '/t';
+  if (group === 'Índices') return v >= 1000
+    ? v.toLocaleString('es-AR', { maximumFractionDigits: 0 })
+    : v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 

@@ -1025,6 +1025,34 @@ footer {
   letter-spacing: .06em;
 }
 
+/* ── FOOTER RESPONSIVE ──────────────────── */
+@media (max-width: 900px) {
+  .footer-top {
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  /* Brand col ocupa todo el ancho en primera fila */
+  .footer-top > *:first-child {
+    grid-column: 1 / -1;
+  }
+  .footer-tagline { max-width: 100%; }
+}
+
+@media (max-width: 540px) {
+  .footer-inner { padding: 28px 16px 20px; }
+  .footer-top {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .footer-top > *:first-child { grid-column: auto; }
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .footer-disclaimer { font-size: 9px; }
+}
+
 
 /* ── WIDGET EDIT MODE ────────────────────────────────────── */
 .widget--editing {

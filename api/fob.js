@@ -92,7 +92,8 @@ export default async function handler(req) {
     return new Response(null, { status: 204, headers: CORS });
   }
 
-  const intentos = [hace(0), hace(1), hace(2), hace(3)];
+  // Ampliamos a 7 días para cubrir fines de semana largos
+  const intentos = [0, 1, 2, 3, 4, 5, 6, 7].map(d => hace(d));
   let data = null;
   let fechaUsada = null;
 
@@ -120,10 +121,12 @@ export default async function handler(req) {
       }),
       {
         status: 200,
-        headers: {
-          ...CORS,
-          'Cache-Control': 's-maxage=7200, stale-while-revalidate=14400',
-        },
+        // En api/fob.js — Línea 119
+      headers: {
+        ...CORS,
+        // Cacheamos 2 horas en el borde (Edge) y 4 horas como stale
+        'Cache-Control': 'public, s-maxage=7200, stale-while-revalidate=14400',
+      },
       }
     );
   }

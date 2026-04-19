@@ -764,19 +764,22 @@ export function GranosPage({ goPage, apiStatus, reloadAll, dolares, mundo, loadM
   const [fobData,   setFobData]   = useState(null);
   const [fobStatus, setFobStatus] = useState('loading');
 
+ // En GranosPage.jsx — Línea 560 aprox.
   useEffect(() => {
     fetchFOB()
-      .then(({ data, error }) => {
-        if (error || !data) { setFobStatus('error'); return; }
-        setFobData(data);
+      .then((response) => {
+        // El helper 'get' en api.js devuelve { data, error }
+        // Tu API de Vercel devuelve { ok, precios, fecha, ... } dentro de 'data'
+        if (response.error || !response.data || response.data.ok === false) { 
+          setFobStatus('error'); 
+          return; 
+        }
+        setFobData(response.data); // Guardamos el objeto completo que tiene .precios
         setFobStatus('ok');
       })
       .catch(() => setFobStatus('error'));
-
-    // Disparar carga de mundo si todavía no está disponible
-    if (!mundo && loadMundo) loadMundo();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  }, []);
+  
   // ── Helpers ────────────────────────────────────────────────
   const getCbot = id => mundo?.items?.find(i => i.id === id) ?? null;
   const tc      = dolares?.pOf ?? null;

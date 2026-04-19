@@ -122,21 +122,9 @@ export default async function handler(req, res) {
     });
   }
 
-  // Fallback estático — valores de referencia de principios de abril 2026
-  return res.status(200).json({
-    ok:    false,
-    error: 'No se pudo obtener precios FOB del MAGyP',
-    fuente: 'MAGyP · fallback estático · abr 2026',
-    fecha:  null,
-    precios: {
-      soja:           290,
-      maiz:           185,
-      trigo:          220,
-      girasol:        380,
-      harina_soja:    310,
-      aceite_soja:    940,
-      pellets_girasol: 220,
-      cebada:         210,
-    },
-  });
+  return res.status(502).json({
+      ok: false,
+      error: 'No se pudieron obtener datos actualizados del MAGyP tras 4 intentos.',
+      intentos: intentos
+    });
 }

@@ -3,7 +3,7 @@
 // Sin datos calculados localmente: todos los valores mostrados vienen directamente de las APIs.
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchFOB, parseFuturosFromMundo } from '../../services/api';
-import { NCM_MAP } from '../../data/granos.js';
+import { NCM_MAP } from '../../data/granos';
 
 // ─── Granos: solo ID, nombre, clave FOB y clave CBOT ──────────
 // Sin retenciones, sin fasRatio, sin cálculos. La API es la única fuente de verdad.

@@ -1,50 +1,51 @@
-// api/fob.js — Vercel Serverless Function
+// api/fob.js — Vercel Edge Function
 // Precios FOB oficiales del MAGyP — actualizacion diaria
 // Fuente: magyp.gob.ar/sitio/areas/ss_mercados_agropecuarios/
 //         indicadores_minagri/granos/_archivos/000004_Estadísticas/
 //         000030_Precios%20FOB%20Oficiales/precios_fob.php
 //
-// El endpoint JSON documentado devuelve soja, maíz, trigo, girasol,
-// harina y aceite de soja en USD/tn (Ley 21.453 — retenciones).
+// NOTA: MAGyP bloquea IPs de Vercel/AWS con "Host not in allowlist".
+// Las Edge Functions usan IPs de Cloudflare que sí son aceptadas,
+// igual que ya se hace en api/insumos.js para datos.energia.gob.ar.
 
-const FOB_URL = 'https://magyp.gob.ar/sitio/areas/ss_mercados_agropecuarios/' +
-  'indicadores_minagri/granos/_archivos/000004_Estadísticas/' +
+export const config = { runtime: 'edge' };
+
+const FOB_URL =
+  'https://magyp.gob.ar/sitio/areas/ss_mercados_agropecuarios/' +
+  'indicadores_minagri/granos/_archivos/000004_Estad%C3%ADsticas/' +
   '000030_Precios%20FOB%20Oficiales/precios_fob.php';
 
-// Fecha de hoy formateada para el parámetro de la API
-function hoy() {
-  const d = new Date();
-  const dd   = String(d.getDate()).padStart(2, '0');
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
+};
 
-// Fecha de hace N días (para buscar si el dato de hoy no llegó aún)
+// Fecha formateada DD/MM/YYYY hace N días (UTC)
 function hace(dias) {
   const d = new Date();
-  d.setDate(d.getDate() - dias);
-  const dd   = String(d.getDate()).padStart(2, '0');
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
+  d.setUTCDate(d.getUTCDate() - dias);
+  const dd   = String(d.getUTCDate()).padStart(2, '0');
+  const mm   = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
 async function fetchFOB(fecha, timeoutMs = 12000) {
-  const url = `${FOB_URL}?Fecha=${fecha}`;
+  const url = `${FOB_URL}?Fecha=${encodeURIComponent(fecha)}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'RadarAgro/1.0',
-        'Accept':     'application/json, text/plain',
+        'User-Agent': 'Mozilla/5.0 (compatible; RadarAgro/1.0)',
+        'Accept':     'application/json, text/plain, */*',
       },
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const text = await res.text();
-    // El endpoint puede devolver JSON directamente o con BOM
     const clean = text.replace(/^\uFEFF/, '').trim();
     return JSON.parse(clean);
   } finally {
@@ -52,7 +53,6 @@ async function fetchFOB(fecha, timeoutMs = 12000) {
   }
 }
 
-// Mapa de nombres posibles en la respuesta → clave normalizada
 const CAMPO_MAP = {
   'soja':            'soja',
   'soja granos':     'soja',
@@ -69,8 +69,6 @@ const CAMPO_MAP = {
 };
 
 function normalizar(json) {
-  // El JSON puede venir como array de objetos { producto, precio }
-  // o como objeto plano { Soja: 290, Maiz: 200, ... }
   const out = {};
   if (Array.isArray(json)) {
     for (const item of json) {
@@ -79,7 +77,7 @@ function normalizar(json) {
       const norm = CAMPO_MAP[key];
       if (norm && !isNaN(val)) out[norm] = val;
     }
-  } else if (typeof json === 'object') {
+  } else if (json && typeof json === 'object') {
     for (const [k, v] of Object.entries(json)) {
       const norm = CAMPO_MAP[k.toLowerCase().trim()];
       const val  = parseFloat(v);
@@ -89,13 +87,12 @@ function normalizar(json) {
   return out;
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  // FOB actualiza una vez al día; cache 2h con revalidación en background
-  res.setHeader('Cache-Control', 's-maxage=7200, stale-while-revalidate=14400');
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS });
+  }
 
-  // Intentamos con hoy; si vacío, con ayer (no publica fines de semana)
-  const intentos = [hoy(), hace(1), hace(2), hace(3)];
+  const intentos = [hace(0), hace(1), hace(2), hace(3)];
   let data = null;
   let fechaUsada = null;
 
@@ -114,20 +111,31 @@ export default async function handler(req, res) {
   }
 
   if (data && Object.keys(data).length > 0) {
-    return res.status(200).json({
-      ok:     true,
-      fuente: 'MAGyP · Mercados Agropecuarios · Ley 21.453 (USD FOB oficial)',
-      fecha:  fechaUsada,
-      precios: data,  // USD/tn
-    });
+    return new Response(
+      JSON.stringify({
+        ok:      true,
+        fuente:  'MAGyP · Mercados Agropecuarios · Ley 21.453 (USD FOB oficial)',
+        fecha:   fechaUsada,
+        precios: data,
+      }),
+      {
+        status: 200,
+        headers: {
+          ...CORS,
+          'Cache-Control': 's-maxage=7200, stale-while-revalidate=14400',
+        },
+      }
+    );
   }
 
-  // Sin datos reales disponibles — el cliente debe mostrar estado de error
-  return res.status(503).json({
-    ok:    false,
-    error: 'No se pudo obtener precios FOB del MAGyP (sin datos para los últimos 3 días hábiles)',
-    fuente: 'MAGyP · Mercados Agropecuarios · Ley 21.453',
-    fecha:  null,
-    precios: null,
-  });
+  return new Response(
+    JSON.stringify({
+      ok:      false,
+      error:   'No se pudo obtener precios FOB del MAGyP (sin datos para los últimos 3 días hábiles)',
+      fuente:  'MAGyP · Mercados Agropecuarios · Ley 21.453',
+      fecha:   null,
+      precios: null,
+    }),
+    { status: 503, headers: CORS }
+  );
 }

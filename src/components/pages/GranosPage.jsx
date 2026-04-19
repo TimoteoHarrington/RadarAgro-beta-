@@ -766,22 +766,59 @@ export function GranosPage({ goPage, apiStatus, reloadAll, dolares, mundo, loadM
 
  // En GranosPage.jsx — Línea 560 aprox.
 // src/pages/GranosPage.jsx — Fragmento del useEffect
+  // Fragmento principal para actualizar en GranosPage.jsx
+
+// Traductor de posiciones arancelarias a claves de la App
+  const POSICION_TO_GRAIN = {
+    '1201': 'soja',
+    '1005': 'maiz',
+    '1001': 'trigo',
+    '1206': 'girasol',
+    '1003': 'cebada',
+    '1007': 'sorgo',
+    '2304': 'harina_soja',
+    '1507': 'aceite_soja',
+    '2306': 'pellets_girasol'
+  };
+
+  // ... dentro del componente GranosPage ...
+
   useEffect(() => {
     setFobStatus('loading');
+    
     fetchFOB()
       .then(({ data, error }) => {
-        if (error || !data) {
-          console.error("FOB Error:", error);
+        if (data && data.ok && Array.isArray(data.precios_raw)) {
+          const preciosMapeados = {};
+          const mesActual = new Date().getMonth() + 1; // Abril = 4
+
+          // Recorremos los posts del MAGyP
+          data.precios_raw.forEach(item => {
+            const prefijo = item.posicion.substring(0, 4);
+            const grainKey = POSICION_TO_GRAIN[prefijo];
+
+            if (grainKey) {
+              // Priorizamos el precio del mes actual (Spot)
+              if (!preciosMapeados[grainKey] || item.mesDesde === mesActual) {
+                preciosMapeados[grainKey] = item.precio;
+              }
+            }
+          });
+
+          // Cumplimos con el formato que esperan tus OverviewCards
+          setFobData({ precios: preciosMapeados, fecha: data.fecha });
+          setFobStatus('ok');
+        } else {
+          console.error("Error cargando FOB:", error);
           setFobStatus('error');
-          return;
         }
-        // 'data' es el objeto que contiene { precios, fecha, ok }
-        setFobData(data.precios); // Guardamos solo los precios para la lógica existente
-        // Si necesitas la fecha podrías guardarla en otro estado:
-        // setLastUpdate(data.fecha); 
-        setFobStatus('ok');
       })
-      .catch(() => setFobStatus('error'));
+      .catch(err => {
+        console.error("FOB Fetch Crash:", err);
+        setFobStatus('error');
+      });
+
+    if (!mundo && loadMundo) loadMundo();
   }, []);
 
   // ── Helpers ────────────────────────────────────────────────

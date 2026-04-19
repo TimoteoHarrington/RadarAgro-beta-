@@ -7,8 +7,13 @@
 async function get(url) {
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return { data: await res.json(), error: null };
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      // Propagar el mensaje de error del servidor si está disponible
+      const msg = json?.error ?? `HTTP ${res.status}`;
+      return { data: null, error: msg };
+    }
+    return { data: json, error: null };
   } catch (err) {
     return { data: null, error: err.message };
   }

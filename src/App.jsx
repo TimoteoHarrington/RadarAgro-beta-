@@ -60,6 +60,7 @@ export default function App() {
               goPage={goPage} dolares={dolares} feriados={feriados}
               lastUpdate={lastUpdate} inflacion={inflacion}
               riesgoPais={riesgoPais} indec={indec} bcra={bcra} tasas={tasas}
+              mundo={mundo} loadMundo={loadMundo}
             />}
           />
           <Route path="/granos" element={
@@ -107,6 +108,7 @@ export default function App() {
               goPage={goPage} dolares={dolares} feriados={feriados}
               lastUpdate={lastUpdate} inflacion={inflacion}
               riesgoPais={riesgoPais} indec={indec} bcra={bcra} tasas={tasas}
+              mundo={mundo} loadMundo={loadMundo}
             />}
           />
         </Routes>

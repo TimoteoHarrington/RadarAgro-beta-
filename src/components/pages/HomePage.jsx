@@ -1,18 +1,29 @@
 // HomePage.jsx
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useClock } from '../../hooks/useClock';
 import { useWidgets } from '../../hooks/useWidgets';
 import { WidgetRenderer } from '../widgets/WidgetRenderer';
+import { fetchFOB } from '../../services/api';
 
 const SIZE_LABELS = { normal: 'Pequeño', wide: 'Mediano', full: 'Grande' };
 
-export function HomePage({ goPage, dolares, feriados, lastUpdate, inflacion, riesgoPais, indec, tasas, bcra }) {
+export function HomePage({ goPage, dolares, feriados, lastUpdate, inflacion, riesgoPais, indec, tasas, bcra, mundo, loadMundo }) {
   const { dateStr, weekday, timeShort } = useClock();
   const { widgetState, orderedDefs, activateWidget, removeWidget, setWidgetSize, reorderWidgets } = useWidgets();
 
   const [editMode, setEditMode]       = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [dragOver, setDragOver]       = useState(null); // id del widget que recibe el drop
+
+  // ── FOB data para los widgets de granos del dashboard ──────
+  const [fobData, setFobData] = useState(null);
+  useEffect(() => {
+    fetchFOB().then(({ data, error }) => {
+      if (!error && data?.ok) setFobData(data);
+    });
+    // Disparar carga de mundo si todavía no está disponible
+    if (!mundo && loadMundo) loadMundo();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateTs = lastUpdate
     ? lastUpdate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' p. m. hs'
@@ -231,6 +242,8 @@ export function HomePage({ goPage, dolares, feriados, lastUpdate, inflacion, rie
                 indec={indec}
                 tasas={tasas}
                 bcra={bcra}
+                mundo={mundo}
+                fobData={fobData}
               />
             </div>
           );

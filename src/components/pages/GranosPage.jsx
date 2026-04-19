@@ -3,16 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { ApiErrorBanner } from '../ui/StatCard';
 import { fetchFOB } from '../../services/api';
 
-// ── Datos estáticos de fallback ──────────────────────────────
-// Se usan cuando la API falla o para secciones sin endpoint disponible
-// (pizarras por ciudad, Matba-Rofex, SIO).
+// ── Datos estáticos — solo los que no tienen reemplazo live ──────────────────
+// GRANOS_PIZARRAS: pizarras por ciudad — sin API disponible todavía
+// GRANOS_FUTUROS: Matba-Rofex — sin API disponible todavía
+// GRANOS_SIO: SIO promedios — sin API disponible todavía
+// HIST_*: históricos de 12 meses — datos de referencia para gráficos
 import {
-  GRANOS_OVERVIEW as OVERVIEW_STATIC,
   GRANOS_PIZARRAS,
-  GRANOS_FOB_FAS as FOB_FAS_STATIC,
   GRANOS_FUTUROS,
   GRANOS_SIO,
-  GRANOS_SUBPRODUCTOS,
   HIST_MESES, HIST_SOJA, HIST_MAIZ, HIST_TRIGO, HIST_GIRASOL,
   HIST_HARINA_SOJA, HIST_ACEITE_SOJA,
   HIST_BASIS_SOJA, HIST_BASIS_MAIZ, HIST_BASIS_TRIGO,
@@ -180,16 +179,16 @@ function OverviewCards({ moneda, overview, loading }) {
 
 // ── TAB: Pizarras ─────────────────────────────────────────────
 function TabPizarras({ moneda, fobData, cbotSoja, cbotMaiz, cbotTrigo, tc }) {
-  const tcVal = tc ?? 1246;
+  const tcVal = tc ?? null;
 
   const basisItems = [
-    { name: 'Soja',  fob: fobData?.precios?.soja  ?? 366, cbot: cbotSoja?.price  ?? 419, isLive: !!(fobData?.precios?.soja  && cbotSoja?.price)  },
-    { name: 'Maíz',  fob: fobData?.precios?.maiz  ?? 202, cbot: cbotMaiz?.price  ?? 186, isLive: !!(fobData?.precios?.maiz  && cbotMaiz?.price)  },
-    { name: 'Trigo', fob: fobData?.precios?.trigo ?? 199, cbot: cbotTrigo?.price ?? 204, isLive: !!(fobData?.precios?.trigo && cbotTrigo?.price) },
+    { name: 'Soja',  fob: fobData?.precios?.soja  ?? null, cbot: cbotSoja?.price  ?? null, isLive: !!(fobData?.precios?.soja  && cbotSoja?.price)  },
+    { name: 'Maíz',  fob: fobData?.precios?.maiz  ?? null, cbot: cbotMaiz?.price  ?? null, isLive: !!(fobData?.precios?.maiz  && cbotMaiz?.price)  },
+    { name: 'Trigo', fob: fobData?.precios?.trigo ?? null, cbot: cbotTrigo?.price ?? null, isLive: !!(fobData?.precios?.trigo && cbotTrigo?.price) },
   ].map(item => ({
     ...item,
-    basis:    Math.round(item.fob - item.cbot),
-    basisPct: ((item.fob - item.cbot) / item.cbot * 100).toFixed(1),
+    basis:    (item.fob != null && item.cbot != null) ? Math.round(item.fob - item.cbot) : null,
+    basisPct: (item.fob != null && item.cbot != null) ? ((item.fob - item.cbot) / item.cbot * 100).toFixed(1) : null,
   }));
 
   return (
@@ -250,7 +249,7 @@ function TabPizarras({ moneda, fobData, cbotSoja, cbotMaiz, cbotTrigo, tc }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr 1px 1fr', background: 'var(--line)' }}>
             {basisItems.map((item, i) => {
-              const bc = item.basis > 0 ? 'var(--green)' : item.basis < 0 ? 'var(--red)' : 'var(--text3)';
+              const bc = item.basis == null ? 'var(--text3)' : item.basis > 0 ? 'var(--green)' : item.basis < 0 ? 'var(--red)' : 'var(--text3)';
               const sign = item.basis > 0 ? '+' : '';
               return (
                 <React.Fragment key={item.name}>
@@ -261,16 +260,16 @@ function TabPizarras({ moneda, fobData, cbotSoja, cbotMaiz, cbotTrigo, tc }) {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 12, color: 'var(--text2)' }}>FOB MAGyP</span>
-                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>USD {item.fob}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>{item.fob != null ? `USD ${item.fob}` : '—'}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 12, color: 'var(--text2)' }}>CBOT Spot</span>
-                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>USD {Math.round(item.cbot)}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>{item.cbot != null ? `USD ${Math.round(item.cbot)}` : '—'}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--line)' }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Basis</span>
                       <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: bc }}>
-                        {sign}USD {item.basis} ({sign}{item.basisPct}%)
+                        {item.basis != null ? `${sign}USD ${item.basis} (${sign}${item.basisPct}%)` : '—'}
                       </span>
                     </div>
                   </div>
@@ -292,7 +291,7 @@ function TabFobFas({ fobData, fobStatus, mundo }) {
   const rows = React.useMemo(() => {
     const getCbot = id => mundo?.items?.find(i => i.id === id);
 
-    if (!fobData?.precios) return FOB_FAS_STATIC.map(r => ({ ...r, isLive: false }));
+    if (!fobData?.precios) return [];
 
     const p = fobData.precios;
     const liveRows = [
@@ -323,6 +322,20 @@ function TabFobFas({ fobData, fobStatus, mundo }) {
     );
   }
 
+  if (fobStatus === 'error' || rows.length === 0) {
+    return (
+      <div style={{ padding: '40px 0', textAlign: 'center' }}>
+        <div className="alert-strip error" style={{ maxWidth: 480, margin: '0 auto' }}>
+          <span className="alert-icon">⚠</span>
+          <span className="alert-text">
+            No se pudo obtener precios FOB desde MAGyP. El servidor puede estar sin datos para el día de hoy.
+            {fobData?.error && <span style={{ display: 'block', marginTop: 4, fontSize: 11, opacity: 0.7 }}>{fobData.error}</span>}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="alert-strip info" style={{ marginBottom: 20 }}>
@@ -330,10 +343,7 @@ function TabFobFas({ fobData, fobStatus, mundo }) {
         <span className="alert-text">
           Precios <strong>FOB</strong> y <strong>FAS</strong> en <strong>USD/tn</strong>.
           {' '}
-          {isLive
-            ? <>Fuente: <strong>MAGyP · Ley 21.453</strong> · <LiveBadge /> · Fecha: <strong>{fobData?.fecha ?? '—'}</strong></>
-            : <>Fuente: Downtack · <RefBadge /></>
-          }
+          <>Fuente: <strong>MAGyP · Ley 21.453</strong> · <LiveBadge /> · Fecha: <strong>{fobData?.fecha ?? '—'}</strong></>
         </span>
       </div>
 
@@ -376,16 +386,9 @@ function TabFobFas({ fobData, fobStatus, mundo }) {
         </div>
       </div>
 
-      {!isLive && fobStatus === 'error' && (
-        <div className="alert-strip error" style={{ marginTop: 12 }}>
-          <span className="alert-icon">⚠</span>
-          <span className="alert-text">No se pudo conectar con MAGyP. Mostrando datos de referencia.</span>
-        </div>
-      )}
-
       <div className="source" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>{isLive ? `Fuente: MAGyP · Ley 21.453 · ${fobData?.fecha ?? ''}` : 'Fuente: Downtack / BCR · referencia'}</span>
-        {isLive ? <LiveBadge /> : <RefBadge />}
+        <span>Fuente: MAGyP · Ley 21.453 · {fobData?.fecha ?? ''}</span>
+        <LiveBadge />
       </div>
     </div>
   );
@@ -545,29 +548,30 @@ function TabSIO() {
 
 // ── TAB: Subproductos ─────────────────────────────────────────
 function TabSubproductos({ fobData, mundo }) {
-  const s = GRANOS_SUBPRODUCTOS.soja;
-  const g = GRANOS_SUBPRODUCTOS.girasol;
-
   const harinaFobLive = fobData?.precios?.harina_soja ?? null;
   const aceiteFobLive = fobData?.precios?.aceite_soja  ?? null;
   const harinaFutItem = mundo?.items?.find(i => i.id === 'soymeal');
   const aceiteFutItem = mundo?.items?.find(i => i.id === 'soyoil');
   const sojaFobLive   = fobData?.precios?.soja ?? null;
+  const girasolFobLive = fobData?.precios?.girasol ?? null;
 
-  const harinaFob = harinaFobLive ?? s.harinaFob.precio;
-  const aceiteFob = aceiteFobLive ?? s.aceiteFob.precio;
-  const harinaFut = harinaFutItem?.price != null ? Math.round(harinaFutItem.price) : s.harinaFutUs.precio;
-  const aceiteFut = aceiteFutItem?.price != null ? aceiteFutItem.price.toFixed(2) : s.aceiteFutUs.precio;
-  const sojaFob   = sojaFobLive ?? 396;
+  const harinaFob = harinaFobLive ?? null;
+  const aceiteFob = aceiteFobLive ?? null;
+  const harinaFut = harinaFutItem?.price != null ? Math.round(harinaFutItem.price) : null;
+  const aceiteFut = aceiteFutItem?.price != null ? aceiteFutItem.price.toFixed(2) : null;
+  const sojaFob   = sojaFobLive ?? null;
 
-  const crushMargin = Math.round(harinaFob * 0.79 + aceiteFob * 0.19 - sojaFob);
-  const liveAny     = harinaFobLive || aceiteFobLive || harinaFutItem || aceiteFutItem;
+  const crushMargin = (harinaFob != null && aceiteFob != null && sojaFob != null)
+    ? Math.round(harinaFob * 0.79 + aceiteFob * 0.19 - sojaFob)
+    : null;
+
+  const liveAny = harinaFobLive || aceiteFobLive || harinaFutItem || aceiteFutItem;
 
   const subCards = [
-    { label:'Harina Soja FOB',     valor:`USD ${harinaFob}`,  unidad:'USD/tn', var: harinaFutItem?.change ?? s.harinaFob.var, isLive:!!harinaFobLive },
-    { label:'Aceite Soja FOB',     valor:`USD ${aceiteFob}`,  unidad:'USD/tn', var: aceiteFutItem?.change ?? s.aceiteFob.var, isLive:!!aceiteFobLive },
-    { label:'Harina Soja Fut. US', valor:`USD ${harinaFut}`,  unidad:'USD/tn', var: harinaFutItem?.change ?? s.harinaFutUs.var, isLive:!!harinaFutItem },
-    { label:'Aceite Soja Fut. US', valor:`${aceiteFut}¢`,     unidad:'USc/lb', var: aceiteFutItem?.change ?? s.aceiteFutUs.var, isLive:!!aceiteFutItem },
+    { label:'Harina Soja FOB',     valor: harinaFob != null ? `USD ${harinaFob}` : '—',      unidad:'USD/tn', var: harinaFutItem?.change ?? null, isLive:!!harinaFobLive },
+    { label:'Aceite Soja FOB',     valor: aceiteFob != null ? `USD ${aceiteFob}` : '—',      unidad:'USD/tn', var: aceiteFutItem?.change ?? null, isLive:!!aceiteFobLive },
+    { label:'Harina Soja Fut. US', valor: harinaFut != null ? `USD ${harinaFut}` : '—',      unidad:'USD/tn', var: harinaFutItem?.change ?? null, isLive:!!harinaFutItem },
+    { label:'Aceite Soja Fut. US', valor: aceiteFut != null ? `${aceiteFut}¢`    : '—',      unidad:'USc/lb', var: aceiteFutItem?.change ?? null, isLive:!!aceiteFutItem },
   ];
 
   return (
@@ -602,9 +606,9 @@ function TabSubproductos({ fobData, mundo }) {
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:1, background:'var(--line)', borderRadius:8, overflow:'hidden' }}>
           {[
-            { label:'Crush Margin',   valor:`USD ${crushMargin}`, sub:'USD/tn procesada' },
-            { label:'Harina/Aceite',  valor:`${(harinaFob/aceiteFob).toFixed(2)}×`, sub:'ratio precio' },
-            { label:'Soja Grano FOB', valor:`USD ${sojaFob}`, sub:`vs USD ${Math.round(harinaFob)} harina` },
+            { label:'Crush Margin',   valor: crushMargin != null ? `USD ${crushMargin}` : '—', sub:'USD/tn procesada' },
+            { label:'Harina/Aceite',  valor: (harinaFob != null && aceiteFob != null) ? `${(harinaFob/aceiteFob).toFixed(2)}×` : '—', sub:'ratio precio' },
+            { label:'Soja Grano FOB', valor: sojaFob != null ? `USD ${sojaFob}` : '—', sub: harinaFob != null ? `vs USD ${Math.round(harinaFob)} harina` : '' },
           ].map(item => (
             <div key={item.label} style={{ background:'var(--bg1)', padding:'12px 16px', textAlign:'center' }}>
               <div style={{ fontFamily:'var(--mono)', fontSize:9, color:'var(--text3)', letterSpacing:'.06em', marginBottom:6 }}>{item.label}</div>
@@ -644,17 +648,14 @@ function TabSubproductos({ fobData, mundo }) {
         <div className="stat" style={{ cursor:'default' }}>
           <div style={{ fontSize:'13px', fontWeight:400, color:'var(--text2)', marginBottom:'8px' }}>Aceite Girasol FOB</div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
-            <div className="stat-val" style={{ fontSize:'20px', marginBottom:0 }}>USD {g.aceiteFob.precio}</div>
-            <span style={{ fontFamily:'var(--mono)', fontSize:'11px', fontWeight:600, color:dir(g.aceiteFob.var)==='up'?'var(--green)':'var(--red)', background:dir(g.aceiteFob.var)==='up'?'var(--green-bg)':'var(--red-bg)', padding:'2px 8px', borderRadius:'4px' }}>
-              {fmtPct(g.aceiteFob.var)}
-            </span>
+            <div className="stat-val" style={{ fontSize:'20px', marginBottom:0 }}>—</div>
           </div>
-          <div className="stat-meta">USD/tn · Exportación</div>
+          <div className="stat-meta">USD/tn · Exportación · sin API disponible</div>
         </div>
         <div className="stat" style={{ cursor:'default' }}>
           <div style={{ fontSize:'13px', fontWeight:400, color:'var(--text2)', marginBottom:'8px' }}>Girasol Grano FOB</div>
           <div className="stat-val" style={{ fontSize:'20px', marginBottom:'10px' }}>
-            {fobData?.precios?.girasol ? `USD ${fobData.precios.girasol}` : 'USD 440'}
+            {girasolFobLive != null ? `USD ${girasolFobLive}` : '—'}
           </div>
           <div className="stat-meta">Retención 7% · Bahía Blanca</div>
         </div>
@@ -781,15 +782,15 @@ export function GranosPage({ goPage, apiStatus, reloadAll, dolares, mundo, loadM
   const tc      = dolares?.pOf ?? null;
 
   // ── Construir overview con datos vivos ─────────────────────
-  const overview = GRANOS_META.map((meta, idx) => {
+  const overview = GRANOS_META.map((meta) => {
     const fobUSD = fobData?.precios?.[meta.fobKey] ?? null;
     const cbot   = meta.cbotId ? getCbot(meta.cbotId) : null;
 
-    const precioUSD = fobUSD                         ?? OVERVIEW_STATIC[idx]?.precioUSD ?? null;
-    const precioARS = (fobUSD && tc) ? Math.round(fobUSD * tc) : OVERVIEW_STATIC[idx]?.precioARS ?? null;
-    const change    = cbot?.change                   ?? OVERVIEW_STATIC[idx]?.variacionPct ?? null;
-    const fob       = fobUSD                         ?? OVERVIEW_STATIC[idx]?.fob ?? null;
-    const fas       = (fobUSD && meta.fasRatio) ? Math.round(fobUSD * meta.fasRatio) : OVERVIEW_STATIC[idx]?.fas ?? null;
+    const precioUSD = fobUSD ?? null;
+    const precioARS = (fobUSD && tc) ? Math.round(fobUSD * tc) : null;
+    const change    = cbot?.change ?? null;
+    const fob       = fobUSD ?? null;
+    const fas       = (fobUSD && meta.fasRatio) ? Math.round(fobUSD * meta.fasRatio) : null;
 
     return {
       id: meta.id, nombre: meta.nombre,
@@ -816,7 +817,7 @@ export function GranosPage({ goPage, apiStatus, reloadAll, dolares, mundo, loadM
               ? <><LiveBadge />{fechaFob && <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)' }}>· {fechaFob}</span>}</>
               : fobStatus === 'loading'
                 ? <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)' }}>cargando…</span>
-                : <RefBadge fecha="mar 2026" />
+                : <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--red)' }}>sin datos FOB · MAGyP no disponible</span>
             }
           </div>
         </div>

@@ -122,9 +122,12 @@ export default async function handler(req, res) {
     });
   }
 
-  return res.status(502).json({
-      ok: false,
-      error: 'No se pudieron obtener datos actualizados del MAGyP tras 4 intentos.',
-      intentos: intentos
-    });
+  // Sin datos reales disponibles — el cliente debe mostrar estado de error
+  return res.status(503).json({
+    ok:    false,
+    error: 'No se pudo obtener precios FOB del MAGyP (sin datos para los últimos 3 días hábiles)',
+    fuente: 'MAGyP · Mercados Agropecuarios · Ley 21.453',
+    fecha:  null,
+    precios: null,
+  });
 }

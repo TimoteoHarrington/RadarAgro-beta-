@@ -3,7 +3,8 @@ import React from 'react';
 import { FERIADOS_2026 } from '../../data/feriados';
 import { CLIMA_DIAS } from '../../data/clima';
 import {
-  GRANOS_OVERVIEW, GRANOS_PIZARRAS, CBOT_DATA,
+  GRANOS_PIZARRAS,
+  GRANOS_OVERVIEW,  // usado por IndicesWidget y RetencionesWidget (cálculos internos)
 } from '../../data/granos';
 import {
   HACIENDA_OVERVIEW, HACIENDA_NOVILLITOS, HACIENDA_NOVILLOS,
@@ -91,24 +92,59 @@ function GrainRowCompact({ g, goPage, page = 'granos' }) {
   );
 }
 
-// Granos data → formato widget (usa data/granos.js que ya tiene precios reales del PDF)
-const GRANOS_W = GRANOS_OVERVIEW.map(g => ({
-  name:  g.nombre,
-  sub:   'BCR Rosario · disponible',
-  pts:   g.sparkPts,
-  price: fARS(g.precioARS),
-  badge: fPct(g.variacionPct),
-  cls:   g.varDir,
-}));
+// Granos data → formato widget
+// Acepta fobData (MAGyP) y tc (dólar oficial) para mostrar datos vivos.
+// Si no hay datos, muestra '…' en lugar de valores inventados.
+const GRANOS_META_W = [
+  { id:'soja',    nombre:'Soja',    fobKey:'soja',    fasRatio:0.778, retencion:'33%' },
+  { id:'maiz',    nombre:'Maíz',    fobKey:'maiz',    fasRatio:0.899, retencion:'12%' },
+  { id:'trigo',   nombre:'Trigo',   fobKey:'trigo',   fasRatio:0.902, retencion:'12%' },
+  { id:'girasol', nombre:'Girasol', fobKey:'girasol', fasRatio:0.932, retencion:'7%'  },
+  { id:'sorgo',   nombre:'Sorgo',   fobKey:'sorgo',   fasRatio:0.915, retencion:'12%' },
+  { id:'cebada',  nombre:'Cebada',  fobKey:'cebada',  fasRatio:0.916, retencion:'12%' },
+];
 
-const CBOT_W = CBOT_DATA.map(g => ({
-  name:  g.nombre,
-  sub:   'USD/tn · CBOT Chicago',
-  pts:   '0,12 14,10 28,8 42,9 56,7',
-  price: g.usd,
-  badge: g.var,
-  cls:   g.varDir,
-}));
+function buildGranosW(fobData, tc) {
+  return GRANOS_META_W.map(meta => {
+    const fobUSD = fobData?.precios?.[meta.fobKey] ?? null;
+    const precioARS = fobUSD && tc ? Math.round(fobUSD * tc) : null;
+    return {
+      name:  meta.nombre,
+      sub:   fobUSD ? 'FOB MAGyP · en vivo' : 'sin datos FOB',
+      pts:   null,
+      price: precioARS != null ? fARS(precioARS) : '…',
+      badge: fobUSD ? `USD ${fobUSD}` : '—',
+      cls:   'fl',
+      isLive: !!fobUSD,
+    };
+  });
+}
+
+// CBOT data → formato widget desde datos live de /api/mundo
+const CBOT_META_W = [
+  { id:'soy',     nombre:'Soja'         },
+  { id:'corn',    nombre:'Maíz'         },
+  { id:'wheat',   nombre:'Trigo CBOT'   },
+  { id:'soymeal', nombre:'Harina Soja'  },
+  { id:'soyoil',  nombre:'Aceite Soja'  },
+];
+
+function buildCbotW(mundo) {
+  return CBOT_META_W.map(meta => {
+    const item = mundo?.items?.find(i => i.id === meta.id) ?? null;
+    const price = item?.price != null ? `USD ${item.price.toFixed(2)}` : '…';
+    const change = item?.change ?? null;
+    return {
+      name:  meta.nombre,
+      sub:   item ? 'USD/tn · CBOT Chicago' : 'sin datos',
+      pts:   null,
+      price,
+      badge: change != null ? fPct(change) : '—',
+      cls:   change == null ? 'fl' : change > 0 ? 'up' : change < 0 ? 'dn' : 'fl',
+      isLive: !!item,
+    };
+  });
+}
 
 const HACIENDA_W = [
   ...HACIENDA_NOVILLITOS.slice(0, 2).map(h => ({
@@ -149,19 +185,24 @@ const ALICUOTAS = { Soja: 0.33, Maíz: 0.12, Trigo: 0.12, Girasol: 0.07, Sorgo: 
 
 // ─────────────────────────────────────────────────────────────
 // WIDGET: Granos Pizarra
-// Datos: data/granos.js (precios reales de BCR del PDF Downtack)
+// Datos: fobData (MAGyP via /api/fob) + dolares (tipo de cambio)
 // ─────────────────────────────────────────────────────────────
-function GranosPizarraWidget({ size, goPage }) {
+function GranosPizarraWidget({ size, goPage, fobData, dolares }) {
+  const tc = dolares?.pOf ?? null;
+  const GRANOS_W = buildGranosW(fobData, tc);
+  const anyLive = GRANOS_W.some(g => g.isLive);
+  const hdrTitle = anyLive ? 'FOB MAGyP · USD/tn · en vivo' : 'Granos · sin datos FOB';
+
   if (size === 'normal') return (
     <>
-      <WHeader title="Pizarra BCR · ARS/tn · Rosario" page="granos" goPage={goPage} />
+      <WHeader title={hdrTitle} page="granos" goPage={goPage} />
       <Wkc2 items={GRANOS_W.slice(0, 4).map(g => ({ label: g.name, val: g.price, delta: g.badge, cls: g.cls }))} />
       {GRANOS_W.slice(0, 3).map((g, i) => <GrainRowCompact key={i} g={g} goPage={goPage} />)}
     </>
   );
   if (size === 'wide') return (
     <>
-      <WHeader title="Pizarra BCR · ARS/tn · Rosario" page="granos" goPage={goPage} />
+      <WHeader title={hdrTitle} page="granos" goPage={goPage} />
       <div className="widget-hero">
         {GRANOS_W.slice(0, 4).map(g => (
           <div className="widget-kpi" key={g.name}>
@@ -176,7 +217,7 @@ function GranosPizarraWidget({ size, goPage }) {
   );
   return (
     <>
-      <WHeader title="Pizarra BCR · ARS/tn · Rosario" page="granos" goPage={goPage} />
+      <WHeader title={hdrTitle} page="granos" goPage={goPage} />
       <div className="widget-hero" style={{ gridTemplateColumns: 'repeat(6,1fr)' }}>
         {GRANOS_W.map(g => (
           <div className="widget-kpi" key={g.name}>
@@ -188,7 +229,7 @@ function GranosPizarraWidget({ size, goPage }) {
       </div>
       {GRANOS_W.map((g, i) => <GrainRow key={i} g={g} goPage={goPage} />)}
       <div style={{ padding: '14px 18px 8px', borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '10px' }}>Comparativa de plazas · ARS/tn</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '10px' }}>Pizarras por plaza · ARS/tn (referencia BCR)</div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>
@@ -212,7 +253,7 @@ function GranosPizarraWidget({ size, goPage }) {
             </tbody>
           </table>
         </div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', marginTop: '8px' }}>Fuente: BCR · Cámara Arbitral de Cereales</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', marginTop: '8px' }}>Pizarras: BCR · Cámara Arbitral · referencia estática</div>
       </div>
     </>
   );
@@ -414,10 +455,19 @@ function DolarWidget({ size, goPage, dolares }) {
 
 // ─────────────────────────────────────────────────────────────
 // WIDGET: CBOT Chicago
-// Datos: data/granos.js CBOT_DATA (precios reales del PDF)
 // ─────────────────────────────────────────────────────────────
-function CbotWidget({ size, goPage }) {
-  const hdr = <WHeader title="CBOT · Disponible · USD/tn" dotColor="var(--accent)" page="granos" goPage={goPage} />;
+// WIDGET: CBOT
+// Datos: mundo (Yahoo Finance via /api/mundo) — datos en tiempo real
+// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// WIDGET: CBOT
+// Datos: mundo (Yahoo Finance via /api/mundo) — datos en tiempo real
+// ─────────────────────────────────────────────────────────────
+function CbotWidget({ size, goPage, mundo }) {
+  const CBOT_W = buildCbotW(mundo);
+  const anyLive = CBOT_W.some(g => g.isLive);
+  const hdr = <WHeader title={anyLive ? 'CBOT · USD/tn · en vivo' : 'CBOT · sin datos'} dotColor="var(--accent)" page="granos" goPage={goPage} />;
+
   if (size === 'normal') return (
     <>
       {hdr}
@@ -455,27 +505,24 @@ function CbotWidget({ size, goPage }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead><tr style={{ borderBottom: '1px solid var(--line)' }}>
-            {['Contrato', 'USD/tn', 'Var.', 'Apertura', 'Máx.', 'Mín.'].map((h, i) => (
+            {['Contrato', 'USD/tn', 'Var.'].map((h, i) => (
               <th key={h} style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)', padding: '8px 14px', textAlign: i > 0 ? 'right' : 'left', fontWeight: 400 }}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {CBOT_DATA.map(g => (
-              <tr key={g.nombre} style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '8px 14px', fontWeight: 500, color: 'var(--white)' }}>{g.nombre}</td>
-                <td style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>{g.usd}</td>
+            {CBOT_W.map(g => (
+              <tr key={g.name} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ padding: '8px 14px', fontWeight: 500, color: 'var(--white)' }}>{g.name}</td>
+                <td style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--white)' }}>{g.price}</td>
                 <td style={{ padding: '8px 14px', textAlign: 'right' }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', background: `var(--${g.varDir === 'up' ? 'green' : 'red'}-bg)`, color: `var(--${g.varDir === 'up' ? 'green' : 'red'})`, padding: '2px 6px', borderRadius: '4px' }}>{g.var}</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', background: `var(--${g.cls === 'up' ? 'green' : g.cls === 'dn' ? 'red' : 'bg3'}-bg)`, color: `var(--${g.cls === 'up' ? 'green' : g.cls === 'dn' ? 'red' : 'text3'})`, padding: '2px 6px', borderRadius: '4px' }}>{g.badge}</span>
                 </td>
-                {[g.open, g.max, g.min].map((v, i) => (
-                  <td key={i} style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--text3)' }}>{v}</td>
-                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div style={{ padding: '6px 14px 10px', fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>CME Group (CBOT) · 1 bu soja ≈ 27,22 kg · 1 bu maíz ≈ 25,40 kg</div>
+      <div style={{ padding: '6px 14px 10px', fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>CME Group (CBOT) · Yahoo Finance · 1 bu soja ≈ 27,22 kg</div>
     </>
   );
 }
@@ -1079,12 +1126,12 @@ function FeriadosWidget({ goPage, feriados }) {
 // ─────────────────────────────────────────────────────────────
 // Main WidgetRenderer — pasa todos los datos reales a cada widget
 // ─────────────────────────────────────────────────────────────
-export function WidgetRenderer({ widgetId, size, goPage, dolares, feriados, inflacion, riesgoPais, indec, tasas, bcra }) {
+export function WidgetRenderer({ widgetId, size, goPage, dolares, feriados, inflacion, riesgoPais, indec, tasas, bcra, mundo, fobData }) {
   switch (widgetId) {
-    case 'granos-pizarra': return <GranosPizarraWidget size={size} goPage={goPage} />;
+    case 'granos-pizarra': return <GranosPizarraWidget size={size} goPage={goPage} fobData={fobData} dolares={dolares} />;
     case 'hacienda':       return <HaciendaWidget      size={size} goPage={goPage} />;
     case 'dolar':          return <DolarWidget          size={size} goPage={goPage} dolares={dolares} />;
-    case 'cbot':           return <CbotWidget           size={size} goPage={goPage} />;
+    case 'cbot':           return <CbotWidget           size={size} goPage={goPage} mundo={mundo} />;
     case 'indices':        return <IndicesWidget        size={size} goPage={goPage} />;
     case 'insumos':        return <InsumosWidget        size={size} goPage={goPage} />;
     case 'macro-kpi':      return <MacroWidget          size={size} goPage={goPage} inflacion={inflacion} riesgoPais={riesgoPais} indec={indec} bcra={bcra} />;
@@ -1096,7 +1143,7 @@ export function WidgetRenderer({ widgetId, size, goPage, dolares, feriados, infl
     case 'calcretenc':     return <CalcRetencWidget     goPage={goPage} dolares={dolares} />;
     case 'feriados':       return <FeriadosWidget       goPage={goPage} feriados={feriados} />;
     // Legacy
-    case 'granos':         return <GranosPizarraWidget  size={size} goPage={goPage} />;
+    case 'granos':         return <GranosPizarraWidget  size={size} goPage={goPage} fobData={fobData} dolares={dolares} />;
     case 'dolares':        return <DolarWidget          size={size} goPage={goPage} dolares={dolares} />;
     case 'macro':          return <MacroWidget          size={size} goPage={goPage} inflacion={inflacion} riesgoPais={riesgoPais} indec={indec} bcra={bcra} />;
     case 'clima':          return <ClimaWidget          size={size} goPage={goPage} />;

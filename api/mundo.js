@@ -1,9 +1,10 @@
-// api/mundo.js — Vercel Serverless Function
+// api/mundo.js — Vercel Edge Function
 // Proxea Yahoo Finance para precios globales con sparklines intradiarios
+// Migrado a Edge Runtime: usa fetch nativo (más rápido, IPs de Cloudflare)
 
-import https from 'https';
+export const config = { runtime: 'edge' };
 
-const YAHOO_BASE = process.env.YAHOO_FINANCE ?? 'https://query1.finance.yahoo.com/v8/finance/chart';
+const YAHOO_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart';
 
 const SYMBOLS = [
   // ── Agro — futuros CBOT ──
@@ -66,30 +67,45 @@ const SYMBOLS = [
   { id: 'usdt',    symbol: 'USDT-USD',   name: 'USDT',          icon: '💵', group: 'Crypto' },
 ];
 
-function fetchYahooRaw(symbolEncoded, interval, range) {
-  return new Promise((resolve, reject) => {
-    const url = `${YAHOO_BASE}/${symbolEncoded}?interval=${interval}&range=${range}`;
-    const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, res => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const result = json.chart.result[0];
-          const meta = result.meta;
-          const closes = result.indicators.quote[0].close || [];
-          const spark = closes.filter(v => v !== null);
-          resolve({
-            price:     meta.regularMarketPrice,
-            prevClose: meta.chartPreviousClose || meta.previousClose || 0,
-            sparkline: spark,
-          });
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(12000, () => { req.destroy(); reject(new Error('timeout')); });
-  });
+const YAHOO_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+  'Accept': 'application/json',
+};
+
+const CORS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Cache-Control': 'public, s-maxage=60',
+};
+
+// Fetch con timeout usando AbortController (compatible con Edge Runtime)
+async function fetchWithTimeout(url, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { headers: YAHOO_HEADERS, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+async function fetchYahooRaw(symbolEncoded, interval, range) {
+  const url = `${YAHOO_BASE}/${symbolEncoded}?interval=${interval}&range=${range}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+  const json = await res.json();
+  const result = json.chart.result[0];
+  const meta = result.meta;
+  const closes = result.indicators.quote[0].close || [];
+  const spark = closes.filter(v => v !== null);
+  return {
+    price:     meta.regularMarketPrice,
+    prevClose: meta.chartPreviousClose || meta.previousClose || 0,
+    sparkline: spark,
+  };
 }
 
 async function fetchYahoo(symbolEncoded) {
@@ -100,47 +116,37 @@ async function fetchYahoo(symbolEncoded) {
   return result;
 }
 
-function fetchYahooChart(symbolEncoded, interval, range) {
-  return new Promise((resolve, reject) => {
-    const url = `${YAHOO_BASE}/${symbolEncoded}?interval=${interval}&range=${range}`;
-    const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, res => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const result = json.chart.result[0];
-          const timestamps = result.timestamp || [];
-          const closes = result.indicators.quote[0].close || [];
-          const points = [];
-          for (let i = 0; i < timestamps.length; i++) {
-            if (closes[i] !== null) points.push({ t: timestamps[i] * 1000, v: closes[i] });
-          }
-          resolve(points);
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(12000, () => { req.destroy(); reject(new Error('timeout')); });
-  });
+async function fetchYahooChart(symbolEncoded, interval, range) {
+  const url = `${YAHOO_BASE}/${symbolEncoded}?interval=${interval}&range=${range}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+  const json = await res.json();
+  const result = json.chart.result[0];
+  const timestamps = result.timestamp || [];
+  const closes = result.indicators.quote[0].close || [];
+  const points = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    if (closes[i] !== null) points.push({ t: timestamps[i] * 1000, v: closes[i] });
+  }
+  return points;
 }
 
-const HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Cache-Control': 'public, max-age=60',
-};
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS });
+  }
 
-export default async function handler(req, res) {
-  Object.entries(HEADERS).forEach(([k, v]) => res.setHeader(k, v));
-
-  const { symbol, range } = req.query;
+  const url = new URL(req.url);
+  const symbol = url.searchParams.get('symbol');
+  const range  = url.searchParams.get('range');
 
   // Modo detalle: /api/mundo?symbol=soy&range=5d
   if (symbol) {
     try {
       const sym = SYMBOLS.find(s => s.id === symbol);
-      if (!sym) return res.status(404).json({ error: 'Unknown symbol' });
+      if (!sym) {
+        return new Response(JSON.stringify({ error: 'Unknown symbol' }), { status: 404, headers: CORS });
+      }
 
       let resolvedRange = range || '5d';
       let interval = resolvedRange === '1d' ? '5m' : resolvedRange === '5d' ? '15m' : resolvedRange === '1mo' ? '1h' : '1d';
@@ -156,9 +162,12 @@ export default async function handler(req, res) {
         ? points.map(p => ({ t: p.t, v: Math.round(p.v * factor * 100) / 100 }))
         : points;
 
-      return res.status(200).json({ id: sym.id, name: sym.name, icon: sym.icon, group: sym.group, range: resolvedRange, points: convertedPoints });
+      return new Response(
+        JSON.stringify({ id: sym.id, name: sym.name, icon: sym.icon, group: sym.group, range: resolvedRange, points: convertedPoints }),
+        { status: 200, headers: CORS }
+      );
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
     }
   }
 
@@ -183,8 +192,11 @@ export default async function handler(req, res) {
       return { ...s, price: null, prevClose: null, change: null, sparkline: [], error: true };
     });
 
-    return res.status(200).json({ data, updated: new Date().toISOString() });
+    return new Response(
+      JSON.stringify({ data, updated: new Date().toISOString() }),
+      { status: 200, headers: CORS }
+    );
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
   }
 }

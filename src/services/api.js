@@ -161,8 +161,17 @@ export async function fetchInsumosAll() {
 // Precios FOB oficiales MAGyP — via proxy /api/fob
 // ─────────────────────────────────────────────────────────────
 
+// src/services/api.js — Solo la parte de fetchFOB
 export async function fetchFOB() {
-  return get('/api/fob');
+  const { data, error } = await get('/api/fob');
+  
+  // Si hay error de red o 503, 'data' será null y 'error' tendrá el mensaje
+  if (error || !data || data.ok === false) {
+    return { data: null, error: error || data?.error || 'Error en API FOB' };
+  }
+
+  // Normalizamos aquí si es necesario o devolvemos el objeto limpio
+  return { data: data, error: null };
 }
 
 // ─────────────────────────────────────────────────────────────

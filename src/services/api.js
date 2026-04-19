@@ -146,8 +146,29 @@ export async function fetchCBOTAll() {
   return { data: out, error: null };
 }
 
+// Extrae contratos futuros específicos (grupo AgroFut) del resultado de /api/mundo
+// Devuelve: { soja: [{contrato, precio, change}], maiz: [...], trigo: [...] }
+export function parseFuturosFromMundo(mundoItems = []) {
+  const out = { soja: [], maiz: [], trigo: [] };
+  mundoItems
+    .filter(item => item.group === 'AgroFut' && item.price != null)
+    .forEach(item => {
+      const key = item.grano;
+      if (out[key]) {
+        out[key].push({
+          id:       item.id,
+          contrato: item.contrato,
+          precio:   item.price,
+          change:   item.change ?? null,
+        });
+      }
+    });
+  // Ordenar por contrato cronológico
+  const orden = { 'MAY 26': 1, 'JUL 26': 2, 'SEP 26': 3, 'NOV 26': 4, 'DIC 26': 5 };
+  Object.keys(out).forEach(k => out[k].sort((a, b) => (orden[a.contrato] ?? 9) - (orden[b.contrato] ?? 9)));
+  return out;
+}
 
-// ... (tus otras funciones de dólar, bcra, etc.)
 
 export async function fetchInsumosAll() {
   const result = await get('/api/insumos');

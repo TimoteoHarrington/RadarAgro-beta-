@@ -15,6 +15,17 @@ const SYMBOLS = [
   { id: 'kwheat',  symbol: 'KE%3DF',     name: 'Trigo KC',      icon: '🌾', group: 'Agro', toTon: 0.367437 },
   { id: 'sunfl',   symbol: 'SB%3DF',     name: 'Girasol (SB)',  icon: '🌻', group: 'Agro', toTon: 22.0462  },
   { id: 'cotton',  symbol: 'CT%3DF',     name: 'Algodón',       icon: '🌿', group: 'Agro', toTon: 22.0462  },
+  // ── Contratos CBOT por vencimiento (futuros específicos) ──
+  { id: 'zs_may26', symbol: 'ZSK26',  name: 'Soja May26',    icon: '🌱', group: 'AgroFut', toTon: 0.367437, contrato: 'MAY 26', grano: 'soja'  },
+  { id: 'zs_jul26', symbol: 'ZSN26',  name: 'Soja Jul26',    icon: '🌱', group: 'AgroFut', toTon: 0.367437, contrato: 'JUL 26', grano: 'soja'  },
+  { id: 'zs_nov26', symbol: 'ZSX26',  name: 'Soja Nov26',    icon: '🌱', group: 'AgroFut', toTon: 0.367437, contrato: 'NOV 26', grano: 'soja'  },
+  { id: 'zc_may26', symbol: 'ZCK26',  name: 'Maíz May26',    icon: '🌽', group: 'AgroFut', toTon: 0.393683, contrato: 'MAY 26', grano: 'maiz'  },
+  { id: 'zc_jul26', symbol: 'ZCN26',  name: 'Maíz Jul26',    icon: '🌽', group: 'AgroFut', toTon: 0.393683, contrato: 'JUL 26', grano: 'maiz'  },
+  { id: 'zc_sep26', symbol: 'ZCU26',  name: 'Maíz Sep26',    icon: '🌽', group: 'AgroFut', toTon: 0.393683, contrato: 'SEP 26', grano: 'maiz'  },
+  { id: 'zc_dic26', symbol: 'ZCZ26',  name: 'Maíz Dic26',    icon: '🌽', group: 'AgroFut', toTon: 0.393683, contrato: 'DIC 26', grano: 'maiz'  },
+  { id: 'zw_may26', symbol: 'ZWK26',  name: 'Trigo May26',   icon: '🌾', group: 'AgroFut', toTon: 0.367437, contrato: 'MAY 26', grano: 'trigo' },
+  { id: 'zw_jul26', symbol: 'ZWN26',  name: 'Trigo Jul26',   icon: '🌾', group: 'AgroFut', toTon: 0.367437, contrato: 'JUL 26', grano: 'trigo' },
+  { id: 'zw_sep26', symbol: 'ZWU26',  name: 'Trigo Sep26',   icon: '🌾', group: 'AgroFut', toTon: 0.367437, contrato: 'SEP 26', grano: 'trigo' },
   // ── Energía ──
   { id: 'oil',     symbol: 'CL%3DF',     name: 'WTI',           icon: '🛢️', group: 'Energía' },
   { id: 'brent',   symbol: 'BZ%3DF',     name: 'Brent',         icon: '🛢️', group: 'Energía' },

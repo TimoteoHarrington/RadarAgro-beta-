@@ -157,8 +157,8 @@ function TabResumen({ fobData, fobStatus, mundo, tc, moneda }) {
                   {isLive ? 'FOB · USD/tn' : 'SIN DATO'}
                 </span>
               </div>
-              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0, color: isLive ? g.color : 'var(--text3)' }}>
-                {isLive ? fobDisplay : <span style={{ color: 'var(--text3)', fontSize: 13 }}>Sin datos</span>}
+              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>
+                {isLive ? fobDisplay : '—'}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0', flexWrap: 'wrap' }}>
                 {cbotChg != null
@@ -294,7 +294,7 @@ function CBOTTabla({ mundo }) {
 
 // ── TAB PRECIO NETO ──────────────────────────────────────────
 function TabPrecioNeto({ fobData, fobStatus, tc, moneda }) {
-  const LOGISTICA = 12;
+  const LOGISTICA = 15; // USD/tn promedio referencial campo-puerto zona núcleo 2025/26
   const FOB_ROWS = [
     { id: 'soja',    nombre: 'Soja',    fobKey: 'soja',    ret: 0.24,  nota: 'Puerto Rosario · Dcto. 877/2025' },
     { id: 'maiz',    nombre: 'Maíz',    fobKey: 'maiz',    ret: 0.085, nota: 'Puerto Rosario · Dcto. 877/2025' },
@@ -328,7 +328,7 @@ function TabPrecioNeto({ fobData, fobStatus, tc, moneda }) {
       <div className="alert-strip info" style={{ marginBottom: 20 }}>
         <span className="alert-icon">i</span>
         <span className="alert-text">
-          <strong>FAS estimado</strong> = FOB × (1 − retención) × 0,975 · Logística: ~USD {LOGISTICA}/tn ·
+          <strong>FAS estimado</strong> = FOB × (1 − retención) × 0,975 · Logística est.: ~USD {LOGISTICA}/tn · gastos comerc. ~2,5% ·
           Valores <strong>referenciales</strong>. Fuente: <strong>MAGyP · Ley 21.453</strong> · {fobData?.fecha}
           {fobData?.diasAtras > 0 && <span style={{ color: 'var(--text3)' }}> · ({fobData.diasAtras}d de retraso)</span>}
         </span>
@@ -345,9 +345,9 @@ function TabPrecioNeto({ fobData, fobStatus, tc, moneda }) {
               <div style={{ fontSize:'13px', fontWeight:500, color:'var(--text2)', marginBottom:'8px', display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
                 <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:color, flexShrink:0 }}/>
                 {row.nombre}
-                <span style={{ fontFamily:'var(--mono)', fontSize:'9px', background:'var(--bg3)', color:'var(--text3)', padding:'1px 6px', borderRadius:'3px', border:'1px solid var(--line)' }}>neto campo</span>
+                <span style={{ fontFamily:'var(--mono)', fontSize:'9px', background:'var(--bg3)', color:'var(--text3)', padding:'1px 6px', borderRadius:'3px', border:'1px solid var(--line)' }}>neto productor</span>
               </div>
-              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0, color }}>
+              <div className="stat-val" style={{ fontSize: '24px', marginBottom: 0 }}>
                 {netoDisplay}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
@@ -383,7 +383,7 @@ function TabPrecioNeto({ fobData, fobStatus, tc, moneda }) {
         title="Qué estás viendo · Metodología del Precio Neto"
         items={[
           { term: 'Precio Neto',  def: 'El ingreso estimado que llegaría al productor una vez descontadas retenciones y logística. Sirve para comparar qué grano conviene vender hoy, en la misma unidad.' },
-          { term: 'Fórmula',      def: 'FOB (MAGyP) × (1 − retención) × 0,975 − USD 12/tn de logística. El factor 0,975 aproxima gastos de comercialización (~1,5% comisión acopiadora + ~1% varios). La logística es un estimado promedio Rosario–campo; varía según distancia real.' },
+          { term: 'Fórmula',      def: 'FOB (MAGyP) × (1 − retención) × 0,975 − USD 15/tn de logística. El factor 0,975 descuenta ~2,5% en gastos de comercialización (comisión acopiadora, corretaje, varios). La logística es un estimado promedio campo–puerto zona núcleo 2025/26; varía fuertemente con la distancia real.' },
           { term: 'Retenciones',  def: 'Derechos de exportación del Decreto 877/2025. Soja 24%, Maíz 8,5%, Trigo 7,5%, Sorgo 8,5%, Cebada 7,5%, Girasol 4,5%. Se aplican sobre el FOB.' },
           { term: 'Limitaciones', def: 'No incluye: flete real campo-puerto, almacenaje, secado, ni condiciones del contrato. Para precio firme, consultá tu acopiador o corredor de granos.' },
         ]}
@@ -848,7 +848,7 @@ export function GranosPage({ goPage, dolares, mundo, loadMundo }) {
                   {k.badge}
                 </span>
               </div>
-              <div className="stat-val" style={{ fontSize:'24px', marginBottom:0, color:k.color }}>{k.val}</div>
+              <div className="stat-val" style={{ fontSize:'24px', marginBottom:0 }}>{k.val}</div>
               <div style={{ display:'flex', alignItems:'center', gap:'8px', margin:'4px 0', flexWrap:'wrap' }}>
                 {k.delta
                   ? <span style={{ fontFamily:'var(--mono)', fontSize:'10px', fontWeight:600, color:k.deltaUp?'var(--green)':'var(--red)', background:k.deltaUp?'var(--green-bg)':'var(--red-bg)', padding:'1px 7px', borderRadius:'3px' }}>{k.sub}</span>

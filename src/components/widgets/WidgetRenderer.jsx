@@ -261,7 +261,7 @@ function GranosPizarraWidget({ size, goPage, fobData, dolares }) {
 
 // ─────────────────────────────────────────────────────────────
 // WIDGET: Hacienda
-// Datos: data/hacienda.js (precios reales del PDF Downtack)
+// Datos: data/hacienda.js (precios del último remate MAG · fallback estático)
 // ─────────────────────────────────────────────────────────────
 function HaciendaWidget({ size, goPage }) {
   const overview = HACIENDA_OVERVIEW;

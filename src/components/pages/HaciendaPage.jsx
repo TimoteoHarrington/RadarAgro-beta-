@@ -1,5 +1,5 @@
 // HaciendaPage.jsx — Hacienda bovina · Cañuelas MAG
-// Fuente: /api/hacienda → proveedor externo (estructura Downtack)
+// Fuente: /api/hacienda → scraping de ganaderiaynegocios.com (datos MAG Cañuelas)
 // Muestra: índices INMAG/IGMAG/Arrendamiento + todas las categorías de faena
 // Sin datos hardcodeados en el frontend.
 
@@ -378,9 +378,7 @@ export function HaciendaPage({ goPage }) {
             <div className="alert-strip warn" style={{ marginBottom: 20 }}>
               <span className="alert-icon">⚠</span>
               <span className="alert-text">
-                Mostrando <strong>datos de ejemplo</strong> · Para datos en tiempo real configurá{' '}
-                <code style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>DOWNTACK_API_URL</code> y{' '}
-                <code style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>DOWNTACK_API_KEY</code> en Vercel
+                Mostrando <strong>último remate conocido</strong> · El scraping del MAG no está disponible en este momento
               </span>
             </div>
           ) : (

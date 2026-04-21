@@ -42,7 +42,7 @@ export default function App() {
 
   return (
     <>
-      <Ticker />
+      {/* <Ticker /> */}
       <Navbar activePage={activePage} goPage={goPage} />
       <div className="main">
 

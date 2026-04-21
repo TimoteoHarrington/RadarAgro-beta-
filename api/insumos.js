@@ -1,7 +1,8 @@
 // api/insumos.js — Vercel Edge Function
 export const config = { runtime: 'edge' };
 
-const CSV_VIGENTES = 'http://datos.energia.gob.ar/dataset/1c181390-5045-475e-94dc-410429be4b17/resource/80ac25de-a44a-4445-9215-090cf55cfda5/download/precios-en-surtidor-resolucin-3142016.csv';
+//const CSV_VIGENTES = 'http://datos.energia.gob.ar/dataset/1c181390-5045-475e-94dc-410429be4b17/resource/80ac25de-a44a-4445-9215-090cf55cfda5/download/precios-en-surtidor-resolucin-3142016.csv';
+const CSV_VIGENTES = 'https://datos.gob.ar/dataset/energia-precios-surtidor---resolucion-3142016/resource/energia_80ac25de-a44a-4445-9215-090cf55cfda5/download/precios-en-surtidor-resolucin-3142016.csv';
 
 const ZONA_NUCLEO = ['santa fe', 'córdoba', 'cordoba', 'buenos aires', 'entre ríos', 'entre rios', 'la pampa'];
 const PRODUCTOS = { 2: 'super', 3: 'premium', 6: 'gnc', 19: 'g2', 21: 'g3' };

@@ -13,9 +13,9 @@ const GRUPO_COLOR = {
 
 // ── Metadatos de índices ────────────────────────────────────────────────
 const INDICE_META = {
-  'ar.canuelas.inmag':         { color: '#5b9cf6', label: 'INMAG',         desc: 'Índice Novillo MAGna · precio de referencia novillos especiales', unidad: 'ARS/kg vivo' },
-  'ar.canuelas.igmag':         { color: '#4abf78', label: 'IGMAG',         desc: 'Índice General MAGna · promedio ponderado del mercado',           unidad: 'ARS/kg vivo' },
-  'ar.canuelas.arrendamiento': { color: '#e8b84b', label: 'Arrendamiento', desc: 'Índice de arrendamiento en equivalente hacienda',                  unidad: 'ARS/ha/año'  },
+  'ar.canuelas.inmag':         { color: '#ffffff', label: 'INMAG',         desc: 'Índice Novillo MAGna · precio de referencia novillos especiales', unidad: 'ARS/kg vivo' },
+  'ar.canuelas.igmag':         { color: '#ffffff', label: 'IGMAG',         desc: 'Índice General MAGna · promedio ponderado del mercado',           unidad: 'ARS/kg vivo' },
+  'ar.canuelas.arrendamiento': { color: '#ffffff', label: 'Arrendamiento', desc: 'Índice de arrendamiento en equivalente hacienda',                  unidad: 'ARS/ha/año'  },
 };
 
 const ORDEN_GRUPOS = ['novillos', 'novillitos', 'vaquillonas', 'vacas', 'toros', 'mejores'];

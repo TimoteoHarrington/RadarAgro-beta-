@@ -1,266 +1,470 @@
-// HaciendaPage.jsx — Hacienda bovina · Cañuelas MAG
-// Fuente: /api/hacienda → scraping de ganaderiaynegocios.com (datos MAG Cañuelas)
-// Muestra: índices INMAG/IGMAG/Arrendamiento + todas las categorías de faena
-// Sin datos hardcodeados en el frontend.
-
+// HaciendaPage.jsx — Rediseño completo · Fuente oficial MAG Cañuelas
 import React, { useState, useEffect, useCallback } from 'react';
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-const fmtARS = v => v == null ? '—' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
+// ── Paleta de grupos (dentro de la paleta del sistema) ─────────────────
+const GRUPO_COLOR = {
+  novillos:    '#5b9cf6', // --accent
+  novillitos:  '#4abf78', // --green
+  vaquillonas: '#e8b84b', // gold
+  vacas:       '#a78bfa', // violet
+  toros:       '#e05c5c', // --red
+  mejores:     '#67d5c0', // teal
+};
 
-function fmtFecha(iso) {
+// ── Metadatos de índices ────────────────────────────────────────────────
+const INDICE_META = {
+  'ar.canuelas.inmag':         { color: '#5b9cf6', label: 'INMAG',         desc: 'Índice Novillo MAGna · precio de referencia novillos especiales', unidad: 'ARS/kg vivo' },
+  'ar.canuelas.igmag':         { color: '#4abf78', label: 'IGMAG',         desc: 'Índice General MAGna · promedio ponderado del mercado', unidad: 'ARS/kg vivo' },
+  'ar.canuelas.arrendamiento': { color: '#e8b84b', label: 'Arrendamiento', desc: 'Índice de arrendamiento en equivalente hacienda', unidad: 'ARS/ha/año' },
+};
+
+// ── Formateadores ───────────────────────────────────────────────────────
+const R    = n => Math.round(n);
+const fARS = v => v == null ? '—' : '$\u00a0' + R(v).toLocaleString('es-AR');
+const fARS2 = v => v == null ? '—' : '$\u00a0' + R(v).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+const fNum = v => v == null ? '—' : R(v).toLocaleString('es-AR');
+const fM   = v => v == null ? '—' : (R(v / 1_000_000).toLocaleString('es-AR') + ' M');
+
+function fFecha(iso) {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(iso).toLocaleDateString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
   } catch { return iso; }
 }
 
-// Color por grupo
-const GRUPO_COLOR = {
-  novillos:    '#4d9ef0',
-  novillitos:  '#56c97a',
-  vaquillonas: '#f0b840',
-  vacas:       '#c792ea',
-  toros:       '#e87d6f',
-  mejores:     '#67d5c0',
-};
+// ── Componentes pequeños ────────────────────────────────────────────────
+const Mono = ({ children, style }) => (
+  <span style={{ fontFamily: 'var(--mono)', ...style }}>{children}</span>
+);
 
-// Color e ícono por índice Cañuelas
-const INDICE_META = {
-  'ar.canuelas.inmag':         { color: '#56c97a', label: 'INMAG',         desc: 'Índice Novillo MAGna · precio de referencia novillos especiales' },
-  'ar.canuelas.igmag':         { color: '#4d9ef0', label: 'IGMAG',         desc: 'Índice General MAGna · promedio ponderado del mercado Cañuelas'  },
-  'ar.canuelas.arrendamiento': { color: '#f0b840', label: 'Arrendamiento', desc: 'Índice de arrendamiento en equivalente hacienda'                  },
-};
-
-// ── Pill de variación (solo cuando haya histórico) ────────────────────────
-function Pill({ v }) {
-  if (v === null || v === undefined) return null;
-  const d = v > 0 ? 'up' : v < 0 ? 'dn' : 'fl';
-  const txt = (v > 0 ? '+' : '') + v.toFixed(1) + '%';
-  return <span className={`pill ${d}`}>{txt}</span>;
-}
-
-// ── Badge MOCK ─────────────────────────────────────────────────────────────
-function MockBadge() {
+function Badge({ type, label }) {
+  const S = {
+    live:  { c: 'var(--green)',  bg: 'var(--green-bg)', dot: true,  txt: 'EN VIVO' },
+    off:   { c: 'var(--text3)', bg: 'var(--bg3)',       dot: false, txt: 'OFFLINE' },
+    info:  { c: 'var(--accent)', bg: 'var(--acc-bg)',   dot: false, txt: label ?? 'INFO' },
+  };
+  const s = S[type] ?? S.info;
   return (
     <span style={{
-      fontFamily: 'var(--mono)', fontSize: 8, fontWeight: 700, letterSpacing: '.08em',
-      color: '#f0b840', background: 'rgba(240,184,64,.12)',
-      border: '1px solid rgba(240,184,64,.3)', borderRadius: 4,
-      padding: '2px 7px',
-    }}>DEMO</span>
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700,
+      letterSpacing: '.09em', textTransform: 'uppercase',
+      color: s.c, background: s.bg, padding: '3px 8px', borderRadius: 4,
+    }}>
+      {s.dot && <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.c, display: 'inline-block' }} />}
+      {s.txt}
+    </span>
   );
 }
 
-// ── Tarjeta de índice (INMAG / IGMAG / Arrendamiento) ────────────────────
+const Skel = ({ w = '60%', h = 14, mb = 0 }) => (
+  <div style={{ height: h, background: 'var(--bg3)', borderRadius: 4, width: w, marginBottom: mb, opacity: .5, animation: 'pulse 1.4s ease-in-out infinite' }} />
+);
+
+// ── Barra de rango de precios ────────────────────────────────────────────
+// Muestra min→max como rango, con marca en promedio y mediana
+function RangeBar({ min, max, prom, mediana, color }) {
+  if (min == null || max == null || prom == null) return <span style={{ color: 'var(--text3)', fontSize: 11 }}>—</span>;
+  const span = max - min || 1;
+  const promPct  = ((prom    - min) / span) * 100;
+  const medPct   = mediana != null ? ((mediana - min) / span) * 100 : null;
+  return (
+    <div style={{ position: 'relative', height: 20, display: 'flex', alignItems: 'center', minWidth: 90 }}>
+      {/* track */}
+      <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'var(--bg3)', borderRadius: 2 }} />
+      {/* fill range */}
+      <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: `${color}22`, borderRadius: 2 }} />
+      {/* mediana mark */}
+      {medPct != null && (
+        <div style={{
+          position: 'absolute', left: `${medPct.toFixed(1)}%`,
+          width: 2, height: 10, background: `${color}66`, borderRadius: 1,
+          transform: 'translateX(-50%)',
+        }} />
+      )}
+      {/* promedio mark */}
+      <div style={{
+        position: 'absolute', left: `${promPct.toFixed(1)}%`,
+        width: 3, height: 14, background: color, borderRadius: 2,
+        transform: 'translateX(-50%)',
+        boxShadow: `0 0 4px ${color}80`,
+      }} />
+    </div>
+  );
+}
+
+// ── Tarjeta de índice principal ─────────────────────────────────────────
 function IndiceCard({ item }) {
-  const meta  = INDICE_META[item.id] ?? { color: 'var(--accent)', label: item.nombre, desc: '' };
+  const meta = INDICE_META[item.id] ?? { color: 'var(--accent)', label: item.nombre, desc: '', unidad: item.unidad };
+  return (
+    <div className="stat" style={{ cursor: 'default', borderTop: `3px solid ${meta.color}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <Mono style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: meta.color, textTransform: 'uppercase' }}>
+          {meta.label}
+        </Mono>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: meta.color, display: 'inline-block' }} />
+      </div>
+      <div style={{ fontFamily: 'var(--display)', fontSize: 30, fontWeight: 700, color: 'var(--white)', letterSpacing: '-.02em', lineHeight: 1, marginBottom: 10 }}>
+        {fARS(item.valor)}
+      </div>
+      <div className="stat-meta" style={{ lineHeight: 1.55, marginBottom: 6 }}>{meta.desc}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+        <Mono style={{ fontSize: 9, color: 'var(--text3)' }}>{meta.unidad}</Mono>
+        <Mono style={{ fontSize: 9, color: 'var(--text3)' }}>{fFecha(item.fecha)}</Mono>
+      </div>
+    </div>
+  );
+}
+
+// ── Tarjeta stat simple ──────────────────────────────────────────────────
+function StatCard({ label, value, sub, color = 'var(--text3)' }) {
   return (
     <div className="stat" style={{ cursor: 'default' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: meta.color, textTransform: 'uppercase' }}>
-          {meta.label}
-        </div>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: meta.color, marginTop: 2 }} />
+      <Mono style={{ fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', display: 'block', marginBottom: 14 }}>
+        {label}
+      </Mono>
+      <div style={{ fontFamily: 'var(--display)', fontSize: 26, fontWeight: 700, color: 'var(--white)', letterSpacing: '-.02em', lineHeight: 1, marginBottom: 8 }}>
+        {value}
       </div>
-      <div className="stat-val" style={{ fontSize: 26, marginBottom: 8, color: meta.color }}>
-        {fmtARS(item.valor)}
-      </div>
-      <div className="stat-meta" style={{ lineHeight: 1.5 }}>{meta.desc}</div>
-      <div className="stat-meta" style={{ marginTop: 6 }}>{item.unidad}</div>
-      <div className="stat-meta" style={{ marginTop: 4, color: 'var(--text3)', fontSize: 9 }}>
-        {fmtFecha(item.fecha)}
-      </div>
+      <div className="stat-meta">{sub}</div>
     </div>
   );
 }
 
-// ── Tabla de categorías de faena ──────────────────────────────────────────
-function GrupoTable({ grupo }) {
-  const color = GRUPO_COLOR[grupo.id] ?? 'var(--accent)';
-  return (
-    <div style={{ marginBottom: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-        <div className="section-title" style={{ marginBottom: 0 }}>{grupo.label}</div>
-      </div>
-      <div className="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Categoría</th>
-              <th className="r">ARS/kg vivo</th>
-              <th className="r">Actualización</th>
-            </tr>
-          </thead>
-          <tbody>
-            {grupo.items.map(item => (
-              <tr key={item.id}>
-                <td><strong>{item.nombre}</strong></td>
-                <td className="r w mono" style={{ color }}>{fmtARS(item.valor)}</td>
-                <td className="r dim" style={{ fontSize: 11 }}>{fmtFecha(item.fecha)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+// ── Tab: Mercado (tabla completa con todos los campos del MAG) ───────────
+function TabMercado({ categorias, grupos }) {
+  const [ordenCol, setOrdenCol] = useState('grupo');
+  const [ordenDir, setOrdenDir] = useState('asc');
+  const [filtroGrupo, setFiltroGrupo] = useState('todos');
+
+  if (!categorias?.length) return (
+    <div className="alert-strip warn"><span className="alert-icon">!</span><span className="alert-text">Sin datos de categorías.</span></div>
   );
-}
-
-// ── Tab: Faena completa ───────────────────────────────────────────────────
-function TabFaena({ grupos, fecha }) {
-  if (!grupos || !grupos.length) {
-    return <div className="alert-strip warn"><span className="alert-icon">!</span><span className="alert-text">Sin datos de categorías.</span></div>;
-  }
-  return (
-    <div className="section">
-      <div className="alert-strip info" style={{ marginBottom: 20 }}>
-        <span className="alert-icon">ℹ</span>
-        <span className="alert-text">
-          Precios en <strong>ARS/kg vivo</strong> · Cañuelas MAG · Resolución 32/2018 APN · Último: <strong>{fmtFecha(fecha)}</strong>
-        </span>
-      </div>
-      {grupos.map(g => <GrupoTable key={g.id} grupo={g} />)}
-    </div>
-  );
-}
-
-// ── Tab: Vista resumen (tabla única ordenada por precio) ──────────────────
-function TabResumen({ grupos }) {
-  const [ordenDir, setOrdenDir] = useState('desc');
-  const [ordenCol, setOrdenCol] = useState('valor');
-
-  if (!grupos || !grupos.length) return null;
-
-  // Aplanar todos los items con su grupo
-  const todos = grupos.flatMap(g =>
-    g.items.map(item => ({ ...item, grupoId: g.id, grupoLabel: g.label }))
-  );
-
-  const sorted = [...todos].sort((a, b) => {
-    const mult = ordenDir === 'desc' ? -1 : 1;
-    if (ordenCol === 'valor') return (a.valor - b.valor) * mult;
-    return a.nombre.localeCompare(b.nombre) * mult;
-  });
 
   const toggleOrden = col => {
-    if (ordenCol === col) setOrdenDir(d => d === 'desc' ? 'asc' : 'desc');
-    else { setOrdenCol(col); setOrdenDir('desc'); }
+    if (ordenCol === col) setOrdenDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setOrdenCol(col); setOrdenDir(col === 'grupo' ? 'asc' : 'desc'); }
   };
+  const arrow = col => ordenCol === col ? (ordenDir === 'asc' ? ' ↑' : ' ↓') : '';
 
-  const arrow = col => ordenCol === col ? (ordenDir === 'desc' ? ' ↓' : ' ↑') : '';
+  let rows = filtroGrupo === 'todos' ? categorias : categorias.filter(c => c.grupo === filtroGrupo);
+  rows = [...rows].sort((a, b) => {
+    const mult = ordenDir === 'asc' ? 1 : -1;
+    if (ordenCol === 'grupo') {
+      const ga = ORDEN_GRUPOS.indexOf(a.grupo), gb = ORDEN_GRUPOS.indexOf(b.grupo);
+      return ga !== gb ? (ga - gb) * mult : (b.promedio - a.promedio);
+    }
+    if (ordenCol === 'promedio') return (a.promedio - b.promedio) * mult;
+    if (ordenCol === 'cabezas')  return ((a.cabezas ?? 0) - (b.cabezas ?? 0)) * mult;
+    if (ordenCol === 'kgProm')   return ((a.kgProm ?? 0) - (b.kgProm ?? 0)) * mult;
+    return 0;
+  });
+
+  // Rango global para las barras
+  const allMin = Math.min(...categorias.map(c => c.minimo ?? c.promedio));
+  const allMax = Math.max(...categorias.map(c => c.maximo ?? c.promedio));
+
+  const gruposPresentes = [...new Set(categorias.map(c => c.grupo))];
 
   return (
     <div>
-      <div className="tbl-wrap">
+      {/* Filtro por grupo */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Mono style={{ fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', marginRight: 4 }}>FILTRAR</Mono>
+        {['todos', ...gruposPresentes].map(g => {
+          const active = filtroGrupo === g;
+          const color  = g === 'todos' ? 'var(--accent)' : (GRUPO_COLOR[g] ?? 'var(--accent)');
+          return (
+            <button key={g} onClick={() => setFiltroGrupo(g)} style={{
+              fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600,
+              padding: '4px 12px', borderRadius: 6, cursor: 'pointer',
+              border: `1px solid ${active ? color : 'var(--line)'}`,
+              background: active ? `${color}18` : 'transparent',
+              color: active ? color : 'var(--text3)',
+              transition: 'all .15s',
+            }}>
+              {g === 'todos' ? 'TODOS' : GRUPO_LABELS[g]?.toUpperCase() ?? g.toUpperCase()}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="tbl-wrap tbl-scroll">
         <table>
           <thead>
             <tr>
-              <th style={{ cursor: 'pointer' }} onClick={() => toggleOrden('nombre')}>
-                Categoría{arrow('nombre')}
-              </th>
-              <th>Grupo</th>
-              <th className="r" style={{ cursor: 'pointer' }} onClick={() => toggleOrden('valor')}>
-                ARS/kg vivo{arrow('valor')}
-              </th>
-              <th className="r">Actualización</th>
+              <th style={{ cursor: 'pointer' }} onClick={() => toggleOrden('grupo')}>Categoría{arrow('grupo')}</th>
+              <th style={{ width: 110 }}>Rango de precio</th>
+              <th className="r" style={{ cursor: 'pointer' }} onClick={() => toggleOrden('promedio')}>Promedio{arrow('promedio')}</th>
+              <th className="r">Mediana</th>
+              <th className="r" style={{ cursor: 'pointer' }} onClick={() => toggleOrden('cabezas')}>Cabezas{arrow('cabezas')}</th>
+              <th className="r" style={{ cursor: 'pointer' }} onClick={() => toggleOrden('kgProm')}>Peso prom.{arrow('kgProm')}</th>
+              <th className="r">Mín / Máx</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map(item => {
-              const color = GRUPO_COLOR[item.grupoId] ?? 'var(--accent)';
+            {rows.map((cat, i) => {
+              const color = GRUPO_COLOR[cat.grupo] ?? 'var(--accent)';
+              const prevGrupo = i > 0 ? rows[i - 1].grupo : null;
+              const isNewGrupo = cat.grupo !== prevGrupo;
               return (
-                <tr key={item.id}>
-                  <td><strong>{item.nombre}</strong></td>
-                  <td>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
-                      <span className="dim" style={{ fontSize: 12 }}>{item.grupoLabel}</span>
-                    </span>
-                  </td>
-                  <td className="r w mono" style={{ color }}>{fmtARS(item.valor)}</td>
-                  <td className="r dim" style={{ fontSize: 11 }}>{fmtFecha(item.fecha)}</td>
-                </tr>
+                <React.Fragment key={cat.id}>
+                  {isNewGrupo && filtroGrupo === 'todos' && (
+                    <tr>
+                      <td colSpan={7} style={{
+                        padding: '8px 16px 4px',
+                        background: 'var(--bg)',
+                        borderBottom: '1px solid var(--line)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <Mono style={{ fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text3)', fontWeight: 600 }}>
+                            {GRUPO_LABELS[cat.grupo] ?? cat.grupo}
+                          </Mono>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {filtroGrupo !== 'todos' && (
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontSize: 13, color: 'var(--text)' }}>{cat.nombre}</span>
+                        {cat.nombreRaw && cat.nombreRaw !== cat.nombre && (
+                          <Mono style={{ fontSize: 9, color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px', borderRadius: 3 }}>
+                            {cat.nombreRaw}
+                          </Mono>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <RangeBar min={cat.minimo} max={cat.maximo} prom={cat.promedio} mediana={cat.mediana} color={color} />
+                    </td>
+                    <td className="r">
+                      <Mono style={{ fontSize: 13, fontWeight: 700, color }}>{fARS(cat.promedio)}</Mono>
+                    </td>
+                    <td className="r">
+                      <Mono style={{ fontSize: 12, color: 'var(--text2)' }}>{fARS(cat.mediana)}</Mono>
+                    </td>
+                    <td className="r">
+                      <Mono style={{ fontSize: 12, color: 'var(--text)' }}>{fNum(cat.cabezas)}</Mono>
+                    </td>
+                    <td className="r">
+                      <Mono style={{ fontSize: 12, color: 'var(--text2)' }}>{cat.kgProm != null ? `${fNum(cat.kgProm)} kg` : '—'}</Mono>
+                    </td>
+                    <td className="r">
+                      <Mono style={{ fontSize: 11, color: 'var(--text3)' }}>
+                        {cat.minimo != null ? fARS2(cat.minimo) : '—'} / {cat.maximo != null ? fARS2(cat.maximo) : '—'}
+                      </Mono>
+                    </td>
+                  </tr>
+                </React.Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
-      <div className="source">Fuente: Cañuelas MAG · Resolución 32/2018 APN</div>
+      <div className="source" style={{ marginTop: 10 }}>
+        Fuente: mercadoagroganadero.com.ar · ARS/kg vivo · Resolución 32/2018 APN · Barra: mín–máx, marca = promedio
+      </div>
     </div>
   );
 }
 
-// ── Tab: Comparativa visual por grupos ────────────────────────────────────
-function TabComparativa({ grupos }) {
-  if (!grupos || !grupos.length) return null;
-
-  // Encontrar max global para barras relativas
-  const todos  = grupos.flatMap(g => g.items);
-  const maxVal = Math.max(...todos.map(i => i.valor));
+// ── Tab: Por grupo (cards con tabla interna) ─────────────────────────────
+function TabGrupos({ grupos, categorias }) {
+  if (!grupos?.length) return null;
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {grupos.map(g => {
         const color = GRUPO_COLOR[g.id] ?? 'var(--accent)';
-        // Ordenar por valor desc dentro del grupo
-        const items = [...g.items].sort((a, b) => b.valor - a.valor);
+        const rawDelGrupo = (categorias ?? []).filter(c => c.grupo === g.id);
+        const totalCab = rawDelGrupo.reduce((s, c) => s + (c.cabezas ?? 0), 0);
+        const maxProm  = Math.max(...rawDelGrupo.map(c => c.promedio));
+
         return (
-          <div key={g.id} style={{ marginBottom: 28 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <div className="section-title" style={{ marginBottom: 0 }}>{g.label}</div>
+          <div key={g.id} style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
+            {/* Header de grupo */}
+            <div style={{
+              padding: '14px 20px',
+              borderBottom: '1px solid var(--line)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: `${color}08`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
+                <span style={{ fontFamily: 'var(--display)', fontSize: 16, fontWeight: 600, color: 'var(--white)' }}>
+                  {g.label}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <Mono style={{ fontSize: 9, color: 'var(--text3)', display: 'block' }}>CABEZAS</Mono>
+                  <Mono style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>{fNum(totalCab)}</Mono>
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {items.map(item => {
-                const pct = (item.valor / maxVal) * 100;
-                return (
-                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {item.nombre}
+
+            {/* Categorías con barra horizontal */}
+            <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {rawDelGrupo
+                .sort((a, b) => b.promedio - a.promedio)
+                .map(cat => {
+                  const pct = maxProm > 0 ? (cat.promedio / maxProm) * 100 : 0;
+                  return (
+                    <div key={cat.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, color: 'var(--text2)' }}>{cat.nombreRaw}</span>
+                          {cat.cabezas > 0 && (
+                            <Mono style={{ fontSize: 9, color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px', borderRadius: 3 }}>
+                              {fNum(cat.cabezas)} cab.
+                            </Mono>
+                          )}
+                          {cat.kgProm != null && (
+                            <Mono style={{ fontSize: 9, color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px', borderRadius: 3 }}>
+                              {fNum(cat.kgProm)} kg
+                            </Mono>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                          {cat.mediana && (
+                            <Mono style={{ fontSize: 11, color: 'var(--text3)' }}>med. {fARS2(cat.mediana)}</Mono>
+                          )}
+                          <Mono style={{ fontSize: 13, fontWeight: 700, color }}>{fARS2(cat.promedio)}</Mono>
+                        </div>
+                      </div>
+                      {/* Barra de rango */}
+                      <div style={{ position: 'relative', height: 6, background: 'var(--bg3)', borderRadius: 3, overflow: 'visible' }}>
+                        <div style={{
+                          position: 'absolute', left: 0,
+                          width: `${pct.toFixed(1)}%`,
+                          height: '100%', background: `${color}50`, borderRadius: 3,
+                          transition: 'width .4s ease',
+                        }} />
+                        {/* Rango min-max */}
+                        {cat.minimo != null && cat.maximo != null && (
+                          <div style={{
+                            position: 'absolute',
+                            left: `${((cat.minimo / maxProm) * 100).toFixed(1)}%`,
+                            width: `${(((cat.maximo - cat.minimo) / maxProm) * 100).toFixed(1)}%`,
+                            height: '100%', background: `${color}30`, borderRadius: 3,
+                          }} />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                        <Mono style={{ fontSize: 9, color: 'var(--text3)' }}>mín {fARS2(cat.minimo)}</Mono>
+                        <Mono style={{ fontSize: 9, color: 'var(--text3)' }}>máx {fARS2(cat.maximo)}</Mono>
+                      </div>
                     </div>
-                    <div style={{ background: 'var(--bg3)', borderRadius: 4, height: 20, overflow: 'hidden' }}>
-                      <div style={{
-                        width: `${pct.toFixed(1)}%`, height: '100%',
-                        background: color, opacity: .75, borderRadius: 4,
-                        transition: 'width .4s ease',
-                      }} />
-                    </div>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color, textAlign: 'right' }}>
-                      {fmtARS(item.valor)}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         );
       })}
-      <div className="source">Fuente: Cañuelas MAG · ARS/kg vivo · barras relativas al mayor precio</div>
+      <div className="source">Fuente: mercadoagroganadero.com.ar · ARS/kg vivo · Resolución 32/2018 APN</div>
     </div>
   );
 }
 
-// ── Loading skeleton ──────────────────────────────────────────────────────
-function Skeleton() {
-  const bar = (w, h, mb) => (
-    <div style={{ width: w, height: h || 14, borderRadius: 4, background: 'var(--bg3)', marginBottom: mb || 0, animation: 'pulse 1.4s ease-in-out infinite' }} />
-  );
+// ── Tab: Comparativa ─────────────────────────────────────────────────────
+function TabComparativa({ categorias }) {
+  if (!categorias?.length) return null;
+
+  const sorted = [...categorias].sort((a, b) => b.promedio - a.promedio);
+  const globalMax = sorted[0]?.promedio ?? 1;
+
   return (
     <div>
-      <style>{`@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}`}</style>
-      {/* Índices skeleton */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {sorted.map(cat => {
+          const color  = GRUPO_COLOR[cat.grupo] ?? 'var(--accent)';
+          const pct    = (cat.promedio / globalMax) * 100;
+          const minPct = cat.minimo != null ? (cat.minimo  / globalMax) * 100 : pct;
+          const maxPct = cat.maximo != null ? (cat.maximo  / globalMax) * 100 : pct;
+
+          return (
+            <div key={cat.id} style={{ display: 'grid', gridTemplateColumns: '200px 1fr 130px', alignItems: 'center', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {cat.nombreRaw}
+                </span>
+              </div>
+              <div style={{ position: 'relative', height: 24, background: 'var(--bg2)', borderRadius: 4, overflow: 'hidden' }}>
+                {/* rango min-max */}
+                <div style={{
+                  position: 'absolute',
+                  left: `${minPct.toFixed(1)}%`,
+                  width: `${(maxPct - minPct).toFixed(1)}%`,
+                  height: '100%',
+                  background: `${color}18`,
+                }} />
+                {/* barra promedio */}
+                <div style={{
+                  position: 'absolute', left: 0,
+                  width: `${pct.toFixed(1)}%`,
+                  height: '100%',
+                  background: `${color}55`,
+                  borderRadius: '0 3px 3px 0',
+                  transition: 'width .4s ease',
+                }} />
+                {/* label cabezas */}
+                {cat.cabezas > 0 && (
+                  <div style={{
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                    fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)',
+                  }}>
+                    {fNum(cat.cabezas)} cab.
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <Mono style={{ fontSize: 13, fontWeight: 700, color }}>{fARS2(cat.promedio)}</Mono>
+                {cat.kgProm != null && (
+                  <Mono style={{ fontSize: 9, color: 'var(--text3)', display: 'block' }}>{fNum(cat.kgProm)} kg prom.</Mono>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="source" style={{ marginTop: 14 }}>
+        Barras: promedio por categoría (relativo al mayor) · sombreado: rango mín–máx · Fuente: mercadoagroganadero.com.ar
+      </div>
+    </div>
+  );
+}
+
+// ── Skeleton ─────────────────────────────────────────────────────────────
+function Skeleton() {
+  return (
+    <div>
+      <style>{`@keyframes pulse{0%,100%{opacity:.4}50%{opacity:.9}}`}</style>
       <div className="grid grid-3" style={{ marginBottom: 28 }}>
-        {[0,1,2].map(i => (
-          <div key={i} className="stat">{bar('55%',11,12)}{bar('70%',30,10)}{bar('80%',10,6)}{bar('40%',9)}</div>
+        {[0, 1, 2].map(i => (
+          <div key={i} className="stat">
+            <Skel w="40%" h={10} mb={16} />
+            <Skel w="70%" h={32} mb={12} />
+            <Skel w="85%" h={10} mb={6} />
+            <Skel w="50%" h={9} />
+          </div>
         ))}
       </div>
-      {/* Tabla skeleton */}
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10, padding: '20px 20px' }}>
-        {[0,1,2,3,4,5].map(i => (
+      <div className="grid grid-2" style={{ marginBottom: 28 }}>
+        {[0, 1].map(i => <div key={i} className="stat"><Skel w="40%" h={9} mb={14} /><Skel w="60%" h={26} mb={8} /><Skel w="70%" h={9} /></div>)}
+      </div>
+      <div className="tbl-wrap" style={{ padding: 20 }}>
+        {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
           <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
-            {bar('35%',12)}{bar('15%',12)}{bar('12%',12)}
+            <Skel w="22%" h={12} /><Skel w="14%" h={12} /><Skel w="10%" h={12} /><Skel w="8%" h={12} />
           </div>
         ))}
       </div>
@@ -268,26 +472,21 @@ function Skeleton() {
   );
 }
 
-// ── Error state ───────────────────────────────────────────────────────────
+// ── Error ─────────────────────────────────────────────────────────────────
 function ErrorState({ error, onRetry }) {
   return (
     <div style={{ padding: '48px 0', textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>⚠</div>
-      <div style={{ fontFamily: 'var(--display)', fontSize: 18, color: 'var(--text)', marginBottom: 12 }}>
-        Error al cargar datos de hacienda
+      <div style={{ fontSize: 36, marginBottom: 14 }}>⚠</div>
+      <div style={{ fontFamily: 'var(--display)', fontSize: 18, color: 'var(--text)', marginBottom: 10 }}>
+        No se pudieron cargar los datos del MAG
       </div>
-      <div style={{
-        fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--red)',
-        background: 'var(--red-bg)', border: '1px solid var(--red)',
-        borderRadius: 8, padding: '10px 20px', display: 'inline-block', marginBottom: 24,
-      }}>
+      <Mono style={{ fontSize: 11, color: 'var(--red)', background: 'var(--red-bg)', border: '1px solid rgba(224,92,92,.3)', borderRadius: 8, padding: '8px 18px', display: 'inline-block', marginBottom: 22 }}>
         {error}
-      </div>
+      </Mono>
       <br />
       <button onClick={onRetry} style={{
-        fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700,
-        padding: '10px 24px', background: 'var(--accent)', color: '#fff',
-        border: 'none', borderRadius: 8, cursor: 'pointer',
+        fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700, padding: '10px 24px',
+        background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer',
       }}>
         Reintentar
       </button>
@@ -295,16 +494,19 @@ function ErrorState({ error, onRetry }) {
   );
 }
 
-// ── Tabs ──────────────────────────────────────────────────────────────────
+// ── Constante de orden de grupos ─────────────────────────────────────────
+const ORDEN_GRUPOS    = ['novillos', 'novillitos', 'vaquillonas', 'vacas', 'toros', 'mejores'];
+const GRUPO_LABELS    = { novillos: 'Novillos', novillitos: 'Novillitos', vaquillonas: 'Vaquillonas', vacas: 'Vacas', toros: 'Toros', mejores: 'Mejores' };
+
 const TABS = [
-  { id: 'faena',       label: 'Faena'       },
-  { id: 'resumen',     label: 'Resumen'     },
-  { id: 'comparativa', label: 'Comparativa' },
+  { id: 'mercado',     label: 'Mercado del día' },
+  { id: 'grupos',      label: 'Por grupo'       },
+  { id: 'comparativa', label: 'Comparativa'     },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────
 export function HaciendaPage({ goPage }) {
-  const [tab,       setTab]       = useState('faena');
+  const [tab,       setTab]       = useState('mercado');
   const [estado,    setEstado]    = useState('loading');
   const [data,      setData]      = useState(null);
   const [error,     setError]     = useState(null);
@@ -329,75 +531,76 @@ export function HaciendaPage({ goPage }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const indices = data?.indices ?? [];
-  const grupos  = data?.grupos  ?? [];
-  const fecha   = data?.fecha;
-  const fuente  = data?.fuente ?? 'Cañuelas MAG';
-  const esMock  = data?.esMock ?? false;
+  const indices      = data?.indices      ?? [];
+  const grupos       = data?.grupos       ?? [];
+  const categorias   = data?.categorias   ?? [];
+  const fecha        = data?.fecha;
+  const totalCabezas = data?.totalCabezas;
+  const totalImporte = data?.totalImporte;
+
+  // Total de categorías activas
+  const totalPrecios = categorias.length + indices.length;
 
   return (
     <div className="page-enter">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────────── */}
       <div className="ph">
         <div>
           <div className="ph-title">
             Hacienda{' '}
-            <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-hacienda')} title="Ayuda">?</span>
+            <span className="help-pip" onClick={() => goPage?.('ayuda', 'glosario-hacienda')} title="Ayuda">?</span>
           </div>
-          <div className="ph-sub">Novillos · Novillitos · Vacas · Vaquillonas · Toros · Cañuelas MAG</div>
+          <div className="ph-sub">
+            Novillos · Novillitos · Vacas · Vaquillonas · Toros · Cañuelas MAG
+          </div>
         </div>
-        <div className="ph-right" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {estado === 'ok' && !esMock && (
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--green)', letterSpacing: '.06em' }}>
-              LIVE · {grupos.reduce((s, g) => s + g.items.length, 0) + indices.length} precios
-            </div>
+        <div className="ph-right">
+          {estado === 'ok' && (
+            <Badge type="live" />
           )}
-          {estado === 'ok' && esMock && <MockBadge />}
+          {estado === 'ok' && (
+            <Mono style={{ fontSize: 10, color: 'var(--text3)' }}>
+              {totalPrecios} precios · {lastFetch?.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+            </Mono>
+          )}
           {estado === 'loading' && (
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)' }}>cargando…</div>
+            <Mono style={{ fontSize: 10, color: 'var(--text3)' }}>cargando…</Mono>
           )}
           {estado === 'error' && (
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--red)' }}>ERROR</div>
+            <Mono style={{ fontSize: 10, color: 'var(--red)' }}>SIN DATOS</Mono>
           )}
           <button
-            onClick={cargar} disabled={estado === 'loading'} title="Actualizar"
-            style={{ background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--text3)', borderRadius: 6, padding: '5px 10px', fontFamily: 'var(--mono)', fontSize: 10, cursor: 'pointer', opacity: estado === 'loading' ? .5 : 1 }}
+            onClick={cargar}
+            disabled={estado === 'loading'}
+            title="Actualizar"
+            style={{
+              background: 'var(--bg2)', border: '1px solid var(--line)', color: 'var(--text3)',
+              borderRadius: 6, padding: '5px 10px', fontFamily: 'var(--mono)',
+              fontSize: 10, cursor: 'pointer', opacity: estado === 'loading' ? .5 : 1,
+            }}
           >↺</button>
         </div>
       </div>
 
-      {/* ── Estados ────────────────────────────────────────────────────── */}
+      {/* ── Estados ───────────────────────────────────────────────── */}
       {estado === 'loading' && <Skeleton />}
       {estado === 'error'   && <ErrorState error={error} onRetry={cargar} />}
 
       {estado === 'ok' && (
         <>
-          {/* ── Banner de estado ─────────────────────────────────────────── */}
-          {esMock ? (
-            <div className="alert-strip warn" style={{ marginBottom: 20 }}>
-              <span className="alert-icon">⚠</span>
-              <span className="alert-text">
-                Mostrando <strong>último remate conocido</strong> · El scraping del MAG no está disponible en este momento
-              </span>
-            </div>
-          ) : (
-            <div className="alert-strip info" style={{ marginBottom: 20 }}>
-              <span className="alert-icon">✓</span>
-              <span className="alert-text">
-                {fuente} · Último: <strong>{fmtFecha(fecha)}</strong>
-                {lastFetch && (
-                  <span style={{ color: 'var(--text3)' }}>
-                    {' '}· Consultado: {lastFetch.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
+          {/* ── Banner de fuente ──────────────────────────────────── */}
+          <div className="alert-strip info" style={{ marginBottom: 24 }}>
+            <span className="alert-icon">✓</span>
+            <span className="alert-text" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <Badge type="info" label="OFICIAL MAG" />
+              <span>mercadoagroganadero.com.ar · Último remate: <strong>{fFecha(fecha)}</strong></span>
+            </span>
+          </div>
 
-          {/* ── Índices Cañuelas (INMAG / IGMAG / Arrendamiento) ─────────── */}
+          {/* ── Índices principales ───────────────────────────────── */}
           {indices.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: 28 }}>
               <div className="section-title">Índices Cañuelas MAG</div>
               <div className="grid grid-3">
                 {indices.map(item => <IndiceCard key={item.id} item={item} />)}
@@ -405,7 +608,30 @@ export function HaciendaPage({ goPage }) {
             </div>
           )}
 
-          {/* ── Tabs ─────────────────────────────────────────────────────── */}
+          {/* ── Stats de jornada ─────────────────────────────────── */}
+          {(totalCabezas || totalImporte) && (
+            <div style={{ marginBottom: 32 }}>
+              <div className="section-title">Jornada</div>
+              <div className="grid grid-2" style={{ maxWidth: 540 }}>
+                {totalCabezas && (
+                  <StatCard
+                    label="Ingreso total"
+                    value={fNum(totalCabezas)}
+                    sub="cabezas en la jornada"
+                  />
+                )}
+                {totalImporte && (
+                  <StatCard
+                    label="Importe total"
+                    value={`$\u00a0${R(totalImporte / 1_000_000).toLocaleString('es-AR')} M`}
+                    sub="ARS transaccionados"
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Tabs ──────────────────────────────────────────────── */}
           <div className="tabs">
             {TABS.map(t => (
               <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
@@ -415,9 +641,9 @@ export function HaciendaPage({ goPage }) {
           </div>
 
           <div>
-            {tab === 'faena'       && <TabFaena       grupos={grupos} fecha={fecha} />}
-            {tab === 'resumen'     && <TabResumen      grupos={grupos} />}
-            {tab === 'comparativa' && <TabComparativa  grupos={grupos} />}
+            {tab === 'mercado'     && <TabMercado     categorias={categorias} grupos={grupos} />}
+            {tab === 'grupos'      && <TabGrupos       grupos={grupos} categorias={categorias} />}
+            {tab === 'comparativa' && <TabComparativa  categorias={categorias} />}
           </div>
         </>
       )}

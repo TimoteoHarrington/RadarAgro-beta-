@@ -498,22 +498,60 @@ export function HaciendaPage({ goPage }) {
   var [error,     setError]     = useState(null);
   var [lastFetch, setLastFetch] = useState(null);
 
+  // HaciendaPage.jsx — Fragmento de la función cargar modificada
+// ... (resto del código igual)
+
   var cargar = useCallback(async function() {
     setEstado('loading');
     setError(null);
+    console.log("Iniciando petición a /api/hacienda..."); // Log de inicio
+
     try {
-      var res  = await fetch('/api/hacienda');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var res = await fetch('/api/hacienda');
+      
+      // Error de red o servidor
+      if (!res.ok) {
+        console.error("Error HTTP:", res.status);
+        throw new Error('Error en el servidor: ' + res.status);
+      }
+
       var json = await res.json();
-      if (!json.ok) throw new Error(json.error || 'Error desconocido');
+      console.log("Datos recibidos de la API:", json); // CRUCIAL para debug
+
+      // Validación de estructura
+      if (!json || json.ok === false) {
+        throw new Error(json.error || 'La API devolvió un estado fallido');
+      }
+
+      // Verificación de campos mínimos necesarios para los componentes
+      if (!json.categorias || !Array.isArray(json.categorias)) {
+        console.warn("La API no envió el array de 'categorias'");
+      }
+
       setData(json);
       setEstado('ok');
       setLastFetch(new Date());
+
     } catch (err) {
+      console.error("Error detallado en la integración:", err);
       setError(err.message);
       setEstado('error');
+      
+      // OPCIONAL: Descomenta esto para usar datos locales si la API falla
+      /*
+      import { HACIENDA_CANUELAS, HACIENDA_NOVILLOS } from '../data/hacienda';
+      setData({
+        ok: true,
+        fecha: new Date().toISOString(),
+        indices: HACIENDA_CANUELAS,
+        categorias: HACIENDA_NOVILLOS // Deberías concatenar todos los grupos aquí
+      });
+      setEstado('ok');
+      */
     }
   }, []);
+
+// ... (resto del código igual)
 
   useEffect(function() { cargar(); }, [cargar]);
 

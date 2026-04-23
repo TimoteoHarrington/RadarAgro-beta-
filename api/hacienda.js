@@ -1,12 +1,5 @@
 // api/hacienda.js — Vercel Edge Function
 // Fuente: consignatarias.com.ar API pública
-// Docs: https://www.consignatarias.com.ar/api-docs
-//
-// ESTRATEGIA ANTI-429:
-// - Cache-Control muy agresivo (s-maxage=3600): Vercel CDN sirve desde caché 1h
-// - Un solo fetch por endpoint (no calls paralelas al mismo origen que sumen)
-// - Retry automático con backoff si el primero da 429
-// - Fallback parcial: si un endpoint falla, los demás siguen
 
 export const config = { runtime: 'edge' };
 
@@ -20,7 +13,6 @@ const HEADERS_REQ = {
   'Origin':          'https://www.consignatarias.com.ar',
 };
 
-// ── Fetch con retry en 429 ────────────────────────────────────────────────────
 async function fetchAPI(path, timeoutMs = 12000, retries = 2) {
   const url = `${BASE}${path}`;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -29,7 +21,6 @@ async function fetchAPI(path, timeoutMs = 12000, retries = 2) {
     try {
       const res = await fetch(url, { signal: ctrl.signal, headers: HEADERS_REQ });
       if (res.status === 429 && attempt < retries) {
-        // Backoff: esperar el Retry-After si viene, si no 2^attempt segundos
         const retryAfter = parseInt(res.headers.get('retry-after') || '0', 10);
         const waitMs     = retryAfter > 0 ? retryAfter * 1000 : (2 ** attempt) * 1500;
         await new Promise(r => setTimeout(r, waitMs));
@@ -46,7 +37,6 @@ async function fetchAPI(path, timeoutMs = 12000, retries = 2) {
   }
 }
 
-// ── Mapeo de categorías (igual que antes) ────────────────────────────────────
 const CATEGORIA_MAP = [
   { match: s => /NOVILLO/i.test(s) && !/NOVILLITO/i.test(s) && /Mest.*EyB/i.test(s),    grupo: 'novillos',    nombre: 'Novillos Esp.' },
   { match: s => /NOVILLO/i.test(s) && !/NOVILLITO/i.test(s) && /Regular.*Liv/i.test(s), grupo: 'novillos',    nombre: 'Novillos Reg. Livianos' },
@@ -117,18 +107,14 @@ function construirIndices(raw, fecha) {
   ].filter(Boolean);
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req) {
   const headers = {
     'Content-Type':                'application/json',
     'Access-Control-Allow-Origin': '*',
-    // CLAVE ANTI-429: Vercel CDN cachea 1 hora → solo 1 request real/hora por ruta de CDN
-    // stale-while-revalidate: sigue sirviendo caché vieja mientras renueva en background
     'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200',
   };
 
   try {
-    // ── 1) Precios — crítico, con retry ──────────────────────────────────────
     const preciosRaw = await fetchAPI('/precios', 15000, 3);
     const preciosD   = preciosRaw?.data || preciosRaw;
     const fecha      = preciosD.fecha || preciosD.date || new Date().toISOString().split('T')[0] + 'T00:00:00-03:00';
@@ -142,26 +128,15 @@ export default async function handler(req) {
       throw new Error('La API devolvió datos vacíos en /api/precios');
     }
 
-    // ── 2) Endpoints secundarios — en paralelo, toleran fallo ────────────────
-    // NOTA: los hacemos con un pequeño delay para no golpear el rate limit en rafaga
     const delay = ms => new Promise(r => setTimeout(r, ms));
 
-    const [statsRes, rematesHoyRes, historicoRes] = await Promise.allSettled([
+    // COMENTADO: Endpoints de remates con problemas
+    const [statsRes, historicoRes] = await Promise.allSettled([
       fetchAPI('/remates/stats',        8000, 1),
-      (await delay(300), fetchAPI('/remates/hoy', 8000, 1)),
+      // (await delay(300), fetchAPI('/remates/hoy', 8000, 1)), 
       (await delay(600), fetchAPI('/market/history?days=30', 8000, 1)),
     ]);
 
-    // Remates próximos — con delay extra para no agotar el rate limit
-    let rematesProxRes;
-    try {
-      await delay(900);
-      rematesProxRes = { status:'fulfilled', value: await fetchAPI('/remates/proximos?dias=7', 8000, 1) };
-    } catch(e) {
-      rematesProxRes = { status:'rejected', reason:e };
-    }
-
-    // ── Procesar secundarios ──────────────────────────────────────────────────
     let stats = null;
     if (statsRes.status === 'fulfilled') {
       const sd = statsRes.value?.data?.resumen || statsRes.value?.resumen || statsRes.value?.data || {};
@@ -174,17 +149,9 @@ export default async function handler(req) {
       };
     }
 
+    // Retornamos arreglos vacíos para remates para evitar roturas en el front
     let rematesHoy = [];
-    if (rematesHoyRes.status === 'fulfilled') {
-      const d = rematesHoyRes.value?.data || rematesHoyRes.value;
-      rematesHoy = Array.isArray(d) ? d : (d?.remates || d?.items || []);
-    }
-
     let rematesProximos = [];
-    if (rematesProxRes.status === 'fulfilled') {
-      const d = rematesProxRes.value?.data || rematesProxRes.value;
-      rematesProximos = Array.isArray(d) ? d : (d?.remates || d?.items || []);
-    }
 
     let historico = null;
     if (historicoRes.status === 'fulfilled') {
@@ -220,15 +187,11 @@ export default async function handler(req) {
 
   } catch (err) {
     console.error('[api/hacienda]', err.message);
-
-    // Devolver error con hint específico si es 429
-    const is429 = err.message?.includes('429') || err.message?.includes('429');
+    const is429 = err.message?.includes('429');
     return new Response(JSON.stringify({
       ok:    false,
       error: err.message,
-      hint:  is429
-        ? 'Rate limit de consignatarias.com.ar (100 req/min). El CDN de Vercel debería cachear. Si persiste, esperá 1 minuto y recargá.'
-        : undefined,
+      hint:  is429 ? 'Rate limit alcanzado. Reintentando en breve.' : undefined,
     }), { status: 503, headers });
   }
 }

@@ -1,7 +1,6 @@
 // HaciendaPage.jsx — Rediseño con API consignatarias.com.ar
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-// ─── Paleta de grupos ───────────────────────────────────────────────────────
 const GRUPO_COLOR = {
   novillos:    '#5b9cf6',
   novillitos:  '#4080d8',
@@ -13,7 +12,6 @@ const GRUPO_COLOR = {
 const ORDEN_GRUPOS = ['novillos', 'novillitos', 'vaquillonas', 'vacas', 'toros', 'mejores'];
 const GRUPO_LABELS = { novillos:'Novillos', novillitos:'Novillitos', vaquillonas:'Vaquillonas', vacas:'Vacas', toros:'Toros', mejores:'Mejores' };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const R    = n => Math.round(n);
 const fARS = v => v == null ? '—' : '$ ' + R(v).toLocaleString('es-AR');
 const fNum = v => v == null ? '—' : R(v).toLocaleString('es-AR');
@@ -35,7 +33,6 @@ function diffDias(iso) {
   return Math.round((h - d) / 86400000);
 }
 
-// ─── Micro components ─────────────────────────────────────────────────────────
 const Mono = ({ children, style }) => (
   <span style={{ fontFamily:'var(--mono)', ...style }}>{children}</span>
 );
@@ -43,7 +40,6 @@ const Skel = ({ w='60%', h=14, mb=0 }) => (
   <div style={{ height:h, background:'var(--bg3)', borderRadius:4, width:w, marginBottom:mb, opacity:.5, animation:'pulse 1.4s ease-in-out infinite' }} />
 );
 
-// ─── FechaBanner ─────────────────────────────────────────────────────────────
 function FechaBanner({ fecha, fuente }) {
   const dias   = diffDias(fecha);
   const esHoy  = dias === 0;
@@ -74,7 +70,6 @@ function FechaBanner({ fecha, fuente }) {
   );
 }
 
-// ─── IndiceCard ───────────────────────────────────────────────────────────────
 function IndiceCard({ label, valor, unidad, desc, variacion }) {
   const tieneVar = variacion != null && !isNaN(variacion);
   const varPos   = tieneVar && variacion >= 0;
@@ -101,7 +96,6 @@ function IndiceCard({ label, valor, unidad, desc, variacion }) {
   );
 }
 
-// ─── BarraRango ───────────────────────────────────────────────────────────────
 function BarraRango({ min, max, prom, color }) {
   color = color || 'var(--accent)';
   if (min == null || max == null || prom == null) return null;
@@ -122,7 +116,6 @@ function BarraRango({ min, max, prom, color }) {
   );
 }
 
-// ─── Sparkline SVG ────────────────────────────────────────────────────────────
 function Sparkline({ datos, color }) {
   const ref = useRef(null);
   useEffect(function() {
@@ -144,7 +137,6 @@ function Sparkline({ datos, color }) {
   return React.createElement('svg', { ref:ref, style:{ width:'100%', height:36, display:'block' } });
 }
 
-// ─── TabResumen ───────────────────────────────────────────────────────────────
 function TabResumen({ categorias, totalCabezas, fecha, stats, historico }) {
   if (!categorias || !categorias.length) return null;
 
@@ -160,7 +152,6 @@ function TabResumen({ categorias, totalCabezas, fecha, stats, historico }) {
 
   return (
     React.createElement('div', null,
-      /* KPIs */
       React.createElement('div', { className:'grid grid-3', style:{ marginBottom:32 } },
         totalCabezas != null && React.createElement('div', { className:'stat', style:{ cursor:'default' } },
           React.createElement('div', { style:{ fontSize:12, color:'var(--text3)', marginBottom:8, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' } }, 'Cabezas hoy'),
@@ -170,16 +161,10 @@ function TabResumen({ categorias, totalCabezas, fecha, stats, historico }) {
         stats && stats.rematesHoy != null && React.createElement('div', { className:'stat', style:{ cursor:'default' } },
           React.createElement('div', { style:{ fontSize:12, color:'var(--text3)', marginBottom:8, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' } }, 'Remates hoy'),
           React.createElement('div', { className:'stat-val', style:{ fontSize:26 } }, fNum(stats.rematesHoy)),
-          React.createElement('div', { className:'stat-meta' }, 'programados para hoy')
-        ),
-        stats && stats.rematesProximos7dias != null && React.createElement('div', { className:'stat', style:{ cursor:'default' } },
-          React.createElement('div', { style:{ fontSize:12, color:'var(--text3)', marginBottom:8, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' } }, 'Próximos 7 días'),
-          React.createElement('div', { className:'stat-val', style:{ fontSize:26 } }, fNum(stats.rematesProximos7dias)),
-          React.createElement('div', { className:'stat-meta' }, (stats.provinciasActivas || '?') + ' provincias · ' + (stats.consignatariasActivas || '?') + ' consignatarias')
+          React.createElement('div', { className:'stat-meta' }, 'programados')
         )
       ),
 
-      /* Sparkline */
       sparkData.length > 1 && React.createElement('div', {
         style:{ marginBottom:32, background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px' }
       },
@@ -194,7 +179,6 @@ function TabResumen({ categorias, totalCabezas, fecha, stats, historico }) {
         React.createElement(Sparkline, { datos:sparkData, color:'var(--accent)' })
       ),
 
-      /* Mejor precio por grupo */
       React.createElement('div', { className:'section-title' }, 'Mejor precio por categoría'),
       React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:2 } },
         mejoresPorGrupo.map(function(item) {
@@ -209,50 +193,37 @@ function TabResumen({ categorias, totalCabezas, fecha, stats, historico }) {
             React.createElement('div', null,
               React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, marginBottom:4 } },
                 React.createElement('div', { style:{ width:3, height:20, background:item.color, borderRadius:2, flexShrink:0 } }),
-                React.createElement('span', { style:{ fontSize:14, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } }, item.label),
-                item.totalCab > 0 && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', background:'var(--bg3)', padding:'1px 6px', borderRadius:3 } }, fNum(item.totalCab) + ' cab.')
+                React.createElement('span', { style:{ fontSize:14, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } }, item.label)
               ),
-              React.createElement('span', { style:{ fontSize:11, color:'var(--text2)', paddingLeft:11 } },
-                item.top.nombreRaw || item.top.nombre,
-                item.top.kgProm != null && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', marginLeft:8 } }, '· ' + fNum(item.top.kgProm) + ' kg prom.')
-              )
+              React.createElement('span', { style:{ fontSize:11, color:'var(--text2)', paddingLeft:11 } }, item.top.nombreRaw || item.top.nombre)
             ),
             React.createElement(BarraRango, { min:item.top.minimo, max:item.top.maximo, prom:item.top.promedio, color:item.color }),
             React.createElement('div', { style:{ textAlign:'right' } },
-              React.createElement(Mono, { style:{ fontSize:18, fontWeight:700, color:item.color, display:'block', letterSpacing:'-.01em' } }, fARS(item.top.promedio)),
-              item.top.mediana != null && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', display:'block', marginTop:2 } }, 'med. ' + fARS(item.top.mediana))
+              React.createElement(Mono, { style:{ fontSize:18, fontWeight:700, color:item.color } }, fARS(item.top.promedio))
             )
           );
         })
-      ),
-      React.createElement('div', { className:'source', style:{ marginTop:10 } }, 'ARS/kg vivo · Fuente: consignatarias.com.ar · INMAG / Cañuelas MAG')
+      )
     )
   );
 }
 
-// ─── TabTabla ─────────────────────────────────────────────────────────────────
 function TabTabla({ categorias }) {
   var [filtroGrupo, setFiltroGrupo] = useState('todos');
-  if (!categorias || !categorias.length) return React.createElement('div', { className:'alert-strip warn' }, React.createElement('span', { className:'alert-icon' }, '!'), React.createElement('span', { className:'alert-text' }, 'Sin datos de categorías.'));
+  if (!categorias || !categorias.length) return null;
 
   var gruposPresentes = Array.from(new Set(categorias.map(function(c) { return c.grupo; })));
   var filas = filtroGrupo === 'todos' ? categorias : categorias.filter(function(c) { return c.grupo === filtroGrupo; });
-  filas = [...filas].sort(function(a, b) {
-    var ga = ORDEN_GRUPOS.indexOf(a.grupo), gb = ORDEN_GRUPOS.indexOf(b.grupo);
-    return ga !== gb ? ga - gb : b.promedio - a.promedio;
-  });
-
+  
   return (
     React.createElement('div', null,
-      React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap', alignItems:'center' } },
-        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', marginRight:4 } }, 'FILTRAR'),
+      React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' } },
         ['todos', ...gruposPresentes].map(function(g) {
           var active = filtroGrupo === g;
-          var color  = g === 'todos' ? 'var(--accent)' : (GRUPO_COLOR[g] || 'var(--accent)');
           return React.createElement('button', {
             key:g, onClick:function() { setFiltroGrupo(g); },
-            style:{ fontFamily:'var(--mono)', fontSize:10, fontWeight:600, padding:'5px 13px', borderRadius:6, cursor:'pointer', border:'1px solid '+(active?color:'var(--line)'), background:active?color+'18':'transparent', color:active?color:'var(--text3)', transition:'all .15s' }
-          }, g === 'todos' ? 'TODOS' : (GRUPO_LABELS[g] || g).toUpperCase());
+            style:{ padding:'5px 13px', borderRadius:6, border:'1px solid '+(active?'var(--accent)':'var(--line)'), background:active?'var(--acc-bg)':'transparent', color:active?'var(--accent)':'var(--text3)' }
+          }, g.toUpperCase());
         })
       ),
       React.createElement('div', { className:'tbl-wrap tbl-scroll' },
@@ -260,255 +231,94 @@ function TabTabla({ categorias }) {
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', null, 'Categoría'),
-              React.createElement('th', null, 'Rango (mín–máx)'),
+              React.createElement('th', null, 'Rango'),
               React.createElement('th', { className:'r' }, 'Promedio'),
-              React.createElement('th', { className:'r' }, 'Mediana'),
-              React.createElement('th', { className:'r' }, 'Cabezas'),
-              React.createElement('th', { className:'r' }, 'Peso prom.')
+              React.createElement('th', { className:'r' }, 'Cabezas')
             )
           ),
           React.createElement('tbody', null,
             filas.map(function(cat, i) {
-              var color    = GRUPO_COLOR[cat.grupo] || 'var(--accent)';
-              var prevGrupo = i > 0 ? filas[i-1].grupo : null;
-              var isNew    = cat.grupo !== prevGrupo;
-              return React.createElement(React.Fragment, { key:cat.id || i },
-                isNew && filtroGrupo === 'todos' && React.createElement('tr', null,
-                  React.createElement('td', { colSpan:6, style:{ background:'var(--bg)', padding:'8px 16px 4px', borderBottom:'1px solid var(--line)' } },
-                    React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8 } },
-                      React.createElement('div', { style:{ width:3, height:14, background:color, borderRadius:2 } }),
-                      React.createElement(Mono, { style:{ fontSize:9, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--text3)', fontWeight:600 } }, GRUPO_LABELS[cat.grupo] || cat.grupo)
-                    )
-                  )
-                ),
-                React.createElement('tr', null,
-                  React.createElement('td', null,
-                    React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8 } },
-                      filtroGrupo !== 'todos' && React.createElement('div', { style:{ width:3, height:14, background:color, borderRadius:2, flexShrink:0 } }),
-                      React.createElement('span', { style:{ fontSize:13, color:'var(--text)' } }, cat.nombreRaw || cat.nombre)
-                    )
-                  ),
-                  React.createElement('td', { style:{ minWidth:160 } }, React.createElement(BarraRango, { min:cat.minimo, max:cat.maximo, prom:cat.promedio, color:color })),
-                  React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:color } }, fARS(cat.promedio))),
-                  React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:12, color:'var(--text2)' } }, fARS(cat.mediana))),
-                  React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:12, color:'var(--text)' } }, fNum(cat.cabezas))),
-                  React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:12, color:'var(--text2)' } }, cat.kgProm != null ? fNum(cat.kgProm)+' kg' : '—'))
-                )
+              return React.createElement('tr', { key:cat.id || i },
+                React.createElement('td', null, cat.nombreRaw || cat.nombre),
+                React.createElement('td', null, React.createElement(BarraRango, { min:cat.minimo, max:cat.maximo, prom:cat.promedio, color:GRUPO_COLOR[cat.grupo] })),
+                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontWeight:700 } }, fARS(cat.promedio))),
+                React.createElement('td', { className:'r' }, fNum(cat.cabezas))
               );
             })
           )
         )
-      ),
-      React.createElement('div', { className:'source', style:{ marginTop:10 } }, 'ARS/kg vivo · Barra: mín–máx, marca = promedio · Fuente: consignatarias.com.ar')
+      )
     )
   );
 }
 
-// ─── TabRemates ───────────────────────────────────────────────────────────────
-function TabRemates({ rematesHoy, rematesProximos }) {
-  var [vista, setVista] = useState('hoy');
-  var lista = vista === 'hoy' ? (rematesHoy || []) : (rematesProximos || []);
-
-  return React.createElement('div', null,
-    React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:20 } },
-      [{ id:'hoy', label:'Hoy' }, { id:'proximos', label:'Próximos 7 días' }].map(function(v) {
-        var active = vista === v.id;
-        return React.createElement('button', {
-          key:v.id, onClick:function() { setVista(v.id); },
-          style:{ fontFamily:'var(--mono)', fontSize:10, fontWeight:600, padding:'5px 14px', borderRadius:6, cursor:'pointer', border:'1px solid '+(active?'var(--accent)':'var(--line)'), background:active?'var(--acc-bg)':'transparent', color:active?'var(--accent)':'var(--text3)', transition:'all .15s' }
-        },
-          v.label.toUpperCase(),
-          v.id === 'hoy' && rematesHoy && rematesHoy.length > 0 && React.createElement('span', { style:{ marginLeft:6, fontSize:9, background:'var(--accent)', color:'#fff', borderRadius:8, padding:'1px 5px' } }, rematesHoy.length)
-        );
-      })
-    ),
-
-    !lista.length && React.createElement('div', { style:{ padding:'40px 0', textAlign:'center' } },
-      React.createElement(Mono, { style:{ fontSize:12, color:'var(--text3)' } },
-        vista === 'hoy' ? 'Sin remates programados para hoy' : 'Sin remates próximos disponibles'
-      )
-    ),
-
-    React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6 } },
-      lista.map(function(r, i) {
-        var fechaR   = r.fecha || r.date;
-        var cabezas  = r.cabezas || r.heads;
-        var consig   = r.consignataria || r.organizer || r.consignatariaNombre;
-        var lugar    = r.lugar || r.location || r.localidad;
-        var provincia = r.provincia || r.province;
-        var tipo     = r.tipo || r.type;
-
-        return React.createElement('div', {
-          key:r.id || i,
-          style:{ display:'grid', gridTemplateColumns:'1fr auto', gap:16, padding:'14px 20px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, alignItems:'center' }
-        },
-          React.createElement('div', null,
-            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, marginBottom:5, flexWrap:'wrap' } },
-              React.createElement('span', { style:{ fontFamily:'var(--display)', fontSize:14, fontWeight:600, color:'var(--white)' } }, consig || 'Remate'),
-              tipo && React.createElement(Mono, { style:{ fontSize:9, color:'var(--accent)', background:'var(--acc-bg)', padding:'2px 7px', borderRadius:4, border:'1px solid rgba(91,156,246,.2)' } }, tipo.toUpperCase())
-            ),
-            React.createElement('div', { style:{ display:'flex', gap:12, flexWrap:'wrap' } },
-              lugar && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text2)' } }, '📍 ' + lugar + (provincia ? ', ' + provincia : '')),
-              fechaR && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '📅 ' + fFechaCorta(fechaR)),
-              r.hora && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '🕐 ' + r.hora)
-            )
-          ),
-          cabezas != null && React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
-            React.createElement(Mono, { style:{ fontSize:18, fontWeight:700, color:'var(--accent)', display:'block' } }, fNum(cabezas)),
-            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block' } }, 'CABEZAS')
-          )
-        );
-      })
-    ),
-    React.createElement('div', { className:'source', style:{ marginTop:10 } }, 'Calendario de remates · Fuente: consignatarias.com.ar')
-  );
-}
-
-// ─── TabHistorico ─────────────────────────────────────────────────────────────
 function TabHistorico({ historico, categorias }) {
-  var gruposData = ORDEN_GRUPOS.map(function(gid) {
-    var cats = (categorias || []).filter(function(c) { return c.grupo === gid; });
-    if (!cats.length) return null;
-    var prom = cats.reduce(function(s, c) { return s + (c.promedio || 0); }, 0) / cats.length;
-    var cab  = cats.reduce(function(s, c) { return s + (c.cabezas || 0); }, 0);
-    return { gid:gid, label:GRUPO_LABELS[gid], color:GRUPO_COLOR[gid], prom:prom, cabezas:cab };
-  }).filter(Boolean);
-
-  var maxProm = Math.max.apply(null, gruposData.map(function(g) { return g.prom; }));
-
   return React.createElement('div', null,
-    gruposData.length > 0 && React.createElement('div', { style:{ marginBottom:32 } },
-      React.createElement('div', { className:'section-title' }, 'Precio promedio por grupo · jornada actual'),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:10 } },
-        [...gruposData].sort(function(a,b){return b.prom-a.prom;}).map(function(g) {
-          var pct = maxProm > 0 ? (g.prom / maxProm) * 100 : 0;
-          return React.createElement('div', { key:g.gid, style:{ display:'grid', gridTemplateColumns:'120px 1fr 130px', alignItems:'center', gap:16 } },
-            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8 } },
-              React.createElement('div', { style:{ width:3, height:16, background:g.color, borderRadius:2, flexShrink:0 } }),
-              React.createElement('span', { style:{ fontSize:12, color:'var(--text2)' } }, g.label)
-            ),
-            React.createElement('div', { style:{ position:'relative', height:20, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
-              React.createElement('div', { style:{ position:'absolute', left:0, top:0, bottom:0, width:pct.toFixed(1)+'%', background:g.color+'40', borderRadius:4, transition:'width .4s ease' } })
-            ),
-            React.createElement('div', { style:{ textAlign:'right', display:'flex', justifyContent:'flex-end', gap:12, alignItems:'baseline' } },
-              g.cabezas > 0 && React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, fNum(g.cabezas) + ' cab.'),
-              React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:g.color } }, fARS(g.prom))
-            )
-          );
-        })
-      )
-    ),
-
-    historico ? React.createElement('div', null,
+    historico && React.createElement('div', null,
       React.createElement('div', { className:'section-title' }, 'Histórico INMAG'),
-      historico.stats && React.createElement('div', { className:'grid grid-3', style:{ marginBottom:20 } },
-        [
-          { label:'Mínimo', val:historico.stats.min, color:'var(--red)' },
-          { label:'Promedio', val:historico.stats.avg, color:'var(--accent)' },
-          { label:'Máximo', val:historico.stats.max, color:'var(--green)' },
-        ].map(function(s) {
-          return React.createElement('div', { key:s.label, className:'stat', style:{ cursor:'default', padding:'12px 16px' } },
-            React.createElement('div', { style:{ fontSize:11, color:'var(--text3)', marginBottom:6, fontFamily:'var(--mono)', letterSpacing:'.08em', textTransform:'uppercase' } }, s.label),
-            React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:s.color, fontFamily:'var(--mono)' } }, fARS(s.val))
-          );
-        })
-      ),
-      historico.series && historico.series.length > 0 && React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:320 } },
+      React.createElement('div', { className:'tbl-wrap tbl-scroll' },
         React.createElement('table', null,
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', null, 'Fecha'),
-              React.createElement('th', { className:'r' }, 'INMAG'),
-              React.createElement('th', { className:'r' }, 'Var. día')
+              React.createElement('th', { className:'r' }, 'Valor')
             )
           ),
           React.createElement('tbody', null,
-            [...historico.series].reverse().map(function(s, i, arr) {
-              var prev   = arr[i+1];
-              var varPct = prev && prev.valor ? ((s.valor - prev.valor) / prev.valor) * 100 : null;
-              var varPos = varPct != null && varPct >= 0;
-              return React.createElement('tr', { key:s.fecha || i },
-                React.createElement('td', null, React.createElement(Mono, { style:{ fontSize:12 } }, fFechaCorta(s.fecha))),
-                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:12, fontWeight:600, color:'var(--accent)' } }, fARS(s.valor != null ? s.valor : s.inmag))),
-                React.createElement('td', { className:'r' },
-                  varPct != null
-                    ? React.createElement(Mono, { style:{ fontSize:11, color:varPos?'var(--green)':'var(--red)', fontWeight:600 } }, (varPos?'▲':'▼') + ' ' + Math.abs(varPct).toFixed(1) + '%')
-                    : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
-                )
+            [...historico.series].reverse().map(function(s, i) {
+              return React.createElement('tr', { key:i },
+                React.createElement('td', null, fFechaCorta(s.fecha)),
+                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontWeight:600, color:'var(--accent)' } }, fARS(s.valor || s.inmag)))
               );
             })
           )
         )
       )
-    ) : React.createElement('div', { className:'alert-strip warn' }, React.createElement('span', { className:'alert-icon' }, '!'), React.createElement('span', { className:'alert-text' }, 'Sin datos históricos.')),
-
-    React.createElement('div', { className:'source', style:{ marginTop:10 } }, 'INMAG: Índice Novillo MAG · Fuente: consignatarias.com.ar')
+    )
   );
 }
 
-// ─── Skeleton & Error ─────────────────────────────────────────────────────────
 function Skeleton() {
   return React.createElement('div', null,
     React.createElement('style', null, '@keyframes pulse{0%,100%{opacity:.4}50%{opacity:.9}}'),
     React.createElement('div', { style:{ padding:'12px 20px', marginBottom:28, background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
       React.createElement(Skel, { w:'45%', h:14 })
-    ),
-    React.createElement('div', { className:'grid grid-3', style:{ marginBottom:28 } },
-      [0,1,2].map(function(i) {
-        return React.createElement('div', { key:i, className:'stat' },
-          React.createElement(Skel, { w:'40%', h:10, mb:14 }),
-          React.createElement(Skel, { w:'70%', h:28, mb:10 }),
-          React.createElement(Skel, { w:'85%', h:9 })
-        );
-      })
-    ),
-    [0,1,2,3,4].map(function(i) {
-      return React.createElement('div', { key:i, style:{ padding:'16px 22px', marginBottom:2, background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, display:'flex', gap:24, alignItems:'center' } },
-        React.createElement('div', { style:{ flex:1 } }, React.createElement(Skel, { w:'50%', h:12, mb:6 }), React.createElement(Skel, { w:'70%', h:9 })),
-        React.createElement(Skel, { w:'180px', h:18 }),
-        React.createElement(Skel, { w:'80px', h:20 })
-      );
-    })
+    )
   );
 }
 
 function ErrorState({ error, onRetry }) {
   return React.createElement('div', { style:{ padding:'48px 0', textAlign:'center' } },
     React.createElement('div', { style:{ fontSize:32, marginBottom:14 } }, '⚠'),
-    React.createElement('div', { style:{ fontFamily:'var(--display)', fontSize:17, color:'var(--text)', marginBottom:10 } }, 'No se pudieron cargar los datos'),
-    React.createElement(Mono, { style:{ fontSize:11, color:'var(--red)', background:'var(--red-bg)', border:'1px solid rgba(224,92,92,.3)', borderRadius:8, padding:'8px 18px', display:'inline-block', marginBottom:22 } }, error),
+    React.createElement(Mono, { style:{ fontSize:11, color:'var(--red)' } }, error),
     React.createElement('br'),
-    React.createElement('button', { onClick:onRetry, style:{ fontFamily:'var(--mono)', fontSize:11, fontWeight:700, padding:'10px 24px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:8, cursor:'pointer' } }, 'Reintentar')
+    React.createElement('button', { onClick:onRetry, style:{ marginTop:20, padding:'10px 24px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:8 } }, 'Reintentar')
   );
 }
 
-// ─── Tabs config ──────────────────────────────────────────────────────────────
+// COMENTADO: Se eliminó la pestaña de remates
 var TABS = [
   { id:'resumen',   label:'Resumen' },
   { id:'tabla',     label:'Tabla completa' },
-  { id:'remates',   label:'Remates' },
   { id:'historico', label:'Histórico' },
 ];
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
 export function HaciendaPage({ goPage }) {
   var [tab,       setTab]       = useState('resumen');
   var [estado,    setEstado]    = useState('loading');
   var [data,      setData]      = useState(null);
   var [error,     setError]     = useState(null);
-  var [lastFetch, setLastFetch] = useState(null);
 
   var cargar = useCallback(async function() {
     setEstado('loading');
     setError(null);
     try {
       var res  = await fetch('/api/hacienda');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw new Error('Error al conectar con la API');
       var json = await res.json();
       if (!json.ok) throw new Error(json.error || 'Error desconocido');
       setData(json);
       setEstado('ok');
-      setLastFetch(new Date());
     } catch (err) {
       setError(err.message);
       setEstado('error');
@@ -523,73 +333,41 @@ export function HaciendaPage({ goPage }) {
   var totalCabezas = data && data.totalCabezas;
   var stats        = data && data.stats;
   var historico    = data && data.historico;
-  var rematesHoy   = (data && data.rematesHoy)       || [];
-  var rematesProx  = (data && data.rematesProximos)  || [];
 
   return React.createElement('div', { className:'page-enter' },
-
-    /* Header */
     React.createElement('div', { className:'ph' },
       React.createElement('div', null,
-        React.createElement('div', { className:'ph-title' },
-          'Hacienda ',
-          React.createElement('span', { className:'help-pip', onClick:function() { goPage && goPage('ayuda', 'glosario-hacienda'); }, title:'Ayuda' }, '?')
-        ),
-        React.createElement('div', { className:'ph-sub' }, 'Novillos · Novillitos · Vacas · Vaquillonas · Toros · Remates · consignatarias.com.ar')
+        React.createElement('div', { className:'ph-title' }, 'Hacienda'),
+        React.createElement('div', { className:'ph-sub' }, 'Mercado Agropecuario Argentino')
       ),
-      React.createElement('div', { className:'ph-right' },
-        estado === 'ok' && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } },
-          (categorias.length + indices.length) + ' precios · act. ' + (lastFetch && lastFetch.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }))
-        ),
-        estado === 'loading' && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'cargando…'),
-        estado === 'error'   && React.createElement(Mono, { style:{ fontSize:10, color:'var(--red)' } }, 'SIN DATOS'),
-        React.createElement('button', {
-          onClick:cargar, disabled:estado === 'loading', title:'Actualizar',
-          style:{ background:'var(--bg2)', border:'1px solid var(--line)', color:'var(--text3)', borderRadius:6, padding:'5px 12px', fontFamily:'var(--mono)', fontSize:11, cursor:'pointer', opacity:estado==='loading'?.5:1 }
-        }, '↺ Actualizar')
-      )
+      React.createElement('button', { onClick:cargar, style:{ cursor:'pointer' } }, '↺ Actualizar')
     ),
 
     estado === 'loading' && React.createElement(Skeleton),
     estado === 'error'   && React.createElement(ErrorState, { error:error, onRetry:cargar }),
 
     estado === 'ok' && React.createElement(React.Fragment, null,
-      React.createElement(FechaBanner, { fecha:fecha, fuente:'consignatarias.com.ar · INMAG / Cañuelas MAG' }),
+      React.createElement(FechaBanner, { fecha:fecha }),
 
-      /* Índices */
       indices.length > 0 && React.createElement('div', { style:{ marginBottom:32 } },
         React.createElement('div', { className:'section-title' }, 'Índices INMAG'),
         React.createElement('div', { className:'grid grid-3' },
           indices.map(function(item) {
-            return React.createElement(IndiceCard, {
-              key:item.id,
-              label:item.label || item.nombre,
-              valor:item.valor,
-              unidad:item.unidad,
-              desc:item.descripcion || item.desc || '',
-              variacion:item.variacionSemanal,
-            });
+            return React.createElement(IndiceCard, { key:item.id, label:item.label, valor:item.valor, unidad:item.unidad, desc:item.desc, variacion:item.variacionSemanal });
           })
         )
       ),
 
-      /* Tabs */
       React.createElement('div', { className:'tabs' },
         TABS.map(function(t) {
-          return React.createElement('button', {
-            key:t.id, className:'tab' + (tab === t.id ? ' active' : ''), onClick:function() { setTab(t.id); }
-          },
-            t.label,
-            t.id === 'remates' && rematesHoy.length > 0 && React.createElement('span', { style:{ marginLeft:6, fontSize:9, background:'var(--accent)', color:'#fff', borderRadius:8, padding:'1px 5px' } }, rematesHoy.length)
-          );
+          return React.createElement('button', { key:t.id, className:'tab' + (tab === t.id ? ' active' : ''), onClick:function() { setTab(t.id); } }, t.label);
         })
       ),
 
       React.createElement('div', null,
         tab === 'resumen'   && React.createElement(TabResumen,   { categorias:categorias, totalCabezas:totalCabezas, fecha:fecha, stats:stats, historico:historico }),
         tab === 'tabla'     && React.createElement(TabTabla,     { categorias:categorias }),
-        tab === 'remates'   && React.createElement(TabRemates,   { rematesHoy:rematesHoy, rematesProximos:rematesProx }),
-        tab === 'historico' && React.createElement(TabHistorico, { historico:historico, categorias:categorias })
+        tab === 'historico' && React.createElement(TabHistorico, { historico:historico })
       )
     )
   );

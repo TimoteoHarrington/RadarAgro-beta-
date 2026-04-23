@@ -212,33 +212,3 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ ok:false, error:err.message }), { status:503, headers });
   }
 }
-
-// Al final de src/data/hacienda.js añade esto:
-
-export const HACIENDA_MOCK_RESPONSE = {
-  ok: true,
-  fecha: "2026-04-21T12:00:00Z",
-  totalCabezas: 7450, // Dato ejemplo del MAG
-  indices: HACIENDA_CANUELAS.map(i => ({
-    id: i.id,
-    nombre: i.nombre,
-    valor: i.precio,
-    unidad: i.unidad || 'ARS/kg',
-    variacionSemanal: i.var1s,
-    descripcion: i.descripcion
-  })),
-  categorias: [
-    ...HACIENDA_NOVILLOS.map(c => ({ ...c, grupo: 'novillos' })),
-    ...HACIENDA_NOVILLITOS.map(c => ({ ...c, grupo: 'novillitos' })),
-    ...HACIENDA_VAQUILLONAS.map(c => ({ ...c, grupo: 'vaquillonas' })),
-    ...HACIENDA_VACAS.map(c => ({ ...c, grupo: 'vacas' })),
-    ...HACIENDA_TOROS.map(c => ({ ...c, grupo: 'toros' })),
-    ...HACIENDA_MEJORES.map(c => ({ ...c, grupo: 'mejores' }))
-  ],
-  stats: {
-    rematesHoy: 2,
-    rematesProximos7dias: 14,
-    provinciasActivas: 5,
-    consignatariasActivas: 12
-  }
-};

@@ -9,7 +9,7 @@ const HEADERS_REQ = {
   'Accept':          'application/json',
   'Accept-Language': 'es-AR,es;q=0.9',
   'User-Agent':      'Mozilla/5.0 (compatible; RadarAgro/2.0; +https://radaragro.vercel.app)',
-  'Referer':         'https://www.consignatarias.com.ar',
+  'Referer':         'https://www.consignatarias.com.ar/mercado',
   'Origin':          'https://www.consignatarias.com.ar',
 };
 
@@ -117,81 +117,54 @@ export default async function handler(req) {
   try {
     const preciosRaw = await fetchAPI('/precios', 15000, 3);
     const preciosD   = preciosRaw?.data || preciosRaw;
-    const fecha      = preciosD.fecha || preciosD.date || new Date().toISOString().split('T')[0] + 'T00:00:00-03:00';
+    
+    if (!preciosD) throw new Error('No se recibieron datos de precios');
+
+    const fecha      = preciosD.fecha || preciosD.date || new Date().toISOString();
     const indices    = construirIndices(preciosD, fecha);
     const categorias = normalizarCategorias(preciosD, fecha);
     const grupos     = construirGrupos(categorias);
-    const totalCabezas = preciosD.totalCabezas ?? preciosD.cabezasTotal
-      ?? (categorias.reduce((s, c) => s + (c.cabezas || 0), 0) || null);
-
-    if (!categorias.length && !indices.length) {
-      throw new Error('La API devolvió datos vacíos en /api/precios');
-    }
+    const totalCabezas = preciosD.totalCabezas ?? preciosD.cabezasTotal ?? 0;
 
     const delay = ms => new Promise(r => setTimeout(r, ms));
 
-    // COMENTADO: Endpoints de remates con problemas
+    // Desactivamos remates temporalmente pero mantenemos el histórico
     const [statsRes, historicoRes] = await Promise.allSettled([
-      fetchAPI('/remates/stats',        8000, 1),
-      // (await delay(300), fetchAPI('/remates/hoy', 8000, 1)), 
+      fetchAPI('/remates/stats', 8000, 1),
       (await delay(600), fetchAPI('/market/history?days=30', 8000, 1)),
     ]);
 
     let stats = null;
-    if (statsRes.status === 'fulfilled') {
-      const sd = statsRes.value?.data?.resumen || statsRes.value?.resumen || statsRes.value?.data || {};
+    if (statsRes.status === 'fulfilled' && statsRes.value) {
+      const sd = statsRes.value.data || statsRes.value;
       stats = {
-        totalRemates:          sd.totalRemates          ?? null,
-        rematesHoy:            sd.rematesHoy            ?? null,
-        rematesProximos7dias:  sd.rematesProximos7dias  ?? null,
-        provinciasActivas:     sd.provinciasActivas     ?? null,
-        consignatariasActivas: sd.consignatariasActivas ?? null,
+        totalRemates: sd.totalRemates || 0,
+        rematesHoy: sd.rematesHoy || 0,
       };
     }
 
-    // Retornamos arreglos vacíos para remates para evitar roturas en el front
-    let rematesHoy = [];
-    let rematesProximos = [];
-
     let historico = null;
-    if (historicoRes.status === 'fulfilled') {
-      const hd     = historicoRes.value?.data || historicoRes.value;
-      const series = Array.isArray(hd) ? hd : (hd?.series || hd?.data || []);
-      const statsH = hd?.stats || hd?.estadisticas || null;
-      if (series.length > 0) {
-        const vals = series.map(s => s.valor ?? s.inmag ?? 0).filter(v => v > 0);
-        historico = {
-          series,
-          stats: statsH || (vals.length ? {
-            min: Math.min(...vals),
-            max: Math.max(...vals),
-            avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
-          } : null),
-        };
-      }
+    if (historicoRes.status === 'fulfilled' && historicoRes.value) {
+      const hd = historicoRes.value.data || historicoRes.value;
+      const series = Array.isArray(hd) ? hd : (hd.series || []);
+      historico = { series };
     }
 
     return new Response(JSON.stringify({
       ok: true,
-      fuente: 'consignatarias.com.ar · API pública · INMAG',
+      fuente: 'consignatarias.com.ar',
       fecha,
       indices,
       grupos,
       categorias,
       totalCabezas,
       stats,
-      rematesHoy,
-      rematesProximos,
+      rematesHoy: [],
+      rematesProximos: [],
       historico,
     }), { status: 200, headers });
 
   } catch (err) {
-    console.error('[api/hacienda]', err.message);
-    const is429 = err.message?.includes('429');
-    return new Response(JSON.stringify({
-      ok:    false,
-      error: err.message,
-      hint:  is429 ? 'Rate limit alcanzado. Reintentando en breve.' : undefined,
-    }), { status: 503, headers });
+    return new Response(JSON.stringify({ ok: false, error: err.message }), { status: 500, headers });
   }
 }

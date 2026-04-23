@@ -1,13 +1,52 @@
 // api/hacienda.js — Vercel Edge Function
 // Fuente: consignatarias.com.ar API pública
 // Docs: https://www.consignatarias.com.ar/api-docs
-// Base: https://www.consignatarias.com.ar/api
+//
+// ESTRATEGIA ANTI-429:
+// - Cache-Control muy agresivo (s-maxage=3600): Vercel CDN sirve desde caché 1h
+// - Un solo fetch por endpoint (no calls paralelas al mismo origen que sumen)
+// - Retry automático con backoff si el primero da 429
+// - Fallback parcial: si un endpoint falla, los demás siguen
 
 export const config = { runtime: 'edge' };
 
 const BASE = 'https://www.consignatarias.com.ar/api';
 
-// Mapeo de respuesta de precios al formato interno (grupos de categorías)
+const HEADERS_REQ = {
+  'Accept':          'application/json',
+  'Accept-Language': 'es-AR,es;q=0.9',
+  'User-Agent':      'Mozilla/5.0 (compatible; RadarAgro/2.0; +https://radaragro.vercel.app)',
+  'Referer':         'https://www.consignatarias.com.ar/mercado',
+  'Origin':          'https://www.consignatarias.com.ar',
+};
+
+// ── Fetch con retry en 429 ────────────────────────────────────────────────────
+async function fetchAPI(path, timeoutMs = 12000, retries = 2) {
+  const url = `${BASE}${path}`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, headers: HEADERS_REQ });
+      if (res.status === 429 && attempt < retries) {
+        // Backoff: esperar el Retry-After si viene, si no 2^attempt segundos
+        const retryAfter = parseInt(res.headers.get('retry-after') || '0', 10);
+        const waitMs     = retryAfter > 0 ? retryAfter * 1000 : (2 ** attempt) * 1500;
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      if (attempt === retries) throw err;
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+// ── Mapeo de categorías (igual que antes) ────────────────────────────────────
 const CATEGORIA_MAP = [
   { match: s => /NOVILLO/i.test(s) && !/NOVILLITO/i.test(s) && /Mest.*EyB/i.test(s),    grupo: 'novillos',    nombre: 'Novillos Esp.' },
   { match: s => /NOVILLO/i.test(s) && !/NOVILLITO/i.test(s) && /Regular.*Liv/i.test(s), grupo: 'novillos',    nombre: 'Novillos Reg. Livianos' },
@@ -32,170 +71,142 @@ const CATEGORIA_MAP = [
 const ORDEN_GRUPOS = ['novillos', 'novillitos', 'vaquillonas', 'vacas', 'toros', 'mejores'];
 const GRUPO_LABELS = { novillos:'Novillos', novillitos:'Novillitos', vaquillonas:'Vaquillonas', vacas:'Vacas', toros:'Toros', mejores:'Mejores' };
 
-// ── Fetch con timeout ─────────────────────────────────────────────────────────
-async function fetchJSON(url, timeoutMs = 12000) {
-  const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: { 'Accept': 'application/json', 'User-Agent': 'RadarAgro/2.0' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
-    return await res.json();
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ── Normalizar categorías desde /api/precios ──────────────────────────────────
-// La respuesta tiene { inmag, igmag, categorias: [{nombre, minimo, maximo, promedio, mediana, cabezas, kgProm}] }
-function normalizarCategorias(preciosData, fecha) {
-  const rawCategorias = preciosData.categorias || preciosData.data?.categorias || [];
-
-  return rawCategorias.map((cat, i) => {
+function normalizarCategorias(raw, fecha) {
+  const lista = raw.categorias || raw.data?.categorias || raw.precios || raw.data?.precios || [];
+  return lista.map((cat, i) => {
     const nombreRaw = cat.nombre || cat.name || '';
     const mapeo     = CATEGORIA_MAP.find(m => m.match(nombreRaw));
     const grupo     = mapeo?.grupo || 'novillos';
-    const nombre    = mapeo?.nombre || nombreRaw;
-
     return {
-      id:        `${grupo}.${i}`,
+      id:       `${grupo}.${i}`,
       nombreRaw,
-      nombre,
+      nombre:   mapeo?.nombre || nombreRaw,
       grupo,
-      minimo:    cat.minimo   ?? cat.min    ?? null,
-      maximo:    cat.maximo   ?? cat.max    ?? null,
-      promedio:  cat.promedio ?? cat.avg    ?? cat.precio ?? 0,
-      mediana:   cat.mediana  ?? cat.median ?? null,
-      cabezas:   cat.cabezas  ?? cat.heads  ?? 0,
-      kgProm:    cat.kgProm   ?? cat.kg     ?? null,
-      unidad:    'ARS/kg vivo',
+      minimo:   cat.minimo   ?? cat.min    ?? null,
+      maximo:   cat.maximo   ?? cat.max    ?? null,
+      promedio: cat.promedio ?? cat.avg    ?? cat.precio ?? 0,
+      mediana:  cat.mediana  ?? cat.median ?? null,
+      cabezas:  cat.cabezas  ?? cat.heads  ?? 0,
+      kgProm:   cat.kgProm   ?? cat.kg     ?? null,
+      unidad:   'ARS/kg vivo',
       fecha,
     };
-  }).filter(cat => cat.promedio > 0);
+  }).filter(c => c.promedio > 0);
 }
 
-// ── Construir grupos desde categorías normalizadas ────────────────────────────
 function construirGrupos(categorias) {
-  const gruposMap = {};
-  for (const cat of categorias) {
-    if (!gruposMap[cat.grupo]) gruposMap[cat.grupo] = [];
-    gruposMap[cat.grupo].push(cat);
+  const map = {};
+  for (const c of categorias) {
+    if (!map[c.grupo]) map[c.grupo] = [];
+    map[c.grupo].push(c);
   }
-  return ORDEN_GRUPOS.filter(g => gruposMap[g]?.length)
-    .map(g => ({ id:g, label:GRUPO_LABELS[g], items:gruposMap[g] }));
+  return ORDEN_GRUPOS.filter(g => map[g]?.length)
+    .map(g => ({ id:g, label:GRUPO_LABELS[g], items:map[g] }));
 }
 
-// ── Construir índices desde respuesta de precios ──────────────────────────────
-function construirIndices(preciosData, fecha) {
-  const raw  = preciosData.data || preciosData;
-  const varS = raw.variacionSemanal ?? raw.weeklyChange ?? null;
-
-  const inmag  = raw.inmag  ?? raw.INMAG  ?? null;
-  const igmag  = raw.igmag  ?? raw.IGMAG  ?? null;
+function construirIndices(raw, fecha) {
+  const d     = raw.data || raw;
+  const inmag = d.inmag ?? d.INMAG ?? null;
+  const igmag = d.igmag ?? d.IGMAG ?? null;
   const arrend = inmag != null ? Math.round(inmag * 0.994 * 100) / 100 : null;
-
+  const varS   = d.variacionSemanal ?? d.weeklyChange ?? null;
   return [
-    inmag  != null ? { id:'ar.canuelas.inmag',         label:'INMAG',         valor:inmag,  unidad:'ARS/kg vivo', desc:'Índice Novillo MAG · referencia novillos especiales', variacionSemanal:varS, fecha } : null,
-    igmag  != null ? { id:'ar.canuelas.igmag',         label:'IGMAG',         valor:igmag,  unidad:'ARS/kg vivo', desc:'Índice General MAG · promedio ponderado del mercado', variacionSemanal:null, fecha } : null,
-    arrend != null ? { id:'ar.canuelas.arrendamiento', label:'Arrendamiento',  valor:arrend, unidad:'ARS/ha/año',  desc:'Equivalente hacienda para arrendamientos',             variacionSemanal:null, fecha } : null,
+    inmag  != null ? { id:'ar.canuelas.inmag',         label:'INMAG',        valor:inmag,  unidad:'ARS/kg vivo', desc:'Índice Novillo MAG · novillos especiales', variacionSemanal:varS, fecha } : null,
+    igmag  != null ? { id:'ar.canuelas.igmag',         label:'IGMAG',        valor:igmag,  unidad:'ARS/kg vivo', desc:'Índice General MAG · promedio ponderado',  variacionSemanal:null, fecha } : null,
+    arrend != null ? { id:'ar.canuelas.arrendamiento', label:'Arrendamiento', valor:arrend, unidad:'ARS/ha/año',  desc:'Equivalente hacienda para arrendamientos', variacionSemanal:null, fecha } : null,
   ].filter(Boolean);
 }
 
-// ── Handler principal ─────────────────────────────────────────────────────────
+// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req) {
   const headers = {
     'Content-Type':                'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Cache-Control':               's-maxage=1800, stale-while-revalidate=3600',
+    // CLAVE ANTI-429: Vercel CDN cachea 1 hora → solo 1 request real/hora por ruta de CDN
+    // stale-while-revalidate: sigue sirviendo caché vieja mientras renueva en background
+    'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200',
   };
 
   try {
-    // Lanzar todas las calls en paralelo
-    const [preciosRes, statsRes, rematesHoyRes, rematesProxRes, historicoRes] = await Promise.allSettled([
-      fetchJSON(`${BASE}/precios`),
-      fetchJSON(`${BASE}/remates/stats`),
-      fetchJSON(`${BASE}/remates/hoy`),
-      fetchJSON(`${BASE}/remates/proximos?dias=7`),
-      fetchJSON(`${BASE}/market/history?days=30`),
+    // ── 1) Precios — crítico, con retry ──────────────────────────────────────
+    const preciosRaw = await fetchAPI('/precios', 15000, 3);
+    const preciosD   = preciosRaw?.data || preciosRaw;
+    const fecha      = preciosD.fecha || preciosD.date || new Date().toISOString().split('T')[0] + 'T00:00:00-03:00';
+    const indices    = construirIndices(preciosD, fecha);
+    const categorias = normalizarCategorias(preciosD, fecha);
+    const grupos     = construirGrupos(categorias);
+    const totalCabezas = preciosD.totalCabezas ?? preciosD.cabezasTotal
+      ?? (categorias.reduce((s, c) => s + (c.cabezas || 0), 0) || null);
+
+    if (!categorias.length && !indices.length) {
+      throw new Error('La API devolvió datos vacíos en /api/precios');
+    }
+
+    // ── 2) Endpoints secundarios — en paralelo, toleran fallo ────────────────
+    // NOTA: los hacemos con un pequeño delay para no golpear el rate limit en rafaga
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+    const [statsRes, rematesHoyRes, historicoRes] = await Promise.allSettled([
+      fetchAPI('/remates/stats',        8000, 1),
+      (await delay(300), fetchAPI('/remates/hoy', 8000, 1)),
+      (await delay(600), fetchAPI('/market/history?days=30', 8000, 1)),
     ]);
 
-    // ── Precios y categorías ─────────────────────────────────────────────────
-    if (preciosRes.status === 'rejected') {
-      throw new Error('No se pudo obtener precios: ' + preciosRes.reason?.message);
+    // Remates próximos — con delay extra para no agotar el rate limit
+    let rematesProxRes;
+    try {
+      await delay(900);
+      rematesProxRes = { status:'fulfilled', value: await fetchAPI('/remates/proximos?dias=7', 8000, 1) };
+    } catch(e) {
+      rematesProxRes = { status:'rejected', reason:e };
     }
-    const preciosData = preciosRes.value?.data || preciosRes.value;
 
-    // Fecha del mercado
-    const fecha = preciosData.fecha || preciosData.date || new Date().toISOString().split('T')[0] + 'T00:00:00-03:00';
-
-    // Índices
-    const indices = construirIndices(preciosData, fecha);
-
-    // Categorías y grupos
-    const categorias = normalizarCategorias(preciosData, fecha);
-    const grupos     = construirGrupos(categorias);
-
-    // Total cabezas
-    const totalCabezas = preciosData.totalCabezas ?? preciosData.cabezasTotal ??
-      (categorias.reduce((s, c) => s + (c.cabezas || 0), 0) || null);
-
-    // ── Stats de remates ─────────────────────────────────────────────────────
+    // ── Procesar secundarios ──────────────────────────────────────────────────
     let stats = null;
     if (statsRes.status === 'fulfilled') {
       const sd = statsRes.value?.data?.resumen || statsRes.value?.resumen || statsRes.value?.data || {};
       stats = {
-        totalRemates:         sd.totalRemates          ?? null,
-        rematesHoy:           sd.rematesHoy            ?? null,
-        rematesProximos7dias: sd.rematesProximos7dias  ?? null,
-        provinciasActivas:    sd.provinciasActivas      ?? null,
-        consignatariasActivas:sd.consignatariasActivas  ?? null,
+        totalRemates:          sd.totalRemates          ?? null,
+        rematesHoy:            sd.rematesHoy            ?? null,
+        rematesProximos7dias:  sd.rematesProximos7dias  ?? null,
+        provinciasActivas:     sd.provinciasActivas     ?? null,
+        consignatariasActivas: sd.consignatariasActivas ?? null,
       };
     }
 
-    // ── Remates de hoy ───────────────────────────────────────────────────────
     let rematesHoy = [];
     if (rematesHoyRes.status === 'fulfilled') {
-      const rhd = rematesHoyRes.value?.data || rematesHoyRes.value;
-      rematesHoy = Array.isArray(rhd) ? rhd : (rhd?.remates || rhd?.items || []);
+      const d = rematesHoyRes.value?.data || rematesHoyRes.value;
+      rematesHoy = Array.isArray(d) ? d : (d?.remates || d?.items || []);
     }
 
-    // ── Remates próximos ─────────────────────────────────────────────────────
     let rematesProximos = [];
     if (rematesProxRes.status === 'fulfilled') {
-      const rpd = rematesProxRes.value?.data || rematesProxRes.value;
-      rematesProximos = Array.isArray(rpd) ? rpd : (rpd?.remates || rpd?.items || []);
+      const d = rematesProxRes.value?.data || rematesProxRes.value;
+      rematesProximos = Array.isArray(d) ? d : (d?.remates || d?.items || []);
     }
 
-    // ── Histórico INMAG ──────────────────────────────────────────────────────
     let historico = null;
     if (historicoRes.status === 'fulfilled') {
-      const hd = historicoRes.value?.data || historicoRes.value;
+      const hd     = historicoRes.value?.data || historicoRes.value;
       const series = Array.isArray(hd) ? hd : (hd?.series || hd?.data || []);
       const statsH = hd?.stats || hd?.estadisticas || null;
-
       if (series.length > 0) {
-        const vals = series.map(s => s.valor ?? s.inmag ?? s.precio ?? 0).filter(v => v > 0);
+        const vals = series.map(s => s.valor ?? s.inmag ?? 0).filter(v => v > 0);
         historico = {
           series,
           stats: statsH || (vals.length ? {
-            min:  Math.min(...vals),
-            max:  Math.max(...vals),
-            avg:  vals.reduce((a, b) => a + b, 0) / vals.length,
+            min: Math.min(...vals),
+            max: Math.max(...vals),
+            avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
           } : null),
         };
       }
     }
 
-    // Si no llegaron categorías del endpoint de precios, fallback a respuesta vacía manejable
-    if (!categorias.length && !indices.length) {
-      throw new Error('La API de consignatarias.com.ar no devolvió precios válidos');
-    }
-
     return new Response(JSON.stringify({
-      ok:              true,
-      fuente:          'consignatarias.com.ar · API pública · INMAG',
+      ok: true,
+      fuente: 'consignatarias.com.ar · API pública · INMAG',
       fecha,
       indices,
       grupos,
@@ -205,10 +216,19 @@ export default async function handler(req) {
       rematesHoy,
       rematesProximos,
       historico,
-    }), { status:200, headers });
+    }), { status: 200, headers });
 
   } catch (err) {
     console.error('[api/hacienda]', err.message);
-    return new Response(JSON.stringify({ ok:false, error:err.message }), { status:503, headers });
+
+    // Devolver error con hint específico si es 429
+    const is429 = err.message?.includes('429') || err.message?.includes('429');
+    return new Response(JSON.stringify({
+      ok:    false,
+      error: err.message,
+      hint:  is429
+        ? 'Rate limit de consignatarias.com.ar (100 req/min). El CDN de Vercel debería cachear. Si persiste, esperá 1 minuto y recargá.'
+        : undefined,
+    }), { status: 503, headers });
   }
 }

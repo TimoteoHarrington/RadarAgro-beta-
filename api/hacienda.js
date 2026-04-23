@@ -9,7 +9,7 @@ const HEADERS_REQ = {
   'Accept':          'application/json',
   'Accept-Language': 'es-AR,es;q=0.9',
   'User-Agent':      'Mozilla/5.0 (compatible; RadarAgro/2.0; +https://radaragro.vercel.app)',
-  'Referer':         'https://www.consignatarias.com.ar/mercado',
+  'Referer':         'https://www.consignatarias.com.ar',
   'Origin':          'https://www.consignatarias.com.ar',
 };
 

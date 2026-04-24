@@ -1,7 +1,8 @@
 // api/hacienda.js — Vercel Serverless Function (Node.js)
 // Fuente: consignatarias.com.ar API pública
-// Docs: https://www.consignatarias.com.ar/api-docs
-// OpenAPI: https://www.consignatarias.com.ar/openapi.json
+//
+// Estructura real de /api/precios:
+// { success, data: { precios: [{categoria, precio_kg, moneda, variacion_semanal}], indice_inmag: {valor, unidad, variacion_semanal}, fuente, fecha_actualizacion }, timestamp }
 
 const BASE = 'https://www.consignatarias.com.ar/api';
 
@@ -11,18 +12,16 @@ const GRUPO_MAP = [
   { match: k => /vaquillon/i.test(k),                          grupo: 'vaquillonas' },
   { match: k => /vaca/i.test(k),                               grupo: 'vacas'       },
   { match: k => /toro/i.test(k),                               grupo: 'toros'       },
-  { match: k => /mej/i.test(k),                                grupo: 'mejores'     },
+  { match: k => /ternero/i.test(k),                            grupo: 'terneros'    },
 ];
 
-const ORDEN_GRUPOS = ['novillos', 'novillitos', 'vaquillonas', 'vacas', 'toros', 'mejores'];
-const GRUPO_LABELS = { novillos:'Novillos', novillitos:'Novillitos', vaquillonas:'Vaquillonas', vacas:'Vacas', toros:'Toros', mejores:'Mejores' };
+const ORDEN_GRUPOS = ['novillos', 'novillitos', 'vaquillonas', 'vacas', 'toros', 'terneros'];
+const GRUPO_LABELS = { novillos:'Novillos', novillitos:'Novillitos', vaquillonas:'Vaquillonas', vacas:'Vacas', toros:'Toros', terneros:'Terneros' };
 
-function formatNombre(key) {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase())
-    .replace(/\bEsp\b/gi, 'Esp.')
-    .replace(/\bReg\b/gi, 'Reg.');
+function parseVariacion(str) {
+  if (!str) return null;
+  const n = parseFloat(str.replace('%', '').replace(',', '.'));
+  return isNaN(n) ? null : n;
 }
 
 async function fetchJSON(url, timeoutMs = 15000) {
@@ -40,73 +39,72 @@ async function fetchJSON(url, timeoutMs = 15000) {
   }
 }
 
-function normalizarCategorias(preciosData, fecha) {
-  const rawCategories = preciosData.categories ?? {};
-  return Object.entries(rawCategories).map(([key, val], i) => {
-    const mapeo = GRUPO_MAP.find(m => m.match(key));
-    const grupo = mapeo?.grupo || 'novillos';
-    return {
-      id:        `${grupo}.${i}`,
-      nombreRaw:  key,
-      nombre:     formatNombre(key),
-      grupo,
-      minimo:    null,
-      maximo:    null,
-      promedio:  val.current ?? 0,
-      mediana:   null,
-      cabezas:   0,
-      kgProm:    null,
-      variacion: val.change ?? null,
-      anterior:  val.prev   ?? null,
-      unidad:    'ARS/kg vivo',
-      fecha,
-    };
-  }).filter(cat => cat.promedio > 0);
-}
-
-function construirGrupos(categorias) {
-  const map = {};
-  for (const cat of categorias) {
-    if (!map[cat.grupo]) map[cat.grupo] = [];
-    map[cat.grupo].push(cat);
-  }
-  return ORDEN_GRUPOS.filter(g => map[g]?.length).map(g => ({ id: g, label: GRUPO_LABELS[g], items: map[g] }));
-}
-
-function construirIndices(preciosData, fecha) {
-  const inmagRaw = preciosData.inmag ?? null;
-  const inmag    = inmagRaw?.current ?? null;
-  const varS     = inmagRaw?.change  ?? null;
-  const arrend   = inmag != null ? Math.round(inmag * 0.994 * 100) / 100 : null;
-  return [
-    inmag  != null ? { id: 'ar.canuelas.inmag',         label: 'INMAG',        valor: inmag,  unidad: 'ARS/kg vivo', desc: 'Índice Novillo MAG · referencia novillos especiales', variacionSemanal: varS,  fecha } : null,
-    arrend != null ? { id: 'ar.canuelas.arrendamiento', label: 'Arrendamiento', valor: arrend, unidad: 'ARS/ha/año',  desc: 'Equivalente hacienda para arrendamientos',             variacionSemanal: null, fecha } : null,
-  ].filter(Boolean);
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
+  // Datos de hacienda se publican 1 vez por día hábil
   res.setHeader('Cache-Control', 's-maxage=14400, stale-while-revalidate=86400');
 
   try {
-    let preciosData;
+    let preciosRaw;
     try {
-      preciosData = await fetchJSON(`${BASE}/precios`);
+      preciosRaw = await fetchJSON(`${BASE}/precios`);
     } catch (err) {
       const status = err.status === 429 ? 429 : 503;
       return res.status(status).json({ ok: false, error: err.message });
     }
 
-    const fecha      = preciosData.fecha ?? preciosData.date ?? new Date().toISOString().split('T')[0] + 'T00:00:00-03:00';
-    const indices    = construirIndices(preciosData, fecha);
-    const categorias = normalizarCategorias(preciosData, fecha);
-    const grupos     = construirGrupos(categorias);
+    const d     = preciosRaw.data ?? {};
+    const lista = Array.isArray(d.precios) ? d.precios : [];
+    const inmag = d.indice_inmag ?? null;
+    const fecha = d.fecha_actualizacion ?? new Date().toISOString().split('T')[0];
+
+    // ── Categorías ────────────────────────────────────────────────────────────
+    const categorias = lista.map((item, i) => {
+      const cat   = item.categoria ?? '';
+      const mapeo = GRUPO_MAP.find(m => m.match(cat));
+      const grupo = mapeo?.grupo || cat;
+      return {
+        id:        `${grupo}.${i}`,
+        nombreRaw:  cat,
+        nombre:     cat.charAt(0).toUpperCase() + cat.slice(1),
+        grupo,
+        minimo:    null,
+        maximo:    null,
+        promedio:  item.precio_kg ?? 0,
+        mediana:   null,
+        cabezas:   0,
+        kgProm:    null,
+        variacion: parseVariacion(item.variacion_semanal),
+        anterior:  null,
+        unidad:    'ARS/kg vivo',
+        fecha,
+      };
+    }).filter(c => c.promedio > 0);
+
+    // ── Grupos ────────────────────────────────────────────────────────────────
+    const map = {};
+    for (const cat of categorias) {
+      if (!map[cat.grupo]) map[cat.grupo] = [];
+      map[cat.grupo].push(cat);
+    }
+    const grupos = ORDEN_GRUPOS.filter(g => map[g]?.length).map(g => ({ id: g, label: GRUPO_LABELS[g] ?? g, items: map[g] }));
+
+    // ── Índices ───────────────────────────────────────────────────────────────
+    const inmagValor  = inmag?.valor ?? null;
+    const inmagVar    = parseVariacion(inmag?.variacion_semanal);
+    const arrend      = inmagValor != null ? Math.round(inmagValor * 0.994 * 100) / 100 : null;
+
+    const indices = [
+      inmagValor != null ? { id: 'ar.mag.inmag',         label: 'INMAG',        valor: inmagValor, unidad: 'ARS/kg vivo', desc: 'Índice Novillo Mercado Agroganadero', variacionSemanal: inmagVar, fecha } : null,
+      arrend     != null ? { id: 'ar.mag.arrendamiento', label: 'Arrendamiento', valor: arrend,     unidad: 'ARS/ha/año',  desc: 'Equivalente hacienda para arrendamientos', variacionSemanal: null, fecha } : null,
+    ].filter(Boolean);
 
     if (!categorias.length && !indices.length) {
-      return res.status(502).json({ ok: false, error: 'sin_datos', raw: preciosData });
+      return res.status(502).json({ ok: false, error: 'sin_datos', raw: preciosRaw });
     }
 
+    // ── Secundarios (opcionales) ──────────────────────────────────────────────
     const [statsRes, rematesHoyRes, rematesProxRes, historicoRes] = await Promise.allSettled([
       fetchJSON(`${BASE}/remates/stats`),
       fetchJSON(`${BASE}/remates/hoy`),
@@ -144,7 +142,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok:              true,
-      fuente:          'consignatarias.com.ar · API pública · INMAG',
+      fuente:          d.fuente ?? 'consignatarias.com.ar · INMAG',
       fecha,
       indices,
       grupos,

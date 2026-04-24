@@ -203,7 +203,8 @@ export default async function handler(req) {
     }
 
     if (!categorias.length && !indices.length) {
-      throw new Error('La API de consignatarias.com.ar no devolvió precios válidos');
+      // Debug: devolver la respuesta cruda para ver la estructura real
+      throw new Error('ESTRUCTURA_CRUDA: ' + JSON.stringify(preciosData).slice(0, 500));
     }
 
     return new Response(JSON.stringify({

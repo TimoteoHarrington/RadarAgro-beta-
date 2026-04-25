@@ -133,7 +133,7 @@ const FAENA_POR_PROVINCIA = [
 
 // ─── Utilidades ──────────────────────────────────────────────────────────────
 
-async function fetchText(url, ms = 12000) {
+async function fetchText(url, ms = 8000) {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
@@ -141,19 +141,17 @@ async function fetchText(url, ms = 12000) {
       signal:   ctrl.signal,
       redirect: 'follow',
       headers:  {
-        'User-Agent':      'RadarAgro/2.0',
-        'Accept':          'text/csv,text/plain,application/json,*/*',
-        'Cache-Control':   'no-cache',   // evitar 304 por cache del runtime
-        'Pragma':          'no-cache',
+        'User-Agent':    'RadarAgro/2.0',
+        'Accept':        'text/csv,text/plain,application/json,*/*',
+        'Cache-Control': 'no-cache',
+        'Pragma':        'no-cache',
       },
     });
-    // 304 Not Modified: el runtime ya tiene el body en cache — lo pedimos sin If-None-Match
-    // En ese caso r.ok === false pero el body podría estar vacío. Reintentar sin cache-headers.
     if (r.status === 304) {
       const r2 = await fetch(url, {
-        signal: AbortSignal.timeout(ms),
-        redirect: 'follow',
-        cache: 'no-store',
+        signal:  AbortSignal.timeout(ms),
+        redirect:'follow',
+        cache:   'no-store',
         headers: { 'User-Agent': 'RadarAgro/2.0', 'Accept': '*/*' },
       });
       if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
@@ -164,7 +162,7 @@ async function fetchText(url, ms = 12000) {
   } finally { clearTimeout(timer); }
 }
 
-async function fetchJSON(url, ms = 10000) {
+async function fetchJSON(url, ms = 7000) {
   return JSON.parse(await fetchText(url, ms));
 }
 
@@ -214,7 +212,7 @@ function normCSVRow(row) {
 async function tryCSVMensual() {
   for (const url of [CSV_MENSUAL, CSV_SERIE]) {
     try {
-      const rows = parseCSV(await fetchText(url, 15000))
+      const rows = parseCSV(await fetchText(url, 8000))
         .map(normCSVRow).filter(Boolean)
         .sort((a,b) => a.mes.localeCompare(b.mes));
       if (rows.length >= 12) { console.log('[frig] CSV ok:', url.split('/').pop()); return rows; }
@@ -226,7 +224,7 @@ async function tryCSVMensual() {
 async function trySeriesAPI() {
   for (const id of SERIE_IDS_A_PROBAR) {
     try {
-      const data = await fetchJSON(SERIES_API + id, 9000);
+      const data = await fetchJSON(SERIES_API + id, 6000);
       if (data?.data?.length >= 12) {
         const rows = data.data.map(d => {
           const val = Object.values(d).find(v => typeof v === 'number' && v > 100000);
@@ -361,7 +359,7 @@ export default async function handler(req, res) {
     checkMagyPFrescura(),
     fetch('https://www.consignatarias.com.ar/api/frigorificos?limit=20', {
       headers:{ 'User-Agent':'RadarAgro/2.0' }, redirect:'follow',
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     }).then(r => r.ok ? r.json() : null).catch(() => null),
   ]);
 

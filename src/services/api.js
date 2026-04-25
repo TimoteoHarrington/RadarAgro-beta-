@@ -6,16 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 async function get(url) {
   try {
-    const res = await fetch(url, {
-      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-    });
-    // 304 Not Modified: reintentar con cache bypass
-    if (res.status === 304) {
-      const res2 = await fetch(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now());
-      const json2 = await res2.json().catch(() => null);
-      if (!res2.ok) return { data: null, error: `HTTP ${res2.status}` };
-      return { data: json2, error: null };
-    }
+    const res = await fetch(url);
     const json = await res.json().catch(() => null);
     if (!res.ok) {
       const msg = json?.error ?? `HTTP ${res.status}`;

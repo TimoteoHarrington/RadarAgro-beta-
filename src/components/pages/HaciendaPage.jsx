@@ -611,11 +611,11 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
   var meta        = frigData.meta             || {};
 
   // Usar campos dinámicos de la API
-  var anioRef        = kpis.anioRef       || 2025;
-  var faenaRef       = kpis.faenaAnualRef || 13230000;
-  var varAnual       = kpis.varAnual;
-  var pesoResRef     = kpis.pesoResRef    || 231;
-  var produccionRef  = kpis.produccionRef || 3060;
+  var anioRef        = kpis.anioRef       || null;
+  var faenaRef       = kpis.faenaAnualRef || null;
+  var varAnual       = kpis.varAnual      ?? null;
+  var pesoResRef     = kpis.pesoResRef    || null;
+  var produccionRef  = kpis.produccionRef || null;
   var ultimoMes      = kpis.ultimoMes;
   var ultimoMesCab   = kpis.ultimoMesCabezas;
   var ultimoMesPeso  = kpis.ultimoMesPeso;
@@ -640,8 +640,8 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
   })();
 
   // Ciclo ganadero
-  var hPct = analisis.hembras2025pct || 47.4;
-  var faseCiclo = analisis.faseCiclo || (hPct < 46 ? 'retencion' : hPct > 48.5 ? 'liquidacion' : 'retencion_leve');
+  var hPct = analisis.hembras2025pct ?? null;
+  var faseCiclo = analisis.faseCiclo || (hPct == null ? 'sin_datos' : hPct < 46 ? 'retencion' : hPct > 48.5 ? 'liquidacion' : 'retencion_leve');
   var faseColor = faseCiclo === 'liquidacion' || faseCiclo === 'liquidación' ? 'var(--red)'
                 : faseCiclo === 'retencion'   || faseCiclo === 'retención'   ? 'var(--green)' : 'var(--accent)';
   var faseLabel = { retencion:'Retención', retencion_leve:'Retención leve', liquidacion:'Liquidación',
@@ -685,7 +685,7 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
           'Faena anual ' + anioRef
         ),
         React.createElement('div', { className:'stat-val', style:{ fontSize:22, color:'var(--accent)' } },
-          (faenaRef/1e6).toFixed(2)+' M'
+          faenaRef != null ? (faenaRef/1e6).toFixed(2)+' M' : '—'
         ),
         React.createElement('div', { className:'stat-meta' },
           'cab. · ',
@@ -715,13 +715,17 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
       React.createElement('div', { className:'stat', style:{ cursor:'default' } },
         React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, 'Establecimientos'),
         React.createElement('div', { className:'stat-val', style:{ fontSize:22 } },
-          (kpis.frigoriificosActivos || '—').toLocaleString ? (kpis.frigoriificosActivos || 364).toLocaleString('es-AR') : '364'
+          kpis.frigoriificosActivos != null
+            ? kpis.frigoriificosActivos.toLocaleString('es-AR')
+            : '—'
         ),
         React.createElement('div', { className:'stat-meta' }, 'habilitados SENASA · tráfico federal')
       ),
       React.createElement('div', { className:'stat', style:{ cursor:'default' } },
         React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, '% Hembras 2025'),
-        React.createElement('div', { className:'stat-val', style:{ fontSize:22, color: faseColor } }, hPct + '%'),
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22, color: hPct != null ? faseColor : 'var(--text3)' } },
+          hPct != null ? hPct + '%' : '—'
+        ),
         React.createElement('div', { className:'stat-meta' },
           'ciclo: ', React.createElement('span', { style:{ color:faseColor, fontWeight:600 } }, faseLabel)
         )
@@ -976,8 +980,9 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
           + 'Los % corresponden a datos agregados publicados por MAGYP 2024.'
         )
       ),
-      provincias.length > 0 && React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
-        provincias.map(function(p) {
+      provincias.length > 0
+        ? React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
+          provincias.map(function(p) {
           return React.createElement('div', { key:p.provincia,
             style:{ display:'grid', gridTemplateColumns:'140px 1fr 50px 90px', gap:12, alignItems:'center',
               padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
@@ -995,7 +1000,12 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
             )
           );
         })
-      ),
+        )
+        : React.createElement('div', { style:{ padding:'24px 0', textAlign:'center' } },
+          React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } },
+            'Datos por provincia no disponibles en la fuente actual.'
+          )
+        ),
       React.createElement('div', { className:'source' },
         'Fuente: SENASA (registro habilitados) · MAGYP (informe sectorial 2024) · datos.magyp.gob.ar'
       )
@@ -1009,7 +1019,7 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
         padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
         React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Total habilitados SENASA'),
         React.createElement(Mono, { style:{ fontSize:18, fontWeight:700, color:'var(--accent)', marginLeft:'auto' } },
-          (dir.total || kpis.frigoriificosActivos || 364)+' establecimientos'
+          (dir.total ?? kpis.frigoriificosActivos ?? '—') + (dir.total || kpis.frigoriificosActivos ? ' establecimientos' : '')
         ),
         React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'tráfico federal')
       ),
@@ -1022,8 +1032,9 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
         )
       ),
       React.createElement('div', { className:'section-title' }, 'Establecimientos del registro oficial'),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:4 } },
-        (dir.muestra || topFrig).map(function(f, i) {
+      (dir.muestra || topFrig).length > 0
+        ? React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:4 } },
+          (dir.muestra || topFrig).map(function(f, i) {
           return React.createElement('div', { key:i,
             style:{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
               background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, flexWrap:'wrap' }
@@ -1050,7 +1061,12 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
             React.createElement('div', { style:{ width:4, height:4, borderRadius:'50%', background:'var(--green)', flexShrink:0 } })
           );
         })
-      ),
+        )
+        : React.createElement('div', { style:{ padding:'24px 0', textAlign:'center' } },
+          React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } },
+            'Directorio no disponible · La fuente externa no respondió en esta consulta.'
+          )
+        ),
       React.createElement('div', { className:'source', style:{ marginTop:12 } },
         'Registro SENASA · Dirección de Industria Alimentaria · MAGYP · datos.consignatarias.com.ar'
       )

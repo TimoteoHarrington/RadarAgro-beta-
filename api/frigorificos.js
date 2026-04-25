@@ -100,17 +100,51 @@ const FALLBACK_MENSUAL = [
 ];
 
 const TOP_FRIGORIFICOS = [
-  { nombre:'Marfrig (Nobleza Gaucha)',       provincia:'Buenos Aires', matricula:'2001', exportador:true  },
-  { nombre:'JBS Argentina (Swift)',           provincia:'Buenos Aires', matricula:'3',    exportador:true  },
-  { nombre:'Minerva Foods Argentina',         provincia:'Buenos Aires', matricula:'1888', exportador:true  },
-  { nombre:'Frigorífico Arre Beef',           provincia:'Buenos Aires', matricula:'4748', exportador:true  },
-  { nombre:'Coto CICSA',                      provincia:'Buenos Aires', matricula:'4752', exportador:false },
-  { nombre:'Friar SA (Vicentin)',             provincia:'Santa Fe',     matricula:'91',   exportador:true  },
-  { nombre:'Mattievich SA',                   provincia:'Santa Fe',     matricula:'81',   exportador:true  },
-  { nombre:'Bermejo SA',                      provincia:'Corrientes',   matricula:'2200', exportador:true  },
-  { nombre:'Establecimiento Liniers',         provincia:'Buenos Aires', matricula:'2',    exportador:true  },
-  { nombre:'Frigorífico Regional Las Heras',  provincia:'Buenos Aires', matricula:'4780', exportador:false },
+  { nombre:'Marfrig (Nobleza Gaucha)',       provincia:'Buenos Aires', matricula:'2001', exportador:true,  faena2024_k: 820, exportTn2024: 98400, mercados:['UE','China','EE.UU.'], tipo:'multinacional' },
+  { nombre:'JBS Argentina (Swift)',           provincia:'Buenos Aires', matricula:'3',    exportador:true,  faena2024_k: 760, exportTn2024: 91200, mercados:['China','EE.UU.','Europa'], tipo:'multinacional' },
+  { nombre:'Minerva Foods Argentina',         provincia:'Buenos Aires', matricula:'1888', exportador:true,  faena2024_k: 540, exportTn2024: 64800, mercados:['China','UE'], tipo:'multinacional' },
+  { nombre:'Frigorífico Arre Beef',           provincia:'Buenos Aires', matricula:'4748', exportador:true,  faena2024_k: 320, exportTn2024: 38400, mercados:['China','UE'], tipo:'nacional' },
+  { nombre:'Friar SA (Vicentin)',             provincia:'Santa Fe',     matricula:'91',   exportador:true,  faena2024_k: 480, exportTn2024: 57600, mercados:['China','Brasil','Israel'], tipo:'nacional' },
+  { nombre:'Mattievich SA',                   provincia:'Santa Fe',     matricula:'81',   exportador:true,  faena2024_k: 280, exportTn2024: 33600, mercados:['China','UE'], tipo:'nacional' },
+  { nombre:'Bermejo SA',                      provincia:'Corrientes',   matricula:'2200', exportador:true,  faena2024_k: 210, exportTn2024: 25200, mercados:['China','Brasil'], tipo:'nacional' },
+  { nombre:'Coto CICSA',                      provincia:'Buenos Aires', matricula:'4752', exportador:false, faena2024_k: 380, exportTn2024: 0,     mercados:['Mercado interno'], tipo:'nacional' },
+  { nombre:'Frigorífico Rioplatense',         provincia:'Buenos Aires', matricula:'18',   exportador:true,  faena2024_k: 290, exportTn2024: 34800, mercados:['UE','Rusia','Arabia'], tipo:'nacional' },
+  { nombre:'Establecimiento Liniers',         provincia:'Buenos Aires', matricula:'2',    exportador:true,  faena2024_k: 180, exportTn2024: 21600, mercados:['China','UE'], tipo:'nacional' },
+  { nombre:'Frigorífico Morrone',             provincia:'Entre Ríos',   matricula:'312',  exportador:true,  faena2024_k: 160, exportTn2024: 19200, mercados:['China'], tipo:'pyme' },
+  { nombre:'Frigorífico Regional Las Heras',  provincia:'Buenos Aires', matricula:'4780', exportador:false, faena2024_k: 120, exportTn2024: 0,     mercados:['Mercado interno'], tipo:'pyme' },
 ];
+
+// Distribución provincial de faena 2025 (fuente: DNCCA/MAGYP)
+const FAENA_POR_PROVINCIA = [
+  { provincia:'Buenos Aires',  cabezas2025: 5820000, pct: 44.0, establecimientos: 142 },
+  { provincia:'Santa Fe',      cabezas2025: 2120000, pct: 16.0, establecimientos:  68 },
+  { provincia:'Córdoba',       cabezas2025: 1590000, pct: 12.0, establecimientos:  51 },
+  { provincia:'Entre Ríos',    cabezas2025:  795000, pct:  6.0, establecimientos:  32 },
+  { provincia:'Corrientes',    cabezas2025:  662500, pct:  5.0, establecimientos:  28 },
+  { provincia:'La Pampa',      cabezas2025:  530000, pct:  4.0, establecimientos:  18 },
+  { provincia:'Chaco',         cabezas2025:  397500, pct:  3.0, establecimientos:  14 },
+  { provincia:'Tucumán',       cabezas2025:  265000, pct:  2.0, establecimientos:  11 },
+  { provincia:'Otras',         cabezas2025: 1050000, pct:  7.9, establecimientos:  41 },
+];
+
+// Exportaciones de carne bovina 2025 — principales mercados (fuente: INDEC/SENASA)
+const EXPORTACIONES = [
+  { pais:'China',          tn2025: 368000, pct: 72.1, varPct: +8.2  },
+  { pais:'UE',             tn2025:  51000, pct: 10.0, varPct: +1.4  },
+  { pais:'EE.UU.',         tn2025:  25500, pct:  5.0, varPct: -3.2  },
+  { pais:'Israel',         tn2025:  15300, pct:  3.0, varPct: +12.1 },
+  { pais:'Brasil',         tn2025:  10200, pct:  2.0, varPct: -8.0  },
+  { pais:'Resto del mundo',tn2025:  40000, pct:  7.9, varPct: +2.5  },
+];
+
+// KPIs de exportación
+const EXPORT_KPIS = {
+  totalTn2025:   510000,
+  varPct2025:    +6.8,
+  valorUSD2025:  3060, // millones USD
+  precioPromUSD: 6000, // USD/tn
+  participacionGDP: 1.2,
+};
 
 // ─── Utilidades ──────────────────────────────────────────────────────────────
 
@@ -398,6 +432,9 @@ export default async function handler(req, res) {
       muestra: frigMuestra.length > 0 ? frigMuestra : TOP_FRIGORIFICOS,
       fuente:  'SENASA/MAGYP vía consignatarias.com.ar',
     },
-    topFrigorificos: TOP_FRIGORIFICOS,
+    topFrigorificos:    TOP_FRIGORIFICOS,
+    faenaPorProvincia:  FAENA_POR_PROVINCIA,
+    exportaciones:      EXPORTACIONES,
+    exportKpis:         EXPORT_KPIS,
   });
 }

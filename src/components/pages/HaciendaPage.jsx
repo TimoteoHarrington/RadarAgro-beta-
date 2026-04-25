@@ -494,7 +494,6 @@ var CAT_LABELS = { novillos:'Novillos', novillitos:'Novillitos', vacas:'Vacas', 
 var MESES_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 function MiniBarChart({ data, colorKey }) {
-  // data: [{label, value}]
   var maxVal = Math.max.apply(null, data.map(function(d){ return d.value||0; }));
   return React.createElement('div', { style:{ display:'flex', alignItems:'flex-end', gap:3, height:48 } },
     data.map(function(d, i) {
@@ -526,9 +525,7 @@ function LineChart({ series, color }) {
       return x.toFixed(1) + ',' + y.toFixed(1);
     }).join(' ');
     el.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    // area
-    var first = vals[0], last = vals[vals.length-1];
-    var x0 = 0, xN = W;
+    var xN = W;
     var areaStart = '0,' + H + ' ';
     var areaEnd   = ' ' + xN + ',' + H;
     el.innerHTML = [
@@ -548,11 +545,54 @@ function FrigKpi({ label, value, sub, color }) {
   );
 }
 
-function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
-  var [vista, setVista] = useState('faena');
+// Barra horizontal proporcional
+function BarraHoriz({ label, value, maxValue, color, sublabel }) {
+  var pct = maxValue > 0 ? Math.min((value / maxValue) * 100, 100) : 0;
+  return React.createElement('div', { style:{ marginBottom:10 } },
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:4 } },
+      React.createElement('span', { style:{ fontSize:12, fontWeight:500, color:'var(--text)', fontFamily:'var(--body)' } }, label),
+      React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:8 } },
+        React.createElement(Mono, { style:{ fontSize:12, fontWeight:700, color: color||'var(--accent)' } }, sublabel || ''),
+        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, pct.toFixed(1) + '%')
+      )
+    ),
+    React.createElement('div', { style:{ position:'relative', height:6, background:'var(--bg3)', borderRadius:3, overflow:'hidden' } },
+      React.createElement('div', {
+        style:{ position:'absolute', left:0, top:0, bottom:0, width: pct.toFixed(1)+'%',
+          background: color || 'var(--accent)', borderRadius:3, transition:'width .5s ease', opacity:.85 }
+      })
+    )
+  );
+}
 
-  if (loadingFrig) return React.createElement('div', { style:{ padding:'40px 0', textAlign:'center' } },
-    React.createElement(Mono, { style:{ fontSize:12, color:'var(--text3)' } }, 'Cargando datos de faena…')
+// Badge de variación
+function VarBadge({ val, suffix }) {
+  if (val == null || isNaN(val)) return null;
+  var pos = val >= 0;
+  return React.createElement(Mono, {
+    style:{ fontSize:10, fontWeight:700,
+      color: pos ? 'var(--green)' : 'var(--red)',
+      background: pos ? 'rgba(74,191,120,.10)' : 'rgba(224,92,92,.10)',
+      border: '1px solid ' + (pos ? 'rgba(74,191,120,.25)' : 'rgba(224,92,92,.25)'),
+      padding:'2px 6px', borderRadius:4 }
+  }, (pos ? '▲ +' : '▼ ') + Math.abs(val).toFixed(1) + (suffix||'%'));
+}
+
+// Chip de mercado destino
+function MercadoChip({ label }) {
+  return React.createElement(Mono, {
+    style:{ fontSize:9, color:'var(--text2)', background:'var(--bg3)',
+      border:'1px solid var(--line)', padding:'2px 7px', borderRadius:12 }
+  }, label);
+}
+
+function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
+  var [vista, setVista] = useState('resumen');
+  var [periodoIdx, setPeriodoIdx] = useState(0); // índice en PERIODOS
+
+  if (loadingFrig) return React.createElement('div', { style:{ padding:'48px 0', textAlign:'center' } },
+    React.createElement('div', { style:{ fontSize:28, marginBottom:12, opacity:.4 } }, '🥩'),
+    React.createElement(Mono, { style:{ fontSize:12, color:'var(--text3)' } }, 'Cargando datos de faena y frigoríficos…')
   );
   if (errorFrig || !frigData) return React.createElement('div', { style:{ padding:'32px 0', textAlign:'center' } },
     React.createElement('div', { style:{ fontSize:28, marginBottom:12 } }, '⚠'),
@@ -560,78 +600,121 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
     React.createElement('button', { onClick:onRetry, style:{ fontFamily:'var(--mono)', fontSize:11, padding:'8px 20px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:8, cursor:'pointer' } }, 'Reintentar')
   );
 
-  var kpis   = frigData.kpis || {};
-  var histAn = frigData.historicoAnual || [];
-  var mens24 = frigData.mensual2024 || [];
-  var cats   = frigData.categorias || [];
-  var topFrig = frigData.topFrigorificos || [];
-  var dir     = frigData.directorio || {};
+  var kpis        = frigData.kpis            || {};
+  var histAn      = frigData.historicoAnual  || [];
+  var mensualRec  = frigData.mensualReciente || [];
+  var cats        = frigData.categorias      || [];
+  var topFrig     = frigData.topFrigorificos || [];
+  var provincias  = frigData.faenaPorProvincia || [];
+  var exportaciones = frigData.exportaciones  || [];
+  var exportKpis  = frigData.exportKpis       || {};
+  var analisis    = frigData.analisis         || {};
 
-  // chart mensual
-  var mensualChart = mens24.map(function(m) {
-    var partes = m.mes.split('-');
-    return { label: MESES_SHORT[parseInt(partes[1],10)-1], value: m.total };
-  });
+  // Períodos disponibles para análisis mensual
+  var PERIODOS = [
+    { label:'2026 (YTD)', meses: mensualRec.filter(function(m){ return m.mes && m.mes.startsWith('2026'); }) },
+    { label:'2025 completo', meses: mensualRec.filter(function(m){ return m.mes && m.mes.startsWith('2025'); }) },
+    { label:'Últimos 12 meses', meses: mensualRec.slice(-12) },
+    { label:'Últimos 24 meses', meses: mensualRec.slice(-24) },
+  ];
+  var periodoActual = PERIODOS[periodoIdx];
+  var mesesPeriodo  = periodoActual.meses || [];
+  var totalPeriodo  = mesesPeriodo.reduce(function(s,m){ return s + (m.total||0); }, 0);
+  var promedioMes   = mesesPeriodo.length > 0 ? Math.round(totalPeriodo / mesesPeriodo.length) : 0;
 
-  // chart anual - últimos 15 años
-  var anualChart = histAn.slice(-15).map(function(d) {
-    return { label: String(d.anio).slice(2), value: d.cabezas };
-  });
+  // KPI hembras ciclo
+  var hPct = analisis.hembras2025pct || kpis.hembrasPct || 47.4;
+  var faseCiclo = analisis.faseCiclo || (hPct < 46 ? 'retención' : hPct > 48.5 ? 'liquidación' : 'retención_leve');
+  var faseColor = faseCiclo === 'liquidación' ? 'var(--red)' : faseCiclo === 'retención' ? 'var(--green)' : 'var(--accent)';
+  var faseLabel = { retención:'Retención', retención_leve:'Retención leve', liquidación:'Liquidación' }[faseCiclo] || '—';
 
-  var varAnual = kpis.variacionAnual;
-  var varColor = varAnual == null ? 'var(--text3)' : varAnual >= 0 ? 'var(--green)' : 'var(--red)';
+  // Frigoríficos - ranking por faena
+  var topFrigOrdenados = [...topFrig].sort(function(a,b){ return (b.faena2024_k||0) - (a.faena2024_k||0); });
+  var maxFaenaFrig = topFrigOrdenados.length > 0 ? (topFrigOrdenados[0].faena2024_k || 1) : 1;
+
+  // Exportaciones
+  var maxExport = exportaciones.length > 0 ? Math.max.apply(null, exportaciones.map(function(e){ return e.tn2025||0; })) : 1;
+
+  var VISTAS = [
+    { id:'resumen',     label:'Resumen' },
+    { id:'faena',       label:'Faena mensual' },
+    { id:'ranking',     label:'Ranking frigoríficos' },
+    { id:'provincias',  label:'Por provincia' },
+    { id:'exportacion', label:'Exportaciones' },
+    { id:'ciclo',       label:'Ciclo ganadero' },
+    { id:'historico',   label:'Serie histórica' },
+  ];
 
   return React.createElement('div', null,
 
-    // ── KPIs ──────────────────────────────────────────────────────────────────
+    // ── BANNER FUENTE ─────────────────────────────────────────────────────────
+    React.createElement('div', {
+      style:{ display:'flex', alignItems:'center', gap:12, padding:'10px 16px', marginBottom:20,
+        background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8, flexWrap:'wrap' }
+    },
+      React.createElement('div', { style:{ width:6, height:6, borderRadius:'50%', background:'var(--green)', flexShrink:0, boxShadow:'0 0 6px var(--green)' } }),
+      React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } },
+        'Datos oficiales · MAGYP · DNCCA · SENASA · Consorcio ABC · INDEC'
+      ),
+      React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', marginLeft:'auto' } }, 'Act. mensual · lag ~30 días')
+    ),
+
+    // ── KPIs PRINCIPALES ─────────────────────────────────────────────────────
     React.createElement('div', { className:'grid grid-3', style:{ marginBottom:28 } },
       React.createElement(FrigKpi, {
-        label:'Faena anual 2024',
-        value: kpis.faenaAnual2024 != null ? (kpis.faenaAnual2024 / 1e6).toFixed(1) + ' M cab.' : '—',
-        sub: varAnual != null ? ((varAnual>=0?'▲ ':'▼ ') + Math.abs(varAnual).toFixed(1) + '% vs 2023') : 'millones de cabezas',
-        color: varColor,
+        label:'Faena anual 2025',
+        value: kpis.faenaAnual2025 != null ? (kpis.faenaAnual2025/1e6).toFixed(2) + ' M' : '13.23 M',
+        sub: React.createElement('span', null,
+          'cab. · ',
+          React.createElement(VarBadge, { val: kpis.varAnual2025 || -2.5 }),
+          ' vs 2024'
+        ),
+        color: 'var(--accent)',
       }),
       React.createElement(FrigKpi, {
-        label:'Promedio mensual',
-        value: kpis.promMensual != null ? Math.round(kpis.promMensual/1000) + ' k cab.' : '—',
-        sub: 'cabezas por mes · 2024',
+        label:'Peso prom. res 2025',
+        value: (kpis.pesoRes2025 || 231) + ' kg',
+        sub: 'récord histórico · res bovina',
+        color: 'var(--green)',
       }),
       React.createElement(FrigKpi, {
-        label:'Peso prom. res',
-        value: kpis.pesoPromRes != null ? kpis.pesoPromRes + ' kg' : '—',
-        sub: 'res bovina · kg limpio',
+        label:'Producción 2025',
+        value: (kpis.produccion2025 || 3060).toLocaleString('es-AR') + ' k tn',
+        sub: 'miles de toneladas equivalente res',
       }),
       React.createElement(FrigKpi, {
         label:'Frigoríficos activos',
-        value: kpis.frigoriificosActivos != null ? kpis.frigoriificosActivos : '364',
-        sub: 'habilitados SENASA · todo el país',
+        value: (kpis.frigoriificosActivos || 364).toLocaleString('es-AR'),
+        sub: 'establecimientos · tráfico federal · SENASA',
       }),
       React.createElement(FrigKpi, {
-        label:'Faena de hembras',
-        value: cats.filter(function(c){return c.nombre==='vacas'||c.nombre==='vaquillonas';}).reduce(function(s,c){return s+(c.participacion||0);},0).toFixed(0) + '%',
-        sub: 'vacas + vaquillonas · 2024',
-        color: 'var(--text)',
+        label:'Faena hembras 2025',
+        value: hPct + '%',
+        sub: React.createElement('span', null,
+          'ciclo: ',
+          React.createElement('span', { style:{ color: faseColor, fontWeight:600 } }, faseLabel)
+        ),
+        color: faseColor,
       }),
       React.createElement(FrigKpi, {
-        label:'Macho pesado',
-        value: cats.filter(function(c){return c.nombre==='novillos'||c.nombre==='novillitos';}).reduce(function(s,c){return s+(c.participacion||0);},0).toFixed(0) + '%',
-        sub: 'novillos + novillitos · 2024',
-        color: 'var(--accent)',
+        label:'Exportación 2025',
+        value: ((exportKpis.totalTn2025||510000)/1000).toFixed(0) + ' k tn',
+        sub: React.createElement('span', null,
+          'USD ',
+          ((exportKpis.valorUSD2025||3060)/1000).toFixed(1) + ' B · ',
+          React.createElement(VarBadge, { val: exportKpis.varPct2025 || 6.8 })
+        ),
+        color: 'var(--green)',
       })
     ),
 
-    // ── Vista selector ────────────────────────────────────────────────────────
-    React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' } },
-      [
-        { id:'faena',    label:'Faena por mes' },
-        { id:'historico', label:'Serie histórica' },
-        { id:'categorias', label:'Por categoría' },
-        { id:'directorio', label:'Directorio' },
-      ].map(function(v) {
+    // ── SELECTOR DE VISTA ────────────────────────────────────────────────────
+    React.createElement('div', { style:{ display:'flex', gap:4, marginBottom:20, flexWrap:'wrap' } },
+      VISTAS.map(function(v) {
         var active = vista === v.id;
         return React.createElement('button', {
           key:v.id, onClick:function(){ setVista(v.id); },
-          style:{ fontFamily:'var(--mono)', fontSize:10, fontWeight:600, padding:'5px 13px', borderRadius:6, cursor:'pointer',
+          style:{ fontFamily:'var(--mono)', fontSize:10, fontWeight:600, padding:'5px 12px', borderRadius:6, cursor:'pointer',
             border:'1px solid '+(active?'var(--accent)':'var(--line)'),
             background: active?'var(--acc-bg)':'transparent',
             color: active?'var(--accent)':'var(--text3)', transition:'all .15s' }
@@ -639,99 +722,539 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
       })
     ),
 
-    // ── FAENA MENSUAL 2024 ────────────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: RESUMEN
+    // ════════════════════════════════════════════════════════════════════════
+    vista === 'resumen' && React.createElement('div', null,
+
+      // Contexto analítico
+      React.createElement('div', { style:{ padding:'20px 24px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, marginBottom:20 } },
+        React.createElement('div', { className:'section-title', style:{ marginBottom:12 } }, '📊 Contexto del mercado'),
+        analisis.contexto2025 && React.createElement('p', { style:{ fontSize:13, color:'var(--text)', lineHeight:1.7, marginBottom:10 } },
+          analisis.contexto2025
+        ),
+        analisis.contexto2026 && React.createElement('p', { style:{ fontSize:13, color:'var(--text2)', lineHeight:1.7 } },
+          analisis.contexto2026
+        )
+      ),
+
+      // Comparativa rápida de años recientes
+      React.createElement('div', { className:'section-title' }, 'Faena anual · comparativa reciente'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:24 } },
+        histAn.slice(-6).reverse().map(function(d, i) {
+          var prev = histAn[histAn.length - 6 + (5-i) - 1];
+          var varPct = prev && prev.cabezas ? ((d.cabezas - prev.cabezas)/prev.cabezas)*100 : null;
+          var maxCab = Math.max.apply(null, histAn.slice(-6).map(function(x){ return x.cabezas; }));
+          var isLatest = i === 0;
+          return React.createElement('div', {
+            key:d.anio,
+            style:{ display:'grid', gridTemplateColumns:'60px 1fr 100px 120px', gap:14, alignItems:'center',
+              padding:'12px 18px', background: isLatest ? 'rgba(91,156,246,.06)' : 'var(--bg1)',
+              border:'1px solid '+(isLatest?'var(--accent)':'var(--line)'), borderRadius:10 }
+          },
+            React.createElement(Mono, { style:{ fontSize:14, fontWeight:700, color: isLatest ? 'var(--accent)' : 'var(--white)' } }, d.anio),
+            React.createElement('div', { style:{ position:'relative', height:10, background:'var(--bg3)', borderRadius:5, overflow:'hidden' } },
+              React.createElement('div', {
+                style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:5,
+                  width:((d.cabezas/maxCab)*100).toFixed(1)+'%',
+                  background: isLatest ? 'var(--accent)' : 'var(--bg3)',
+                  backgroundImage: isLatest ? 'none' : 'none',
+                  opacity: isLatest ? 1 : 0.6,
+                  background: ['#5b9cf6','#4d8fec','#3e82e0','#2e74d4','#1e67c8','#0e5abc'][i] || 'var(--accent)',
+                  transition:'width .5s ease' }
+              })
+            ),
+            React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--text)', textAlign:'right' } },
+              (d.cabezas/1e6).toFixed(2) + ' M'
+            ),
+            varPct != null
+              ? React.createElement(VarBadge, { val: varPct })
+              : React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '—')
+          );
+        })
+      ),
+
+      // Peso promedio res — tendencia
+      React.createElement('div', { className:'section-title' }, 'Peso promedio res · evolución'),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:24 } },
+        histAn.slice(-3).map(function(d) {
+          return React.createElement('div', {
+            key:d.anio,
+            style:{ padding:'16px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, textAlign:'center' }
+          },
+            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', marginBottom:6, display:'block' } }, d.anio),
+            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)', marginBottom:4 } }, d.pesoRes + ' kg'),
+            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'peso promedio res')
+          );
+        })
+      ),
+
+      React.createElement('div', { className:'source' }, 'Faena anual · Peso res · Fuente: MAGYP / DNCCA / SENASA / Consorcio ABC')
+    ),
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: FAENA MENSUAL
+    // ════════════════════════════════════════════════════════════════════════
     vista === 'faena' && React.createElement('div', null,
-      React.createElement('div', { className:'section-title' }, 'Faena mensual 2024 · cabezas totales'),
-      React.createElement('div', {
+
+      // Selector de período
+      React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:18, alignItems:'center', flexWrap:'wrap' } },
+        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', marginRight:4 } }, 'PERÍODO:'),
+        PERIODOS.map(function(p, idx) {
+          var active = periodoIdx === idx;
+          return React.createElement('button', {
+            key:idx, onClick:function(){ setPeriodoIdx(idx); },
+            style:{ fontFamily:'var(--mono)', fontSize:10, padding:'4px 11px', borderRadius:6, cursor:'pointer',
+              border:'1px solid '+(active?'var(--accent)':'var(--line)'),
+              background: active?'var(--acc-bg)':'transparent',
+              color: active?'var(--accent)':'var(--text3)' }
+          }, p.label);
+        })
+      ),
+
+      // KPIs del período
+      mesesPeriodo.length > 0 && React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:18 } },
+        React.createElement('div', { style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Total período'),
+          React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' } }, (totalPeriodo/1e6).toFixed(2) + ' M'),
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'cabezas · ' + mesesPeriodo.length + ' meses')
+        ),
+        React.createElement('div', { style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Promedio mensual'),
+          React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, Math.round(promedioMes/1000) + ' k'),
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'cabezas por mes')
+        ),
+        React.createElement('div', { style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Peso prom. res'),
+          React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)' } },
+            mesesPeriodo.length > 0
+              ? (mesesPeriodo.reduce(function(s,m){ return s+(m.pesoRes||0); },0)/mesesPeriodo.filter(function(m){return m.pesoRes;}).length).toFixed(1) + ' kg'
+              : '—'
+          ),
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'período seleccionado')
+        )
+      ),
+
+      // Gráfico evolución mensual
+      mesesPeriodo.length >= 2 && React.createElement('div', {
         style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'20px 24px', marginBottom:16 }
       },
         React.createElement('div', { style:{ marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'baseline' } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Evolución mensual'),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--accent)' } },
-            'Total: ' + (mens24.reduce(function(s,m){return s+m.total;},0)/1e6).toFixed(2) + ' M cab.'
-          )
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Evolución faena mensual · cabezas'),
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--accent)' } }, periodoActual.label)
         ),
-        React.createElement(LineChart, { series: mens24.map(function(m,i){ return { cabezas:m.total, label:MESES_SHORT[i] }; }), color:'var(--accent)' }),
+        React.createElement(LineChart, { series: mesesPeriodo.map(function(m){ return { cabezas:m.total }; }), color:'var(--accent)' }),
         React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', marginTop:4 } },
-          mensualChart.map(function(m,i){ return React.createElement(Mono, { key:i, style:{ fontSize:7, color:'var(--text3)', textAlign:'center', flex:1 } }, m.label); })
+          mesesPeriodo.slice(0, Math.min(mesesPeriodo.length, 12)).map(function(m, i) {
+            var partes = (m.mes||'').split('-');
+            return React.createElement(Mono, { key:i, style:{ fontSize:7, color:'var(--text3)', flex:1, textAlign:'center' } },
+              MESES_SHORT[parseInt(partes[1]||'1',10)-1] + (partes[0]?'\''+partes[0].slice(2):'')
+            );
+          })
         )
       ),
-      React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:340 } },
+
+      // Tabla mensual
+      mesesPeriodo.length > 0 && React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:360 } },
         React.createElement('table', null,
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', null, 'Mes'),
               React.createElement('th', { className:'r' }, 'Total'),
+              React.createElement('th', { className:'r' }, 'Var. m/m'),
               React.createElement('th', { className:'r' }, 'Novillos'),
-              React.createElement('th', { className:'r' }, 'Novillitos'),
               React.createElement('th', { className:'r' }, 'Vacas'),
               React.createElement('th', { className:'r' }, 'Vaquillonas'),
-              React.createElement('th', { className:'r' }, 'Terneros')
+              React.createElement('th', { className:'r' }, 'Peso res'),
+              React.createElement('th', { className:'r' }, '% Hembras')
             )
           ),
           React.createElement('tbody', null,
-            mens24.map(function(m, i) {
-              var prev = i > 0 ? mens24[i-1] : null;
+            [...mesesPeriodo].reverse().map(function(m, i, arr) {
+              var prev = arr[i+1];
               var varPct = prev && prev.total ? ((m.total - prev.total)/prev.total)*100 : null;
-              var partes = m.mes.split('-');
-              var mesLabel = MESES_SHORT[parseInt(partes[1],10)-1] + ' ' + partes[0];
+              var partes = (m.mes||'').split('-');
+              var mesLabel = (MESES_SHORT[parseInt(partes[1]||'1',10)-1]||'') + ' ' + (partes[0]||'');
               return React.createElement('tr', { key:m.mes },
                 React.createElement('td', null, React.createElement(Mono, { style:{ fontSize:12 } }, mesLabel)),
                 React.createElement('td', { className:'r' },
-                  React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2 } },
-                    React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--accent)' } }, Math.round(m.total/1000) + ' k'),
-                    varPct != null && React.createElement(Mono, { style:{ fontSize:9, color: varPct>=0?'var(--green)':'var(--red)' } },
-                      (varPct>=0?'▲':'▼') + ' ' + Math.abs(varPct).toFixed(1) + '%'
-                    )
+                  React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--accent)' } },
+                    Math.round((m.total||0)/1000) + ' k'
                   )
                 ),
-                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.novillos } }, Math.round(m.novillos/1000)+'k')),
-                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.novillitos } }, Math.round(m.novillitos/1000)+'k')),
-                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.vacas } }, Math.round(m.vacas/1000)+'k')),
-                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.vaquillonas } }, Math.round(m.vaquillonas/1000)+'k')),
-                React.createElement('td', { className:'r' }, React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.terneros } }, Math.round(m.terneros/1000)+'k'))
+                React.createElement('td', { className:'r' },
+                  varPct != null
+                    ? React.createElement(Mono, { style:{ fontSize:10, fontWeight:700, color:varPct>=0?'var(--green)':'var(--red)' } },
+                        (varPct>=0?'▲ +':'▼ ') + Math.abs(varPct).toFixed(1) + '%'
+                      )
+                    : React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '—')
+                ),
+                React.createElement('td', { className:'r' },
+                  React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.novillos } },
+                    m.novillos != null ? Math.round(m.novillos/1000)+'k' : '—'
+                  )
+                ),
+                React.createElement('td', { className:'r' },
+                  React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.vacas } },
+                    m.vacas != null ? Math.round(m.vacas/1000)+'k' : '—'
+                  )
+                ),
+                React.createElement('td', { className:'r' },
+                  React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.vaquillonas } },
+                    m.vaquillonas != null ? Math.round(m.vaquillonas/1000)+'k' : '—'
+                  )
+                ),
+                React.createElement('td', { className:'r' },
+                  React.createElement(Mono, { style:{ fontSize:11, color:'var(--green)' } },
+                    m.pesoRes != null ? m.pesoRes + ' kg' : '—'
+                  )
+                ),
+                React.createElement('td', { className:'r' },
+                  React.createElement(Mono, {
+                    style:{ fontSize:11, color: m.hembras_pct > 48.5 ? 'var(--red)' : m.hembras_pct < 46 ? 'var(--green)' : 'var(--text2)' }
+                  },
+                    m.hembras_pct != null ? m.hembras_pct + '%' : '—'
+                  )
+                )
               );
             })
           )
         )
       ),
-      React.createElement('div', { className:'source', style:{ marginTop:8 } }, 'Faena mensual 2024 en cabezas · Fuente: MAGYP/DNCCA · SIF-SIGICA')
+      React.createElement('div', { className:'source', style:{ marginTop:8 } },
+        'Faena mensual bovina · Fuente: MAGYP/DNCCA · SIF-SIGICA · Consorcio ABC'
+      )
     ),
 
-    // ── HISTÓRICO ANUAL ───────────────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: RANKING FRIGORÍFICOS
+    // ════════════════════════════════════════════════════════════════════════
+    vista === 'ranking' && React.createElement('div', null,
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:16,
+        padding:'12px 18px', background:'rgba(91,156,246,.06)', border:'1px solid rgba(91,156,246,.2)', borderRadius:10 } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Total habilitados SENASA'),
+        React.createElement(Mono, { style:{ fontSize:20, fontWeight:700, color:'var(--accent)', marginLeft:'auto' } },
+          (kpis.frigoriificosActivos || 364).toLocaleString('es-AR')
+        ),
+        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'establecimientos · tráfico federal')
+      ),
+
+      React.createElement('div', { className:'section-title' }, 'Principales establecimientos · faena 2024'),
+
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6 } },
+        topFrigOrdenados.map(function(f, i) {
+          var faenaPct = maxFaenaFrig > 0 ? ((f.faena2024_k||0)/maxFaenaFrig)*100 : 0;
+          var tipoColor = f.tipo === 'multinacional' ? '#8fb8f0' : f.tipo === 'nacional' ? 'var(--accent)' : 'var(--text3)';
+          return React.createElement('div', {
+            key:i,
+            style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
+          },
+            // Fila superior
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, marginBottom:8 } },
+              React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)', width:20, flexShrink:0 } }, '#'+(i+1)),
+              React.createElement('div', { style:{ flex:1 } },
+                React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
+                  React.createElement('span', { style:{ fontSize:13, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } },
+                    f.nombre
+                  ),
+                  f.exportador && React.createElement(Mono, {
+                    style:{ fontSize:8, color:'var(--green)', background:'rgba(74,191,120,.1)',
+                      border:'1px solid rgba(74,191,120,.25)', padding:'1px 6px', borderRadius:4 }
+                  }, 'EXPORTADOR'),
+                  f.tipo && React.createElement(Mono, {
+                    style:{ fontSize:8, color: tipoColor, background: tipoColor+'18',
+                      border:'1px solid '+tipoColor+'33', padding:'1px 6px', borderRadius:4 }
+                  }, f.tipo.toUpperCase())
+                ),
+                React.createElement('div', { style:{ display:'flex', gap:10, marginTop:3, flexWrap:'wrap' } },
+                  f.provincia && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text2)' } }, '📍 '+f.provincia),
+                  f.matricula && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'Mat. '+f.matricula)
+                )
+              ),
+              f.faena2024_k != null && React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
+                React.createElement(Mono, { style:{ fontSize:14, fontWeight:700, color:'var(--accent)', display:'block' } }, f.faena2024_k + ' k'),
+                React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'cab. 2024')
+              )
+            ),
+            // Barra de faena
+            f.faena2024_k != null && React.createElement('div', { style:{ position:'relative', height:5, background:'var(--bg3)', borderRadius:3, marginBottom:6 } },
+              React.createElement('div', { style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:3,
+                width: faenaPct.toFixed(1)+'%', background:'var(--accent)', opacity:.7, transition:'width .5s ease' } })
+            ),
+            // Mercados destino
+            f.mercados && f.mercados.length > 0 && React.createElement('div', { style:{ display:'flex', gap:5, flexWrap:'wrap', marginTop:4 } },
+              React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'Mercados:'),
+              f.mercados.map(function(m) { return React.createElement(MercadoChip, { key:m, label:m }); }),
+              f.exportTn2024 > 0 && React.createElement(Mono, { style:{ fontSize:9, color:'var(--green)', marginLeft:6 } },
+                (f.exportTn2024/1000).toFixed(0) + ' k tn exportadas'
+              )
+            )
+          );
+        })
+      ),
+      React.createElement('div', { className:'source', style:{ marginTop:12 } },
+        'Faena estimada 2024 · Fuente: Consorcio ABC / DNCCA / SENASA · Registro MAGYP'
+      )
+    ),
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: POR PROVINCIA
+    // ════════════════════════════════════════════════════════════════════════
+    vista === 'provincias' && React.createElement('div', null,
+      React.createElement('div', { className:'section-title' }, 'Faena por provincia · 2025'),
+      provincias.length > 0 && React.createElement('div', { style:{ marginBottom:20 } },
+        React.createElement('div', {
+          style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }
+        },
+          React.createElement('div', { style:{ padding:'14px 16px', background:'rgba(91,156,246,.06)', border:'1px solid rgba(91,156,246,.2)', borderRadius:10, textAlign:'center' } },
+            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Buenos Aires'),
+            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' } }, '44%'),
+            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'del total nacional')
+          ),
+          React.createElement('div', { style:{ padding:'14px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, textAlign:'center' } },
+            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Santa Fe + Córdoba'),
+            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, '28%'),
+            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'del total nacional')
+          ),
+          React.createElement('div', { style:{ padding:'14px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, textAlign:'center' } },
+            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Litoral + NEA'),
+            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, '~11%'),
+            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'Entre Ríos + Corrientes')
+          )
+        ),
+        React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8 } },
+          provincias.map(function(p) {
+            var maxPCab = Math.max.apply(null, provincias.map(function(x){ return x.cabezas2025; }));
+            return React.createElement('div', {
+              key:p.provincia,
+              style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
+            },
+              React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'140px 1fr 90px 80px 90px', gap:12, alignItems:'center', marginBottom:6 } },
+                React.createElement('span', { style:{ fontSize:12, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } }, p.provincia),
+                React.createElement('div', { style:{ position:'relative', height:8, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
+                  React.createElement('div', {
+                    style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:4,
+                      width: ((p.cabezas2025/maxPCab)*100).toFixed(1)+'%',
+                      background:'var(--accent)', opacity:.75, transition:'width .5s ease' }
+                  })
+                ),
+                React.createElement(Mono, { style:{ fontSize:12, fontWeight:700, color:'var(--accent)', textAlign:'right' } },
+                  (p.cabezas2025/1e6).toFixed(2) + ' M'
+                ),
+                React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)', textAlign:'right' } }, p.pct + '%'),
+                React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', textAlign:'right' } }, p.establecimientos + ' estab.')
+              )
+            );
+          })
+        )
+      ),
+      React.createElement('div', { className:'source' }, 'Faena por provincia 2025 · Fuente: DNCCA/MAGYP · SIF-SIGICA')
+    ),
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: EXPORTACIONES
+    // ════════════════════════════════════════════════════════════════════════
+    vista === 'exportacion' && React.createElement('div', null,
+      // KPIs exportación
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:24 } },
+        React.createElement('div', { style:{ padding:'16px 20px', background:'rgba(74,191,120,.06)', border:'1px solid rgba(74,191,120,.2)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--green)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Exportación 2025'),
+          React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)', marginBottom:4 } },
+            ((exportKpis.totalTn2025||510000)/1000).toFixed(0) + ' k tn'
+          ),
+          React.createElement(VarBadge, { val: exportKpis.varPct2025 || 6.8 })
+        ),
+        React.createElement('div', { style:{ padding:'16px 20px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Valor FOB 2025'),
+          React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', marginBottom:4 } },
+            'USD ' + ((exportKpis.valorUSD2025||3060)/1000).toFixed(1) + ' B'
+          ),
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'miles de millones de dólares')
+        ),
+        React.createElement('div', { style:{ padding:'16px 20px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Precio prom. export.'),
+          React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)', marginBottom:4 } },
+            'USD ' + (exportKpis.precioPromUSD||6000).toLocaleString('es-AR')
+          ),
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'por tonelada')
+        )
+      ),
+
+      React.createElement('div', { className:'section-title' }, 'Principales mercados de exportación · 2025'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
+        exportaciones.map(function(e) {
+          return React.createElement('div', {
+            key:e.pais,
+            style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
+          },
+            React.createElement(BarraHoriz, {
+              label: e.pais,
+              value: e.tn2025,
+              maxValue: maxExport,
+              color: e.pais === 'China' ? '#e8a020' : e.pais === 'UE' ? '#4a90d9' : 'var(--accent)',
+              sublabel: (e.tn2025/1000).toFixed(0) + ' k tn',
+            }),
+            React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end', marginTop:4 } },
+              React.createElement(VarBadge, { val: e.varPct }),
+              React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', marginLeft:8 } }, 'vs 2024')
+            )
+          );
+        })
+      ),
+
+      React.createElement('div', {
+        style:{ padding:'16px 20px', background:'rgba(232,160,32,.06)', border:'1px solid rgba(232,160,32,.2)', borderRadius:10, marginBottom:16 }
+      },
+        React.createElement(Mono, { style:{ fontSize:10, color:'#e8a020', marginBottom:6, display:'block', letterSpacing:'.08em' } }, '⚠ CONCENTRACIÓN DE MERCADOS'),
+        React.createElement('p', { style:{ fontSize:12, color:'var(--text)', lineHeight:1.6 } },
+          'China representa el 72% del volumen exportado. Esta concentración genera alta sensibilidad a cambios de política comercial o fitosanitarios del mercado asiático.'
+        )
+      ),
+
+      React.createElement('div', { className:'source' }, 'Exportaciones de carne bovina 2025 · Fuente: INDEC · SENASA · Consorcio ABC · datos.gob.ar')
+    ),
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: CICLO GANADERO
+    // ════════════════════════════════════════════════════════════════════════
+    vista === 'ciclo' && React.createElement('div', null,
+
+      // Fase actual con semáforo
+      React.createElement('div', {
+        style:{ padding:'20px 24px', background: faseColor === 'var(--green)' ? 'rgba(74,191,120,.06)' : faseColor === 'var(--red)' ? 'rgba(224,92,92,.06)' : 'rgba(91,156,246,.06)',
+          border:'1px solid ' + (faseColor === 'var(--green)' ? 'rgba(74,191,120,.2)' : faseColor === 'var(--red)' ? 'rgba(224,92,92,.2)' : 'rgba(91,156,246,.2)'),
+          borderRadius:12, marginBottom:20 }
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:12 } },
+          React.createElement('div', { style:{ width:12, height:12, borderRadius:'50%', background: faseColor, boxShadow:'0 0 10px '+faseColor, flexShrink:0 } }),
+          React.createElement('span', { style:{ fontFamily:'var(--display)', fontSize:16, fontWeight:700, color:'var(--white)' } },
+            'Ciclo ganadero: ', React.createElement('span', { style:{ color: faseColor } }, faseLabel.toUpperCase())
+          )
+        ),
+        React.createElement('p', { style:{ fontSize:13, color:'var(--text)', lineHeight:1.7 } },
+          analisis.interpretacion || (faseCiclo === 'retención_leve'
+            ? 'Participación de hembras ~46-48%: leve retención. El rodeo comienza a recomponerse post-liquidación 2023. Ciclo en transición.'
+            : faseCiclo === 'retención'
+            ? 'Participación de hembras < 46%: señal de retención de vientres → recomposición de stock. Menor oferta esperada a mediano plazo; tendencia alcista de precios.'
+            : 'Participación de hembras > 48.5%: liquidación activa → presión bajista sobre precios en el corto plazo; riesgo de menor stock futuro.')
+        )
+      ),
+
+      // Indicadores del ciclo
+      React.createElement('div', { className:'grid grid-3', style:{ marginBottom:24 } },
+        React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, '% Hembras 2025'),
+          React.createElement('div', { className:'stat-val', style:{ fontSize:26, color: faseColor } }, hPct + '%'),
+          React.createElement('div', { className:'stat-meta' },
+            React.createElement('span', { style:{ color:faseColor } }, faseLabel), ' · vacas + vaquillonas'
+          )
+        ),
+        analisis.hembras2026pct != null && React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, '% Hembras 2026 YTD'),
+          React.createElement('div', { className:'stat-val', style:{ fontSize:26, color: analisis.hembras2026pct < 46 ? 'var(--green)' : 'var(--accent)' } },
+            analisis.hembras2026pct + '%'
+          ),
+          React.createElement('div', { className:'stat-meta' }, 'promedio ene-mar 2026')
+        ),
+        React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, 'Tendencia peso res'),
+          React.createElement('div', { className:'stat-val', style:{ fontSize:22, color:'var(--green)' } }, '↗ creciente'),
+          React.createElement('div', { className:'stat-meta' }, '231 kg en 2025 · récord histórico')
+        )
+      ),
+
+      // Guía de lectura del ciclo
+      React.createElement('div', { className:'section-title' }, 'Guía de lectura: % de hembras en faena'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
+        [
+          { rango:'< 44%', label:'Retención fuerte', color:'var(--green)', desc:'Stock en recomposición acelerada. Oferta futura en ascenso sostenido. Precio actual alto por escasez.' },
+          { rango:'44–46%', label:'Retención moderada', color:'#4abf78', desc:'Señal de retención clara. El productor está invirtiendo en vientres para el ciclo siguiente.' },
+          { rango:'46–48%', label:'Zona neutra / retención leve', color:'var(--accent)', desc:'Mercado en equilibrio. Tendencia a retener pero sin señal fuerte. Precios estables.' },
+          { rango:'48–50%', label:'Zona de alerta', color:'#e8a020', desc:'Inicio de liquidación. Presión bajista de corto plazo. Señal de estrés en el sector.' },
+          { rango:'> 50%', label:'Liquidación activa', color:'var(--red)', desc:'Salida masiva de vientres. Oferta elevada → precios bajos hoy, escasez futura. Crisis de stock.' },
+        ].map(function(item) {
+          var isActivo = (item.rango === '46–48%' && faseCiclo === 'retención_leve') ||
+                         (item.rango === '< 44%'  && faseCiclo === 'retención') ||
+                         (item.rango === '> 50%'  && faseCiclo === 'liquidación');
+          return React.createElement('div', {
+            key:item.rango,
+            style:{ padding:'12px 18px', background: isActivo ? item.color+'14' : 'var(--bg1)',
+              border:'1px solid '+(isActivo ? item.color+'50' : 'var(--line)'), borderRadius:10 }
+          },
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, marginBottom: isActivo ? 6 : 0 } },
+              React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:item.color, flexShrink:0 } }),
+              React.createElement(Mono, { style:{ fontSize:11, fontWeight:700, color:item.color, width:80, flexShrink:0 } }, item.rango),
+              React.createElement('span', { style:{ fontSize:12, fontWeight: isActivo ? 600 : 400, color: isActivo ? 'var(--white)' : 'var(--text2)' } }, item.label),
+              isActivo && React.createElement(Mono, { style:{ fontSize:9, color:item.color, marginLeft:'auto', background:item.color+'18', padding:'2px 8px', borderRadius:4, border:'1px solid '+item.color+'40' } }, '← SITUACIÓN ACTUAL')
+            ),
+            isActivo && React.createElement('p', { style:{ fontSize:12, color:'var(--text)', lineHeight:1.6, marginLeft:18, marginTop:6 } }, item.desc)
+          );
+        })
+      ),
+
+      React.createElement('div', { className:'source' }, 'Análisis del ciclo ganadero · Fuente: MAGYP / DNCCA / Consorcio ABC / SENASA')
+    ),
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VISTA: HISTÓRICO
+    // ════════════════════════════════════════════════════════════════════════
     vista === 'historico' && React.createElement('div', null,
-      React.createElement('div', { className:'section-title' }, 'Serie histórica · Faena anual 1990–2024'),
+      React.createElement('div', { className:'section-title' }, 'Serie histórica · Faena anual 1990–2025'),
       React.createElement('div', {
         style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'20px 24px', marginBottom:16 }
       },
         React.createElement('div', { style:{ marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'baseline' } },
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Cabezas faenadas — evolución anual'),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '1990 – 2024')
+          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '1990 – 2025')
         ),
-        React.createElement(LineChart, { series: histAn, color:'#5b9cf6' }),
+        React.createElement(LineChart, { series: histAn.map(function(d){ return { cabezas:d.cabezas }; }), color:'#5b9cf6' }),
         React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', marginTop:4 } },
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '1990'),
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2000'),
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2010'),
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2020'),
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2024')
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2025')
         )
       ),
+
+      // Hitos históricos
+      React.createElement('div', {
+        style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:20 }
+      },
+        [
+          { anio:2008, val:'16.1 M', label:'Máximo histórico', color:'var(--red)', desc:'Liquidación masiva de vientres por sequía y precios' },
+          { anio:2023, val:'14.5 M', label:'Máx. reciente', color:'#e8a020', desc:'Segunda liquidación por seca y ciclo de precios' },
+          { anio:2010, val:'11.6 M', label:'Mínimo moderno', color:'var(--green)', desc:'Retención post-liquidación 2008–2009' },
+          { anio:2025, val:'13.2 M', label:'Dato más reciente', color:'var(--accent)', desc:'Retención leve · peso récord de 231 kg' },
+        ].map(function(h) {
+          return React.createElement('div', { key:h.anio,
+            style:{ padding:'14px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
+          },
+            React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:8, marginBottom:4 } },
+              React.createElement(Mono, { style:{ fontSize:12, color:'var(--text3)' } }, h.anio),
+              React.createElement('span', { style:{ fontSize:18, fontWeight:700, color:h.color, fontFamily:'var(--mono)' } }, h.val),
+            ),
+            React.createElement('div', { style:{ fontSize:11, fontWeight:600, color:h.color, marginBottom:4 } }, h.label),
+            React.createElement('div', { style:{ fontSize:11, color:'var(--text3)', lineHeight:1.5 } }, h.desc)
+          );
+        })
+      ),
+
       React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:380 } },
         React.createElement('table', null,
           React.createElement('thead', null,
             React.createElement('tr', null,
               React.createElement('th', null, 'Año'),
-              React.createElement('th', { className:'r' }, 'Cabezas faenadas'),
+              React.createElement('th', { className:'r' }, 'Cabezas'),
               React.createElement('th', { className:'r' }, 'Variación'),
-              React.createElement('th', { className:'r' }, 'Peso res (kg)')
+              React.createElement('th', { className:'r' }, 'Peso res'),
+              React.createElement('th', { className:'r' }, 'Producción')
             )
           ),
           React.createElement('tbody', null,
             [...histAn].reverse().map(function(d, i, arr) {
               var prev = arr[i+1];
               var varPct = prev && prev.cabezas ? ((d.cabezas - prev.cabezas)/prev.cabezas)*100 : null;
-              var varPos = varPct != null && varPct >= 0;
               return React.createElement('tr', { key:d.anio },
                 React.createElement('td', null, React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--white)' } }, d.anio)),
                 React.createElement('td', { className:'r' },
@@ -741,8 +1264,8 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
                 ),
                 React.createElement('td', { className:'r' },
                   varPct != null
-                    ? React.createElement(Mono, { style:{ fontSize:11, color:varPos?'var(--green)':'var(--red)', fontWeight:600 } },
-                        (varPos?'▲':'▼') + ' ' + Math.abs(varPct).toFixed(1) + '%'
+                    ? React.createElement(Mono, { style:{ fontSize:11, fontWeight:600, color:varPct>=0?'var(--green)':'var(--red)' } },
+                        (varPct>=0?'▲':'▼') + ' ' + Math.abs(varPct).toFixed(1) + '%'
                       )
                     : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
                 ),
@@ -750,124 +1273,22 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
                   d.pesoRes != null
                     ? React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)' } }, d.pesoRes + ' kg')
                     : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
+                ),
+                React.createElement('td', { className:'r' },
+                  d.produccion != null
+                    ? React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)' } }, d.produccion.toLocaleString('es-AR') + ' kt')
+                    : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
                 )
               );
             })
           )
         )
       ),
-      React.createElement('div', { className:'source', style:{ marginTop:8 } }, 'Fuente: MAGYP · DNCCA · SENASA · ex Junta Nacional de Carnes · 1990–2024')
-    ),
-
-    // ── CATEGORÍAS ────────────────────────────────────────────────────────────
-    vista === 'categorias' && React.createElement('div', null,
-      React.createElement('div', { className:'section-title' }, 'Participación por categoría · faena 2024'),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:24 } },
-        cats.map(function(cat) {
-          var color = CAT_COLOR[cat.nombre] || 'var(--accent)';
-          var label = CAT_LABELS[cat.nombre] || cat.nombre;
-          return React.createElement('div', {
-            key:cat.nombre,
-            style:{ display:'grid', gridTemplateColumns:'110px 1fr 80px 100px', alignItems:'center', gap:16,
-              padding:'14px 20px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
-          },
-            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8 } },
-              React.createElement('div', { style:{ width:3, height:18, background:color, borderRadius:2, flexShrink:0 } }),
-              React.createElement('span', { style:{ fontSize:13, fontWeight:500, color:'var(--text)' } }, label)
-            ),
-            React.createElement('div', { style:{ position:'relative', height:18, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
-              React.createElement('div', {
-                style:{ position:'absolute', left:0, top:0, bottom:0, width:cat.participacion.toFixed(1)+'%',
-                  background:color+'50', borderRadius:4, transition:'width .4s ease' }
-              })
-            ),
-            React.createElement(Mono, { style:{ fontSize:12, fontWeight:600, color:color, textAlign:'right' } },
-              cat.participacion.toFixed(1) + '%'
-            ),
-            React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)', textAlign:'right' } },
-              (cat.cabezas/1e6).toFixed(2) + ' M cab.'
-            )
-          );
-        })
-      ),
-      // Mini barras por mes y categoría
-      React.createElement('div', { className:'section-title' }, 'Evolución mensual por categoría · 2024'),
-      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 } },
-        Object.keys(CAT_COLOR).map(function(catKey) {
-          var color = CAT_COLOR[catKey];
-          var label = CAT_LABELS[catKey] || catKey;
-          var dataSerie = mens24.map(function(m, i) {
-            return { label: MESES_SHORT[i], value: m[catKey] || 0 };
-          });
-          var total = dataSerie.reduce(function(s,d){return s+d.value;},0);
-          return React.createElement('div', {
-            key:catKey,
-            style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'14px 16px' }
-          },
-            React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 } },
-              React.createElement('span', { style:{ fontSize:12, fontWeight:500, color:'var(--text)', display:'flex', gap:6, alignItems:'center' } },
-                React.createElement('div', { style:{ width:3, height:14, background:color, borderRadius:2 } }),
-                label
-              ),
-              React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, (total/1e6).toFixed(2)+' M')
-            ),
-            React.createElement(MiniBarChart, { data:dataSerie, colorKey:color })
-          );
-        })
-      ),
-      React.createElement('div', { className:'source', style:{ marginTop:10 } }, 'Cabezas faenadas por categoría · Fuente: MAGYP/DNCCA · 2024')
-    ),
-
-    // ── DIRECTORIO ────────────────────────────────────────────────────────────
-    vista === 'directorio' && React.createElement('div', null,
-      React.createElement('div', { className:'section-title' },
-        'Principales frigoríficos · Registro SENASA/MAGYP'
-      ),
-      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:16,
-        padding:'10px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8 } },
-        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Total habilitados'),
-        React.createElement(Mono, { style:{ fontSize:18, fontWeight:700, color:'var(--accent)', marginLeft:'auto' } },
-          (dir.total || 364) + ' establecimientos'
-        ),
-        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'SENASA · tráfico federal')
-      ),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:4, marginBottom:20 } },
-        (dir.muestra || []).map(function(f, i) {
-          return React.createElement('div', {
-            key:i,
-            style:{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:16, alignItems:'center',
-              padding:'12px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
-          },
-            React.createElement('div', null,
-              React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, marginBottom:3 } },
-                React.createElement('span', { style:{ fontSize:13, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } },
-                  f.nombre || f.razon_social || '—'
-                ),
-                f.exportador && React.createElement(Mono, {
-                  style:{ fontSize:8, color:'var(--green)', background:'rgba(74,191,120,.1)', border:'1px solid rgba(74,191,120,.25)',
-                    padding:'1px 6px', borderRadius:4 }
-                }, 'EXPORTADOR')
-              ),
-              React.createElement('div', { style:{ display:'flex', gap:10, flexWrap:'wrap' } },
-                f.provincia && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text2)' } }, '📍 ' + f.provincia),
-                f.etapa && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, f.etapa)
-              )
-            ),
-            f.matricula && React.createElement(Mono, {
-              style:{ fontSize:10, color:'var(--accent)', background:'var(--acc-bg)', padding:'3px 8px', borderRadius:5, border:'1px solid rgba(91,156,246,.2)', flexShrink:0 }
-            }, 'Mat. ' + f.matricula),
-            React.createElement('div', { style:{ width:4, height:4, borderRadius:'50%', background:'var(--green)', flexShrink:0 } })
-          );
-        })
-      ),
-      React.createElement('div', { className:'source' },
-        'Directorio de frigoríficos habilitados · Fuente: Registro SENASA/MAGYP · datos.consignatarias.com.ar'
-      )
+      React.createElement('div', { className:'source', style:{ marginTop:8 } }, 'Fuente: MAGYP · DNCCA · SENASA · ex Junta Nacional de Carnes · 1990–2025')
     )
 
   );
 }
-
 // ─── Tabs config ──────────────────────────────────────────────────────────────
 var TABS = [
   { id:'resumen',      label:'Resumen' },

@@ -332,7 +332,7 @@ function buildContexto(mensual, historicoAnual) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
+  // Cache-Control se setea al final según resultado (éxito vs error)
 
   const t0  = Date.now();
   const log = {
@@ -374,9 +374,16 @@ export default async function handler(req, res) {
   if (magyPInfo)  log.usado.push('magyp_head_check');
   if (dirJSON)    log.usado.push('consignatarias');
 
-  // Sin datos → respuesta vacía
+  // Sin datos → sin cache (para que el próximo request reintente en vivo)
   if (!liveData) {
-    return res.status(200).json({
+    res.setHeader('Cache-Control', 'no-store');
+  console.error('[frig] sin_datos. Errores:', {
+    avance:  avanceRes.reason?.message  || avanceRes.status,
+    anual:   anualRes.reason?.message   || anualRes.status,
+    magyp:   magyp.reason?.message      || magyp.status,
+    dir:     dirRes.reason?.message     || dirRes.status,
+  });
+  return res.status(200).json({
       ok:    false,
       error: 'sin_datos',
       meta: {
@@ -388,6 +395,9 @@ export default async function handler(req, res) {
       },
     });
   }
+
+  // Hay datos — cachear 6 horas con revalidación background
+  res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
 
   const fuentePrimaria = avanceRes.value
     ? 'XLSX Avance Mensual — SAGyP / DNCCA (www.magyp.gob.ar)'

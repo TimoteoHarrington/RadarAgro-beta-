@@ -212,6 +212,11 @@ body {
   border-radius: 12px;
   overflow: hidden;
 }
+/* When combined with tbl-scroll, allow horizontal scroll */
+.tbl-wrap.tbl-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+}
 .tbl-scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 thead tr { border-bottom: 1px solid var(--line); background: var(--bg); }

@@ -588,7 +588,7 @@ function MercadoChip({ label }) {
 
 function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
   var [vista, setVista] = useState('resumen');
-  var [periodoIdx, setPeriodoIdx] = useState(0); // índice en PERIODOS
+  var [periodoIdx, setPeriodoIdx] = useState(1); // default: 2025 completo
 
   if (loadingFrig) return React.createElement('div', { style:{ padding:'48px 0', textAlign:'center' } },
     React.createElement('div', { style:{ fontSize:28, marginBottom:12, opacity:.4 } }, '🥩'),
@@ -606,109 +606,142 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
   var cats        = frigData.categorias      || [];
   var topFrig     = frigData.topFrigorificos || [];
   var provincias  = frigData.faenaPorProvincia || [];
-  var exportaciones = frigData.exportaciones  || [];
-  var exportKpis  = frigData.exportKpis       || {};
   var analisis    = frigData.analisis         || {};
+  var dir         = frigData.directorio       || {};
+  var meta        = frigData.meta             || {};
 
-  // Períodos disponibles para análisis mensual
+  // Usar campos dinámicos de la API
+  var anioRef        = kpis.anioRef       || 2025;
+  var faenaRef       = kpis.faenaAnualRef || 13230000;
+  var varAnual       = kpis.varAnual;
+  var pesoResRef     = kpis.pesoResRef    || 231;
+  var produccionRef  = kpis.produccionRef || 3060;
+  var ultimoMes      = kpis.ultimoMes;
+  var ultimoMesCab   = kpis.ultimoMesCabezas;
+  var ultimoMesPeso  = kpis.ultimoMesPeso;
+
+  // Badge de fuente: verde = datos vivos, amarillo = fallback
+  var esFallback    = meta.usandoFallback;
+  var fuenteLabel   = meta.fuentePrimaria || 'MAGYP · DNCCA · SENASA · Consorcio ABC';
+  var ultimoDato    = meta.ultimoDatoDisponible || ultimoMes;
+
+  // Períodos para análisis mensual
   var PERIODOS = [
     { label:'2026 (YTD)', meses: mensualRec.filter(function(m){ return m.mes && m.mes.startsWith('2026'); }) },
-    { label:'2025 completo', meses: mensualRec.filter(function(m){ return m.mes && m.mes.startsWith('2025'); }) },
-    { label:'Últimos 12 meses', meses: mensualRec.slice(-12) },
-    { label:'Últimos 24 meses', meses: mensualRec.slice(-24) },
+    { label:'2025',       meses: mensualRec.filter(function(m){ return m.mes && m.mes.startsWith('2025'); }) },
+    { label:'Últ. 12m',  meses: mensualRec.slice(-12) },
+    { label:'Últ. 24m',  meses: mensualRec.slice(-24) },
   ];
   var periodoActual = PERIODOS[periodoIdx];
-  var mesesPeriodo  = periodoActual.meses || [];
+  var mesesPeriodo  = periodoActual ? (periodoActual.meses || []) : [];
   var totalPeriodo  = mesesPeriodo.reduce(function(s,m){ return s + (m.total||0); }, 0);
   var promedioMes   = mesesPeriodo.length > 0 ? Math.round(totalPeriodo / mesesPeriodo.length) : 0;
+  var pesoPromPeriodo = (function(){
+    var mCon = mesesPeriodo.filter(function(m){return m.pesoRes;});
+    return mCon.length ? (mCon.reduce(function(s,m){return s+(m.pesoRes||0);},0)/mCon.length).toFixed(1) : null;
+  })();
 
-  // KPI hembras ciclo
-  var hPct = analisis.hembras2025pct || kpis.hembrasPct || 47.4;
-  var faseCiclo = analisis.faseCiclo || (hPct < 46 ? 'retención' : hPct > 48.5 ? 'liquidación' : 'retención_leve');
-  var faseColor = faseCiclo === 'liquidación' ? 'var(--red)' : faseCiclo === 'retención' ? 'var(--green)' : 'var(--accent)';
-  var faseLabel = { retención:'Retención', retención_leve:'Retención leve', liquidación:'Liquidación' }[faseCiclo] || '—';
-
-  // Frigoríficos - ranking por faena
-  var topFrigOrdenados = [...topFrig].sort(function(a,b){ return (b.faena2024_k||0) - (a.faena2024_k||0); });
-  var maxFaenaFrig = topFrigOrdenados.length > 0 ? (topFrigOrdenados[0].faena2024_k || 1) : 1;
-
-  // Exportaciones
-  var maxExport = exportaciones.length > 0 ? Math.max.apply(null, exportaciones.map(function(e){ return e.tn2025||0; })) : 1;
+  // Ciclo ganadero
+  var hPct = analisis.hembras2025pct || 47.4;
+  var faseCiclo = analisis.faseCiclo || (hPct < 46 ? 'retencion' : hPct > 48.5 ? 'liquidacion' : 'retencion_leve');
+  var faseColor = faseCiclo === 'liquidacion' || faseCiclo === 'liquidación' ? 'var(--red)'
+                : faseCiclo === 'retencion'   || faseCiclo === 'retención'   ? 'var(--green)' : 'var(--accent)';
+  var faseLabel = { retencion:'Retención', retencion_leve:'Retención leve', liquidacion:'Liquidación',
+                    'retención':'Retención', 'retención_leve':'Retención leve', 'liquidación':'Liquidación' }[faseCiclo] || '—';
 
   var VISTAS = [
-    { id:'resumen',     label:'Resumen' },
-    { id:'faena',       label:'Faena mensual' },
-    { id:'ranking',     label:'Ranking frigoríficos' },
-    { id:'provincias',  label:'Por provincia' },
-    { id:'exportacion', label:'Exportaciones' },
-    { id:'ciclo',       label:'Ciclo ganadero' },
-    { id:'historico',   label:'Serie histórica' },
+    { id:'resumen',    label:'Resumen' },
+    { id:'faena',      label:'Faena mensual' },
+    { id:'provincias', label:'Por provincia' },
+    { id:'directorio', label:'Directorio' },
+    { id:'ciclo',      label:'Ciclo ganadero' },
+    { id:'historico',  label:'Serie histórica' },
   ];
 
   return React.createElement('div', null,
 
-    // ── BANNER FUENTE ─────────────────────────────────────────────────────────
+    // Banner fuente con estado en vivo vs fallback
     React.createElement('div', {
-      style:{ display:'flex', alignItems:'center', gap:12, padding:'10px 16px', marginBottom:20,
-        background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8, flexWrap:'wrap' }
+      style:{ display:'flex', alignItems:'center', gap:10, padding:'9px 16px', marginBottom:20,
+        background: esFallback ? 'rgba(232,160,32,.06)' : 'rgba(74,191,120,.04)',
+        border:'1px solid '+(esFallback ? 'rgba(232,160,32,.25)' : 'rgba(74,191,120,.15)'),
+        borderRadius:8, flexWrap:'wrap' }
     },
-      React.createElement('div', { style:{ width:6, height:6, borderRadius:'50%', background:'var(--green)', flexShrink:0, boxShadow:'0 0 6px var(--green)' } }),
-      React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } },
-        'Datos oficiales · MAGYP · DNCCA · SENASA · Consorcio ABC · INDEC'
+      React.createElement('div', {
+        style:{ width:7, height:7, borderRadius:'50%', flexShrink:0,
+          background: esFallback ? '#e8a020' : 'var(--green)',
+          boxShadow:'0 0 6px '+(esFallback ? '#e8a020' : 'var(--green)') }
+      }),
+      React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.09em', textTransform:'uppercase' } },
+        fuenteLabel
       ),
-      React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', marginLeft:'auto' } }, 'Act. mensual · lag ~30 días')
+      ultimoDato && React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', marginLeft:'auto' } },
+        'Último dato: ' + ultimoDato + (esFallback ? ' · fallback' : ' · en vivo')
+      )
     ),
 
-    // ── KPIs PRINCIPALES ─────────────────────────────────────────────────────
-    React.createElement('div', { className:'grid grid-3', style:{ marginBottom:28 } },
-      React.createElement(FrigKpi, {
-        label:'Faena anual 2025',
-        value: kpis.faenaAnual2025 != null ? (kpis.faenaAnual2025/1e6).toFixed(2) + ' M' : '13.23 M',
-        sub: React.createElement('span', null,
+    // KPIs principales (siempre visibles)
+    React.createElement('div', { className:'grid grid-3', style:{ marginBottom:24 } },
+      React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } },
+          'Faena anual ' + anioRef
+        ),
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22, color:'var(--accent)' } },
+          (faenaRef/1e6).toFixed(2)+' M'
+        ),
+        React.createElement('div', { className:'stat-meta' },
           'cab. · ',
-          React.createElement(VarBadge, { val: kpis.varAnual2025 || -2.5 }),
-          ' vs 2024'
+          varAnual != null
+            ? React.createElement('span', { style:{ color: varAnual >= 0 ? 'var(--green)' : 'var(--red)' } },
+                (varAnual >= 0 ? '▲ +' : '▼ ') + Math.abs(varAnual).toFixed(1) + '% i/a'
+              )
+            : '—'
+        )
+      ),
+      React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } },
+          'Peso prom. res ' + anioRef
         ),
-        color: 'var(--accent)',
-      }),
-      React.createElement(FrigKpi, {
-        label:'Peso prom. res 2025',
-        value: (kpis.pesoRes2025 || 231) + ' kg',
-        sub: 'récord histórico · res bovina',
-        color: 'var(--green)',
-      }),
-      React.createElement(FrigKpi, {
-        label:'Producción 2025',
-        value: (kpis.produccion2025 || 3060).toLocaleString('es-AR') + ' k tn',
-        sub: 'miles de toneladas equivalente res',
-      }),
-      React.createElement(FrigKpi, {
-        label:'Frigoríficos activos',
-        value: (kpis.frigoriificosActivos || 364).toLocaleString('es-AR'),
-        sub: 'establecimientos · tráfico federal · SENASA',
-      }),
-      React.createElement(FrigKpi, {
-        label:'Faena hembras 2025',
-        value: hPct + '%',
-        sub: React.createElement('span', null,
-          'ciclo: ',
-          React.createElement('span', { style:{ color: faseColor, fontWeight:600 } }, faseLabel)
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22, color:'var(--green)' } },
+          (pesoResRef || '—') + ' kg'
         ),
-        color: faseColor,
-      }),
-      React.createElement(FrigKpi, {
-        label:'Exportación 2025',
-        value: ((exportKpis.totalTn2025||510000)/1000).toFixed(0) + ' k tn',
-        sub: React.createElement('span', null,
-          'USD ',
-          ((exportKpis.valorUSD2025||3060)/1000).toFixed(1) + ' B · ',
-          React.createElement(VarBadge, { val: exportKpis.varPct2025 || 6.8 })
+        React.createElement('div', { className:'stat-meta' }, 'kg res con hueso · promedio anual')
+      ),
+      React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, 'Producción ' + anioRef),
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22 } },
+          (produccionRef||'—') + ' k tn'
         ),
-        color: 'var(--green)',
-      })
+        React.createElement('div', { className:'stat-meta' }, 'miles de tn equiv. res')
+      ),
+      React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, 'Establecimientos'),
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22 } },
+          (kpis.frigoriificosActivos || '—').toLocaleString ? (kpis.frigoriificosActivos || 364).toLocaleString('es-AR') : '364'
+        ),
+        React.createElement('div', { className:'stat-meta' }, 'habilitados SENASA · tráfico federal')
+      ),
+      React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, '% Hembras 2025'),
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22, color: faseColor } }, hPct + '%'),
+        React.createElement('div', { className:'stat-meta' },
+          'ciclo: ', React.createElement('span', { style:{ color:faseColor, fontWeight:600 } }, faseLabel)
+        )
+      ),
+      ultimoMesCab != null && React.createElement('div', { className:'stat', style:{ cursor:'default' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } },
+          'Último dato · ' + (ultimoDato || '—')
+        ),
+        React.createElement('div', { className:'stat-val', style:{ fontSize:22 } },
+          Math.round(ultimoMesCab/1000)+' k'
+        ),
+        React.createElement('div', { className:'stat-meta' },
+          'cab. faenadas' + (ultimoMesPeso ? ' · ' + ultimoMesPeso + ' kg/res' : '')
+        )
+      )
     ),
 
-    // ── SELECTOR DE VISTA ────────────────────────────────────────────────────
+    // Selector de vista
     React.createElement('div', { style:{ display:'flex', gap:4, marginBottom:20, flexWrap:'wrap' } },
       VISTAS.map(function(v) {
         var active = vista === v.id;
@@ -727,10 +760,11 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
     // ════════════════════════════════════════════════════════════════════════
     vista === 'resumen' && React.createElement('div', null,
 
-      // Contexto analítico
-      React.createElement('div', { style:{ padding:'20px 24px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, marginBottom:20 } },
-        React.createElement('div', { className:'section-title', style:{ marginBottom:12 } }, '📊 Contexto del mercado'),
-        analisis.contexto2025 && React.createElement('p', { style:{ fontSize:13, color:'var(--text)', lineHeight:1.7, marginBottom:10 } },
+      analisis.contexto2025 && React.createElement('div', {
+        style:{ padding:'18px 22px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:12, marginBottom:20 }
+      },
+        React.createElement('div', { className:'section-title', style:{ marginBottom:10 } }, '📊 Contexto ' + anioRef + '–' + (anioRef+1)),
+        React.createElement('p', { style:{ fontSize:13, color:'var(--text)', lineHeight:1.7, marginBottom: analisis.contexto2026 ? 10 : 0 } },
           analisis.contexto2025
         ),
         analisis.contexto2026 && React.createElement('p', { style:{ fontSize:13, color:'var(--text2)', lineHeight:1.7 } },
@@ -738,58 +772,72 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
         )
       ),
 
-      // Comparativa rápida de años recientes
-      React.createElement('div', { className:'section-title' }, 'Faena anual · comparativa reciente'),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:24 } },
-        histAn.slice(-6).reverse().map(function(d, i) {
-          var prev = histAn[histAn.length - 6 + (5-i) - 1];
-          var varPct = prev && prev.cabezas ? ((d.cabezas - prev.cabezas)/prev.cabezas)*100 : null;
-          var maxCab = Math.max.apply(null, histAn.slice(-6).map(function(x){ return x.cabezas; }));
-          var isLatest = i === 0;
-          return React.createElement('div', {
-            key:d.anio,
-            style:{ display:'grid', gridTemplateColumns:'60px 1fr 100px 120px', gap:14, alignItems:'center',
-              padding:'12px 18px', background: isLatest ? 'rgba(91,156,246,.06)' : 'var(--bg1)',
-              border:'1px solid '+(isLatest?'var(--accent)':'var(--line)'), borderRadius:10 }
-          },
-            React.createElement(Mono, { style:{ fontSize:14, fontWeight:700, color: isLatest ? 'var(--accent)' : 'var(--white)' } }, d.anio),
-            React.createElement('div', { style:{ position:'relative', height:10, background:'var(--bg3)', borderRadius:5, overflow:'hidden' } },
-              React.createElement('div', {
-                style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:5,
+      // Comparativa últimos 5 años
+      React.createElement('div', { className:'section-title' }, 'Faena anual · comparativa'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6, marginBottom:24 } },
+        (function(){
+          var sliced = histAn.slice(-5);
+          var maxCab = Math.max.apply(null, sliced.map(function(x){ return x.cabezas; }));
+          return sliced.reverse().map(function(d, i) {
+            var origIdx = sliced.length - 1 - i;
+            var prev = histAn[histAn.length - 5 + origIdx - 1];
+            var varPct = prev && prev.cabezas ? ((d.cabezas - prev.cabezas)/prev.cabezas)*100 : null;
+            var isLatest = i === 0;
+            return React.createElement('div', { key:d.anio,
+              style:{ display:'grid', gridTemplateColumns:'56px 1fr 90px 80px', gap:12, alignItems:'center',
+                padding:'10px 16px',
+                background: isLatest ? 'rgba(91,156,246,.06)' : 'var(--bg1)',
+                border:'1px solid '+(isLatest?'var(--accent)':'var(--line)'), borderRadius:8 }
+            },
+              React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color: isLatest?'var(--accent)':'var(--white)' } }, d.anio),
+              React.createElement('div', { style:{ position:'relative', height:8, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
+                React.createElement('div', { style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:4,
                   width:((d.cabezas/maxCab)*100).toFixed(1)+'%',
-                  background: isLatest ? 'var(--accent)' : 'var(--bg3)',
-                  backgroundImage: isLatest ? 'none' : 'none',
-                  opacity: isLatest ? 1 : 0.6,
-                  background: ['#5b9cf6','#4d8fec','#3e82e0','#2e74d4','#1e67c8','#0e5abc'][i] || 'var(--accent)',
-                  transition:'width .5s ease' }
-              })
-            ),
-            React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--text)', textAlign:'right' } },
-              (d.cabezas/1e6).toFixed(2) + ' M'
-            ),
-            varPct != null
-              ? React.createElement(VarBadge, { val: varPct })
-              : React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '—')
-          );
-        })
+                  background:['#5b9cf6','#4d8fec','#3e82e0','#2e74d4','#1e67c8'][i] || 'var(--accent)',
+                  opacity:.8, transition:'width .5s ease' } })
+              ),
+              React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--text)', textAlign:'right' } },
+                (d.cabezas/1e6).toFixed(2)+' M'
+              ),
+              varPct != null
+                ? React.createElement(Mono, { style:{ fontSize:10, fontWeight:700, textAlign:'right',
+                    color:varPct>=0?'var(--green)':'var(--red)' } },
+                    (varPct>=0?'▲ +':'▼ ')+Math.abs(varPct).toFixed(1)+'%'
+                  )
+                : React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '—')
+            );
+          });
+        })()
       ),
 
-      // Peso promedio res — tendencia
-      React.createElement('div', { className:'section-title' }, 'Peso promedio res · evolución'),
-      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:24 } },
-        histAn.slice(-3).map(function(d) {
-          return React.createElement('div', {
-            key:d.anio,
-            style:{ padding:'16px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, textAlign:'center' }
-          },
-            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', marginBottom:6, display:'block' } }, d.anio),
-            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)', marginBottom:4 } }, d.pesoRes + ' kg'),
-            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'peso promedio res')
-          );
-        })
+      // Participación por categoría (datos agregados 2025)
+      cats.length > 0 && React.createElement('div', null,
+        React.createElement('div', { className:'section-title' }, 'Participación por categoría · faena 2025'),
+        React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6, marginBottom:16 } },
+          cats.map(function(cat) {
+            var color = CAT_COLOR[cat.nombre] || 'var(--accent)';
+            var label = CAT_LABELS[cat.nombre] || cat.nombre;
+            return React.createElement('div', { key:cat.nombre,
+              style:{ display:'grid', gridTemplateColumns:'100px 1fr 55px', alignItems:'center', gap:12,
+                padding:'10px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8 }
+            },
+              React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:6 } },
+                React.createElement('div', { style:{ width:3, height:14, background:color, borderRadius:2 } }),
+                React.createElement('span', { style:{ fontSize:12, fontWeight:500, color:'var(--text)' } }, label)
+              ),
+              React.createElement('div', { style:{ position:'relative', height:8, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
+                React.createElement('div', { style:{ position:'absolute', left:0, top:0, bottom:0,
+                  width:cat.participacion.toFixed(1)+'%', background:color, opacity:.7, borderRadius:4, transition:'width .4s ease' } })
+              ),
+              React.createElement(Mono, { style:{ fontSize:12, fontWeight:700, color:color, textAlign:'right' } },
+                cat.participacion.toFixed(1)+'%'
+              )
+            );
+          })
+        )
       ),
 
-      React.createElement('div', { className:'source' }, 'Faena anual · Peso res · Fuente: MAGYP / DNCCA / SENASA / Consorcio ABC')
+      React.createElement('div', { className:'source' }, 'Fuente: MAGYP · DNCCA · SENASA · Consorcio ABC · datos.magyp.gob.ar')
     ),
 
     // ════════════════════════════════════════════════════════════════════════
@@ -798,13 +846,12 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
     vista === 'faena' && React.createElement('div', null,
 
       // Selector de período
-      React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:18, alignItems:'center', flexWrap:'wrap' } },
-        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', marginRight:4 } }, 'PERÍODO:'),
+      React.createElement('div', { style:{ display:'flex', gap:6, marginBottom:16, alignItems:'center', flexWrap:'wrap' } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase' } }, 'Período:'),
         PERIODOS.map(function(p, idx) {
           var active = periodoIdx === idx;
-          return React.createElement('button', {
-            key:idx, onClick:function(){ setPeriodoIdx(idx); },
-            style:{ fontFamily:'var(--mono)', fontSize:10, padding:'4px 11px', borderRadius:6, cursor:'pointer',
+          return React.createElement('button', { key:idx, onClick:function(){ setPeriodoIdx(idx); },
+            style:{ fontFamily:'var(--mono)', fontSize:10, padding:'4px 10px', borderRadius:6, cursor:'pointer',
               border:'1px solid '+(active?'var(--accent)':'var(--line)'),
               background: active?'var(--acc-bg)':'transparent',
               color: active?'var(--accent)':'var(--text3)' }
@@ -813,60 +860,56 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
       ),
 
       // KPIs del período
-      mesesPeriodo.length > 0 && React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:18 } },
-        React.createElement('div', { style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Total período'),
-          React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' } }, (totalPeriodo/1e6).toFixed(2) + ' M'),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'cabezas · ' + mesesPeriodo.length + ' meses')
+      mesesPeriodo.length > 0 && React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 } },
+        React.createElement('div', { style:{ padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Total período'),
+          React.createElement('div', { style:{ fontSize:18, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' } }, (totalPeriodo/1e6).toFixed(2)+' M'),
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, mesesPeriodo.length+' meses')
         ),
-        React.createElement('div', { style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Promedio mensual'),
-          React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, Math.round(promedioMes/1000) + ' k'),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'cabezas por mes')
+        React.createElement('div', { style:{ padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Prom. mensual'),
+          React.createElement('div', { style:{ fontSize:18, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, Math.round(promedioMes/1000)+' k'),
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'cab./mes')
         ),
-        React.createElement('div', { style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Peso prom. res'),
-          React.createElement('div', { style:{ fontSize:20, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)' } },
-            mesesPeriodo.length > 0
-              ? (mesesPeriodo.reduce(function(s,m){ return s+(m.pesoRes||0); },0)/mesesPeriodo.filter(function(m){return m.pesoRes;}).length).toFixed(1) + ' kg'
-              : '—'
-          ),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'período seleccionado')
+        React.createElement('div', { style:{ padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Peso prom. res'),
+          React.createElement('div', { style:{ fontSize:18, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)' } }, pesoPromPeriodo ? pesoPromPeriodo+' kg' : '—'),
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'promedio período')
         )
       ),
 
-      // Gráfico evolución mensual
+      // Gráfico
       mesesPeriodo.length >= 2 && React.createElement('div', {
-        style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'20px 24px', marginBottom:16 }
+        style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:14 }
       },
-        React.createElement('div', { style:{ marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'baseline' } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Evolución faena mensual · cabezas'),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--accent)' } }, periodoActual.label)
+        React.createElement('div', { style:{ marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'baseline' } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Evolución · cabezas faenadas'),
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--accent)' } }, periodoActual.label)
         ),
         React.createElement(LineChart, { series: mesesPeriodo.map(function(m){ return { cabezas:m.total }; }), color:'var(--accent)' }),
-        React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', marginTop:4 } },
-          mesesPeriodo.slice(0, Math.min(mesesPeriodo.length, 12)).map(function(m, i) {
+        React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', marginTop:3 } },
+          mesesPeriodo.map(function(m, i) {
             var partes = (m.mes||'').split('-');
-            return React.createElement(Mono, { key:i, style:{ fontSize:7, color:'var(--text3)', flex:1, textAlign:'center' } },
-              MESES_SHORT[parseInt(partes[1]||'1',10)-1] + (partes[0]?'\''+partes[0].slice(2):'')
+            return React.createElement(Mono, { key:i,
+              style:{ fontSize:7, color:'var(--text3)', flex:1, textAlign:'center', overflow:'hidden' } },
+              MESES_SHORT[parseInt(partes[1]||'1',10)-1]
             );
           })
         )
       ),
 
-      // Tabla mensual
-      mesesPeriodo.length > 0 && React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:360 } },
-        React.createElement('table', null,
+      // Tabla — columnas reducidas para evitar overflow
+      mesesPeriodo.length > 0 && React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:380 } },
+        React.createElement('table', { style:{ minWidth:600 } },
           React.createElement('thead', null,
             React.createElement('tr', null,
-              React.createElement('th', null, 'Mes'),
-              React.createElement('th', { className:'r' }, 'Total'),
-              React.createElement('th', { className:'r' }, 'Var. m/m'),
-              React.createElement('th', { className:'r' }, 'Novillos'),
-              React.createElement('th', { className:'r' }, 'Vacas'),
-              React.createElement('th', { className:'r' }, 'Vaquillonas'),
-              React.createElement('th', { className:'r' }, 'Peso res'),
-              React.createElement('th', { className:'r' }, '% Hembras')
+              React.createElement('th', { style:{ minWidth:90 } }, 'Mes'),
+              React.createElement('th', { className:'r', style:{ minWidth:75 } }, 'Total'),
+              React.createElement('th', { className:'r', style:{ minWidth:65 } }, 'Var. m/m'),
+              React.createElement('th', { className:'r', style:{ minWidth:70 } }, 'Novillos'),
+              React.createElement('th', { className:'r', style:{ minWidth:65 } }, 'Vacas'),
+              React.createElement('th', { className:'r', style:{ minWidth:75 } }, 'Peso res'),
+              React.createElement('th', { className:'r', style:{ minWidth:75 } }, '% Hembras')
             )
           ),
           React.createElement('tbody', null,
@@ -874,18 +917,19 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
               var prev = arr[i+1];
               var varPct = prev && prev.total ? ((m.total - prev.total)/prev.total)*100 : null;
               var partes = (m.mes||'').split('-');
-              var mesLabel = (MESES_SHORT[parseInt(partes[1]||'1',10)-1]||'') + ' ' + (partes[0]||'');
+              var mesLabel = (MESES_SHORT[parseInt(partes[1]||'1',10)-1]||'')+' '+(partes[0]||'');
               return React.createElement('tr', { key:m.mes },
                 React.createElement('td', null, React.createElement(Mono, { style:{ fontSize:12 } }, mesLabel)),
                 React.createElement('td', { className:'r' },
                   React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--accent)' } },
-                    Math.round((m.total||0)/1000) + ' k'
+                    Math.round((m.total||0)/1000)+'k'
                   )
                 ),
                 React.createElement('td', { className:'r' },
                   varPct != null
-                    ? React.createElement(Mono, { style:{ fontSize:10, fontWeight:700, color:varPct>=0?'var(--green)':'var(--red)' } },
-                        (varPct>=0?'▲ +':'▼ ') + Math.abs(varPct).toFixed(1) + '%'
+                    ? React.createElement(Mono, { style:{ fontSize:10, fontWeight:700,
+                        color:varPct>=0?'var(--green)':'var(--red)' } },
+                        (varPct>=0?'▲ +':'▼ ')+Math.abs(varPct).toFixed(1)+'%'
                       )
                     : React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '—')
                 ),
@@ -900,21 +944,15 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
                   )
                 ),
                 React.createElement('td', { className:'r' },
-                  React.createElement(Mono, { style:{ fontSize:11, color:CAT_COLOR.vaquillonas } },
-                    m.vaquillonas != null ? Math.round(m.vaquillonas/1000)+'k' : '—'
-                  )
-                ),
-                React.createElement('td', { className:'r' },
                   React.createElement(Mono, { style:{ fontSize:11, color:'var(--green)' } },
-                    m.pesoRes != null ? m.pesoRes + ' kg' : '—'
+                    m.pesoRes != null ? m.pesoRes+' kg' : '—'
                   )
                 ),
                 React.createElement('td', { className:'r' },
                   React.createElement(Mono, {
-                    style:{ fontSize:11, color: m.hembras_pct > 48.5 ? 'var(--red)' : m.hembras_pct < 46 ? 'var(--green)' : 'var(--text2)' }
-                  },
-                    m.hembras_pct != null ? m.hembras_pct + '%' : '—'
-                  )
+                    style:{ fontSize:11,
+                      color: m.hembras_pct > 48.5 ? 'var(--red)' : m.hembras_pct < 46 ? 'var(--green)' : 'var(--text2)' }
+                  }, m.hembras_pct != null ? m.hembras_pct+'%' : '—')
                 )
               );
             })
@@ -927,191 +965,97 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
     ),
 
     // ════════════════════════════════════════════════════════════════════════
-    // VISTA: RANKING FRIGORÍFICOS
+    // VISTA: POR PROVINCIA
     // ════════════════════════════════════════════════════════════════════════
-    vista === 'ranking' && React.createElement('div', null,
-      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:16,
-        padding:'12px 18px', background:'rgba(91,156,246,.06)', border:'1px solid rgba(91,156,246,.2)', borderRadius:10 } },
-        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Total habilitados SENASA'),
-        React.createElement(Mono, { style:{ fontSize:20, fontWeight:700, color:'var(--accent)', marginLeft:'auto' } },
-          (kpis.frigoriificosActivos || 364).toLocaleString('es-AR')
-        ),
-        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'establecimientos · tráfico federal')
+    vista === 'provincias' && React.createElement('div', null,
+      React.createElement('div', { className:'section-title' }, 'Distribución de faena por provincia · datos MAGYP 2024'),
+      React.createElement('div', {
+        style:{ padding:'10px 16px', marginBottom:16, background:'rgba(91,156,246,.06)',
+          border:'1px solid rgba(91,156,246,.2)', borderRadius:8 }
+      },
+        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } },
+          'Participación % de faena y cantidad de establecimientos habilitados SENASA por provincia. '
+          + 'Los % corresponden a datos agregados publicados por MAGYP 2024.'
+        )
       ),
-
-      React.createElement('div', { className:'section-title' }, 'Principales establecimientos · faena 2024'),
-
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6 } },
-        topFrigOrdenados.map(function(f, i) {
-          var faenaPct = maxFaenaFrig > 0 ? ((f.faena2024_k||0)/maxFaenaFrig)*100 : 0;
-          var tipoColor = f.tipo === 'multinacional' ? '#8fb8f0' : f.tipo === 'nacional' ? 'var(--accent)' : 'var(--text3)';
-          return React.createElement('div', {
-            key:i,
-            style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
+      provincias.length > 0 && React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
+        provincias.map(function(p) {
+          return React.createElement('div', { key:p.provincia,
+            style:{ display:'grid', gridTemplateColumns:'140px 1fr 50px 90px', gap:12, alignItems:'center',
+              padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
           },
-            // Fila superior
-            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, marginBottom:8 } },
-              React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)', width:20, flexShrink:0 } }, '#'+(i+1)),
-              React.createElement('div', { style:{ flex:1 } },
-                React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' } },
-                  React.createElement('span', { style:{ fontSize:13, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } },
-                    f.nombre
-                  ),
-                  f.exportador && React.createElement(Mono, {
-                    style:{ fontSize:8, color:'var(--green)', background:'rgba(74,191,120,.1)',
-                      border:'1px solid rgba(74,191,120,.25)', padding:'1px 6px', borderRadius:4 }
-                  }, 'EXPORTADOR'),
-                  f.tipo && React.createElement(Mono, {
-                    style:{ fontSize:8, color: tipoColor, background: tipoColor+'18',
-                      border:'1px solid '+tipoColor+'33', padding:'1px 6px', borderRadius:4 }
-                  }, f.tipo.toUpperCase())
-                ),
-                React.createElement('div', { style:{ display:'flex', gap:10, marginTop:3, flexWrap:'wrap' } },
-                  f.provincia && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text2)' } }, '📍 '+f.provincia),
-                  f.matricula && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'Mat. '+f.matricula)
-                )
-              ),
-              f.faena2024_k != null && React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
-                React.createElement(Mono, { style:{ fontSize:14, fontWeight:700, color:'var(--accent)', display:'block' } }, f.faena2024_k + ' k'),
-                React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'cab. 2024')
-              )
+            React.createElement('span', { style:{ fontSize:12, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } }, p.provincia),
+            React.createElement('div', { style:{ position:'relative', height:8, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
+              React.createElement('div', { style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:4,
+                width:(p.pctFaena||p.pct||0).toFixed(0)+'%', background:'var(--accent)', opacity:.75, transition:'width .5s ease' } })
             ),
-            // Barra de faena
-            f.faena2024_k != null && React.createElement('div', { style:{ position:'relative', height:5, background:'var(--bg3)', borderRadius:3, marginBottom:6 } },
-              React.createElement('div', { style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:3,
-                width: faenaPct.toFixed(1)+'%', background:'var(--accent)', opacity:.7, transition:'width .5s ease' } })
+            React.createElement(Mono, { style:{ fontSize:12, fontWeight:700, color:'var(--accent)', textAlign:'right' } },
+              (p.pctFaena||p.pct||0)+'%'
             ),
-            // Mercados destino
-            f.mercados && f.mercados.length > 0 && React.createElement('div', { style:{ display:'flex', gap:5, flexWrap:'wrap', marginTop:4 } },
-              React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, 'Mercados:'),
-              f.mercados.map(function(m) { return React.createElement(MercadoChip, { key:m, label:m }); }),
-              f.exportTn2024 > 0 && React.createElement(Mono, { style:{ fontSize:9, color:'var(--green)', marginLeft:6 } },
-                (f.exportTn2024/1000).toFixed(0) + ' k tn exportadas'
-              )
+            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', textAlign:'right' } },
+              (p.establecimientos||0)+' estab.'
             )
           );
         })
       ),
-      React.createElement('div', { className:'source', style:{ marginTop:12 } },
-        'Faena estimada 2024 · Fuente: Consorcio ABC / DNCCA / SENASA · Registro MAGYP'
+      React.createElement('div', { className:'source' },
+        'Fuente: SENASA (registro habilitados) · MAGYP (informe sectorial 2024) · datos.magyp.gob.ar'
       )
     ),
 
     // ════════════════════════════════════════════════════════════════════════
-    // VISTA: POR PROVINCIA
+    // VISTA: DIRECTORIO
     // ════════════════════════════════════════════════════════════════════════
-    vista === 'provincias' && React.createElement('div', null,
-      React.createElement('div', { className:'section-title' }, 'Faena por provincia · 2025'),
-      provincias.length > 0 && React.createElement('div', { style:{ marginBottom:20 } },
-        React.createElement('div', {
-          style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }
-        },
-          React.createElement('div', { style:{ padding:'14px 16px', background:'rgba(91,156,246,.06)', border:'1px solid rgba(91,156,246,.2)', borderRadius:10, textAlign:'center' } },
-            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Buenos Aires'),
-            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' } }, '44%'),
-            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'del total nacional')
-          ),
-          React.createElement('div', { style:{ padding:'14px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, textAlign:'center' } },
-            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Santa Fe + Córdoba'),
-            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, '28%'),
-            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'del total nacional')
-          ),
-          React.createElement('div', { style:{ padding:'14px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, textAlign:'center' } },
-            React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Litoral + NEA'),
-            React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)' } }, '~11%'),
-            React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'Entre Ríos + Corrientes')
-          )
+    vista === 'directorio' && React.createElement('div', null,
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:16,
+        padding:'12px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
+        React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Total habilitados SENASA'),
+        React.createElement(Mono, { style:{ fontSize:18, fontWeight:700, color:'var(--accent)', marginLeft:'auto' } },
+          (dir.total || kpis.frigoriificosActivos || 364)+' establecimientos'
         ),
-        React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8 } },
-          provincias.map(function(p) {
-            var maxPCab = Math.max.apply(null, provincias.map(function(x){ return x.cabezas2025; }));
-            return React.createElement('div', {
-              key:p.provincia,
-              style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
-            },
-              React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'140px 1fr 90px 80px 90px', gap:12, alignItems:'center', marginBottom:6 } },
-                React.createElement('span', { style:{ fontSize:12, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } }, p.provincia),
-                React.createElement('div', { style:{ position:'relative', height:8, background:'var(--bg3)', borderRadius:4, overflow:'hidden' } },
-                  React.createElement('div', {
-                    style:{ position:'absolute', left:0, top:0, bottom:0, borderRadius:4,
-                      width: ((p.cabezas2025/maxPCab)*100).toFixed(1)+'%',
-                      background:'var(--accent)', opacity:.75, transition:'width .5s ease' }
-                  })
-                ),
-                React.createElement(Mono, { style:{ fontSize:12, fontWeight:700, color:'var(--accent)', textAlign:'right' } },
-                  (p.cabezas2025/1e6).toFixed(2) + ' M'
-                ),
-                React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)', textAlign:'right' } }, p.pct + '%'),
-                React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)', textAlign:'right' } }, p.establecimientos + ' estab.')
-              )
-            );
-          })
+        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'tráfico federal')
+      ),
+      React.createElement('div', {
+        style:{ padding:'10px 16px', marginBottom:14, background:'rgba(91,156,246,.06)',
+          border:'1px solid rgba(91,156,246,.2)', borderRadius:8 }
+      },
+        React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } },
+          'Muestra del registro SENASA/MAGYP. Solo se incluyen datos del registro oficial: nombre, matrícula, provincia y habilitación de exportación.'
         )
       ),
-      React.createElement('div', { className:'source' }, 'Faena por provincia 2025 · Fuente: DNCCA/MAGYP · SIF-SIGICA')
-    ),
-
-    // ════════════════════════════════════════════════════════════════════════
-    // VISTA: EXPORTACIONES
-    // ════════════════════════════════════════════════════════════════════════
-    vista === 'exportacion' && React.createElement('div', null,
-      // KPIs exportación
-      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:24 } },
-        React.createElement('div', { style:{ padding:'16px 20px', background:'rgba(74,191,120,.06)', border:'1px solid rgba(74,191,120,.2)', borderRadius:10 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--green)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Exportación 2025'),
-          React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--green)', fontFamily:'var(--mono)', marginBottom:4 } },
-            ((exportKpis.totalTn2025||510000)/1000).toFixed(0) + ' k tn'
-          ),
-          React.createElement(VarBadge, { val: exportKpis.varPct2025 || 6.8 })
-        ),
-        React.createElement('div', { style:{ padding:'16px 20px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Valor FOB 2025'),
-          React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', marginBottom:4 } },
-            'USD ' + ((exportKpis.valorUSD2025||3060)/1000).toFixed(1) + ' B'
-          ),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'miles de millones de dólares')
-        ),
-        React.createElement('div', { style:{ padding:'16px 20px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' } }, 'Precio prom. export.'),
-          React.createElement('div', { style:{ fontSize:22, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)', marginBottom:4 } },
-            'USD ' + (exportKpis.precioPromUSD||6000).toLocaleString('es-AR')
-          ),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, 'por tonelada')
-        )
-      ),
-
-      React.createElement('div', { className:'section-title' }, 'Principales mercados de exportación · 2025'),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
-        exportaciones.map(function(e) {
-          return React.createElement('div', {
-            key:e.pais,
-            style:{ padding:'14px 18px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
+      React.createElement('div', { className:'section-title' }, 'Establecimientos del registro oficial'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:4 } },
+        (dir.muestra || topFrig).map(function(f, i) {
+          return React.createElement('div', { key:i,
+            style:{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
+              background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, flexWrap:'wrap' }
           },
-            React.createElement(BarraHoriz, {
-              label: e.pais,
-              value: e.tn2025,
-              maxValue: maxExport,
-              color: e.pais === 'China' ? '#e8a020' : e.pais === 'UE' ? '#4a90d9' : 'var(--accent)',
-              sublabel: (e.tn2025/1000).toFixed(0) + ' k tn',
-            }),
-            React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end', marginTop:4 } },
-              React.createElement(VarBadge, { val: e.varPct }),
-              React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', marginLeft:8 } }, 'vs 2024')
-            )
+            React.createElement('div', { style:{ flex:1, minWidth:0 } },
+              React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:3 } },
+                React.createElement('span', { style:{ fontSize:13, fontWeight:600, color:'var(--white)', fontFamily:'var(--display)' } },
+                  f.nombre || f.razon_social || '—'
+                ),
+                f.exportador && React.createElement(Mono, {
+                  style:{ fontSize:8, color:'var(--green)', background:'rgba(74,191,120,.1)',
+                    border:'1px solid rgba(74,191,120,.25)', padding:'1px 6px', borderRadius:4 }
+                }, 'EXPORTADOR')
+              ),
+              React.createElement('div', { style:{ display:'flex', gap:10, flexWrap:'wrap' } },
+                f.provincia && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text2)' } }, '📍 '+f.provincia),
+                f.etapa && React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, f.etapa)
+              )
+            ),
+            f.matricula && React.createElement(Mono, {
+              style:{ fontSize:10, color:'var(--accent)', background:'var(--acc-bg)',
+                padding:'3px 8px', borderRadius:5, border:'1px solid rgba(91,156,246,.2)', flexShrink:0 }
+            }, 'Mat. '+f.matricula),
+            React.createElement('div', { style:{ width:4, height:4, borderRadius:'50%', background:'var(--green)', flexShrink:0 } })
           );
         })
       ),
-
-      React.createElement('div', {
-        style:{ padding:'16px 20px', background:'rgba(232,160,32,.06)', border:'1px solid rgba(232,160,32,.2)', borderRadius:10, marginBottom:16 }
-      },
-        React.createElement(Mono, { style:{ fontSize:10, color:'#e8a020', marginBottom:6, display:'block', letterSpacing:'.08em' } }, '⚠ CONCENTRACIÓN DE MERCADOS'),
-        React.createElement('p', { style:{ fontSize:12, color:'var(--text)', lineHeight:1.6 } },
-          'China representa el 72% del volumen exportado. Esta concentración genera alta sensibilidad a cambios de política comercial o fitosanitarios del mercado asiático.'
-        )
-      ),
-
-      React.createElement('div', { className:'source' }, 'Exportaciones de carne bovina 2025 · Fuente: INDEC · SENASA · Consorcio ABC · datos.gob.ar')
+      React.createElement('div', { className:'source', style:{ marginTop:12 } },
+        'Registro SENASA · Dirección de Industria Alimentaria · MAGYP · datos.consignatarias.com.ar'
+      )
     ),
 
     // ════════════════════════════════════════════════════════════════════════
@@ -1119,136 +1063,110 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
     // ════════════════════════════════════════════════════════════════════════
     vista === 'ciclo' && React.createElement('div', null,
 
-      // Fase actual con semáforo
+      // Semáforo de fase
       React.createElement('div', {
-        style:{ padding:'20px 24px', background: faseColor === 'var(--green)' ? 'rgba(74,191,120,.06)' : faseColor === 'var(--red)' ? 'rgba(224,92,92,.06)' : 'rgba(91,156,246,.06)',
-          border:'1px solid ' + (faseColor === 'var(--green)' ? 'rgba(74,191,120,.2)' : faseColor === 'var(--red)' ? 'rgba(224,92,92,.2)' : 'rgba(91,156,246,.2)'),
-          borderRadius:12, marginBottom:20 }
+        style:{ padding:'18px 22px', marginBottom:20, borderRadius:12,
+          background: faseColor === 'var(--green)' ? 'rgba(74,191,120,.06)'
+                    : faseColor === 'var(--red)'   ? 'rgba(224,92,92,.06)' : 'rgba(91,156,246,.06)',
+          border:'1px solid '+(faseColor === 'var(--green)' ? 'rgba(74,191,120,.2)'
+                             : faseColor === 'var(--red)'   ? 'rgba(224,92,92,.2)' : 'rgba(91,156,246,.2)') }
       },
-        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginBottom:12 } },
-          React.createElement('div', { style:{ width:12, height:12, borderRadius:'50%', background: faseColor, boxShadow:'0 0 10px '+faseColor, flexShrink:0 } }),
-          React.createElement('span', { style:{ fontFamily:'var(--display)', fontSize:16, fontWeight:700, color:'var(--white)' } },
-            'Ciclo ganadero: ', React.createElement('span', { style:{ color: faseColor } }, faseLabel.toUpperCase())
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, marginBottom:10 } },
+          React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:faseColor, boxShadow:'0 0 8px '+faseColor } }),
+          React.createElement('span', { style:{ fontFamily:'var(--display)', fontSize:15, fontWeight:700, color:'var(--white)' } },
+            'Ciclo ganadero 2025: ', React.createElement('span', { style:{ color:faseColor } }, faseLabel.toUpperCase())
           )
         ),
         React.createElement('p', { style:{ fontSize:13, color:'var(--text)', lineHeight:1.7 } },
-          analisis.interpretacion || (faseCiclo === 'retención_leve'
-            ? 'Participación de hembras ~46-48%: leve retención. El rodeo comienza a recomponerse post-liquidación 2023. Ciclo en transición.'
-            : faseCiclo === 'retención'
-            ? 'Participación de hembras < 46%: señal de retención de vientres → recomposición de stock. Menor oferta esperada a mediano plazo; tendencia alcista de precios.'
-            : 'Participación de hembras > 48.5%: liquidación activa → presión bajista sobre precios en el corto plazo; riesgo de menor stock futuro.')
+          analisis.interpretacion ||
+          'Participación de hembras ~47.4% en 2025: leve retención. El rodeo comienza a recomponerse luego del récord de liquidación de 2023. Ciclo en transición hacia menor oferta futura.'
         )
       ),
 
-      // Indicadores del ciclo
+      // Indicadores
       React.createElement('div', { className:'grid grid-3', style:{ marginBottom:24 } },
         React.createElement('div', { className:'stat', style:{ cursor:'default' } },
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, '% Hembras 2025'),
-          React.createElement('div', { className:'stat-val', style:{ fontSize:26, color: faseColor } }, hPct + '%'),
-          React.createElement('div', { className:'stat-meta' },
-            React.createElement('span', { style:{ color:faseColor } }, faseLabel), ' · vacas + vaquillonas'
-          )
+          React.createElement('div', { className:'stat-val', style:{ fontSize:26, color:faseColor } }, hPct+'%'),
+          React.createElement('div', { className:'stat-meta' }, faseLabel+' · vacas + vaquillonas')
         ),
         analisis.hembras2026pct != null && React.createElement('div', { className:'stat', style:{ cursor:'default' } },
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, '% Hembras 2026 YTD'),
-          React.createElement('div', { className:'stat-val', style:{ fontSize:26, color: analisis.hembras2026pct < 46 ? 'var(--green)' : 'var(--accent)' } },
-            analisis.hembras2026pct + '%'
+          React.createElement('div', { className:'stat-val', style:{ fontSize:26, color:'var(--accent)' } },
+            analisis.hembras2026pct+'%'
           ),
-          React.createElement('div', { className:'stat-meta' }, 'promedio ene-mar 2026')
+          React.createElement('div', { className:'stat-meta' }, 'promedio ene–mar 2026')
         ),
         React.createElement('div', { className:'stat', style:{ cursor:'default' } },
           React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:8 } }, 'Tendencia peso res'),
-          React.createElement('div', { className:'stat-val', style:{ fontSize:22, color:'var(--green)' } }, '↗ creciente'),
+          React.createElement('div', { className:'stat-val', style:{ fontSize:20, color:'var(--green)' } }, '↗ creciente'),
           React.createElement('div', { className:'stat-meta' }, '231 kg en 2025 · récord histórico')
         )
       ),
 
-      // Guía de lectura del ciclo
-      React.createElement('div', { className:'section-title' }, 'Guía de lectura: % de hembras en faena'),
-      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 } },
+      // Guía de lectura
+      React.createElement('div', { className:'section-title' }, 'Guía: % de hembras en faena como indicador de ciclo'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6 } },
         [
-          { rango:'< 44%', label:'Retención fuerte', color:'var(--green)', desc:'Stock en recomposición acelerada. Oferta futura en ascenso sostenido. Precio actual alto por escasez.' },
-          { rango:'44–46%', label:'Retención moderada', color:'#4abf78', desc:'Señal de retención clara. El productor está invirtiendo en vientres para el ciclo siguiente.' },
-          { rango:'46–48%', label:'Zona neutra / retención leve', color:'var(--accent)', desc:'Mercado en equilibrio. Tendencia a retener pero sin señal fuerte. Precios estables.' },
-          { rango:'48–50%', label:'Zona de alerta', color:'#e8a020', desc:'Inicio de liquidación. Presión bajista de corto plazo. Señal de estrés en el sector.' },
-          { rango:'> 50%', label:'Liquidación activa', color:'var(--red)', desc:'Salida masiva de vientres. Oferta elevada → precios bajos hoy, escasez futura. Crisis de stock.' },
+          { rango:'< 44%',   label:'Retención fuerte',        color:'var(--green)',  desc:'Stock en recomposición acelerada. Oferta futura en ascenso, precios firmes por escasez actual.' },
+          { rango:'44–46%',  label:'Retención moderada',      color:'#4abf78',       desc:'Señal de retención clara. El productor invierte en vientres para el ciclo siguiente.' },
+          { rango:'46–48%',  label:'Zona neutra / ret. leve', color:'var(--accent)', desc:'Mercado en equilibrio o leve retención post-liquidación. Precios estables.' },
+          { rango:'48–50%',  label:'Zona de alerta',          color:'#e8a020',       desc:'Inicio de liquidación. Presión bajista de corto plazo sobre precios.' },
+          { rango:'> 50%',   label:'Liquidación activa',      color:'var(--red)',    desc:'Salida masiva de vientres. Oferta elevada hoy, escasez futura garantizada. Crisis de stock.' },
         ].map(function(item) {
-          var isActivo = (item.rango === '46–48%' && faseCiclo === 'retención_leve') ||
-                         (item.rango === '< 44%'  && faseCiclo === 'retención') ||
-                         (item.rango === '> 50%'  && faseCiclo === 'liquidación');
-          return React.createElement('div', {
-            key:item.rango,
-            style:{ padding:'12px 18px', background: isActivo ? item.color+'14' : 'var(--bg1)',
-              border:'1px solid '+(isActivo ? item.color+'50' : 'var(--line)'), borderRadius:10 }
+          var actual = (item.rango === '46–48%' && (faseCiclo==='retencion_leve'||faseCiclo==='retención_leve'))
+                    || (item.rango === '< 44%'  && (faseCiclo==='retencion'||faseCiclo==='retención'))
+                    || (item.rango === '> 50%'  && (faseCiclo==='liquidacion'||faseCiclo==='liquidación'));
+          return React.createElement('div', { key:item.rango,
+            style:{ padding: actual ? '12px 16px' : '8px 16px',
+              background: actual ? item.color+'12' : 'var(--bg1)',
+              border:'1px solid '+(actual ? item.color+'40' : 'var(--line)'), borderRadius:8 }
           },
-            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, marginBottom: isActivo ? 6 : 0 } },
-              React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:item.color, flexShrink:0 } }),
-              React.createElement(Mono, { style:{ fontSize:11, fontWeight:700, color:item.color, width:80, flexShrink:0 } }, item.rango),
-              React.createElement('span', { style:{ fontSize:12, fontWeight: isActivo ? 600 : 400, color: isActivo ? 'var(--white)' : 'var(--text2)' } }, item.label),
-              isActivo && React.createElement(Mono, { style:{ fontSize:9, color:item.color, marginLeft:'auto', background:item.color+'18', padding:'2px 8px', borderRadius:4, border:'1px solid '+item.color+'40' } }, '← SITUACIÓN ACTUAL')
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10 } },
+              React.createElement('div', { style:{ width:7, height:7, borderRadius:'50%', background:item.color, flexShrink:0 } }),
+              React.createElement(Mono, { style:{ fontSize:10, fontWeight:700, color:item.color, width:70, flexShrink:0 } }, item.rango),
+              React.createElement('span', { style:{ fontSize:12, fontWeight: actual ? 600 : 400, color: actual ? 'var(--white)' : 'var(--text2)', flex:1 } }, item.label),
+              actual && React.createElement(Mono, { style:{ fontSize:8, color:item.color, background:item.color+'18', border:'1px solid '+item.color+'40', padding:'2px 7px', borderRadius:4 } }, '← HOY')
             ),
-            isActivo && React.createElement('p', { style:{ fontSize:12, color:'var(--text)', lineHeight:1.6, marginLeft:18, marginTop:6 } }, item.desc)
+            actual && React.createElement('p', { style:{ fontSize:12, color:'var(--text)', lineHeight:1.6, marginTop:6, marginLeft:17 } }, item.desc)
           );
         })
       ),
-
-      React.createElement('div', { className:'source' }, 'Análisis del ciclo ganadero · Fuente: MAGYP / DNCCA / Consorcio ABC / SENASA')
+      React.createElement('div', { className:'source', style:{ marginTop:16 } },
+        'Análisis ciclo ganadero · Fuente: MAGYP / DNCCA / Consorcio ABC / SENASA'
+      )
     ),
 
     // ════════════════════════════════════════════════════════════════════════
-    // VISTA: HISTÓRICO
+    // VISTA: SERIE HISTÓRICA
     // ════════════════════════════════════════════════════════════════════════
     vista === 'historico' && React.createElement('div', null,
       React.createElement('div', { className:'section-title' }, 'Serie histórica · Faena anual 1990–2025'),
-      React.createElement('div', {
-        style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'20px 24px', marginBottom:16 }
+      histAn.length >= 2 && React.createElement('div', {
+        style:{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'18px 22px', marginBottom:14 }
       },
-        React.createElement('div', { style:{ marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'baseline' } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Cabezas faenadas — evolución anual'),
-          React.createElement(Mono, { style:{ fontSize:10, color:'var(--text3)' } }, '1990 – 2025')
+        React.createElement('div', { style:{ marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'baseline' } },
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' } }, 'Cabezas faenadas · evolución anual'),
+          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '1990 – 2025')
         ),
         React.createElement(LineChart, { series: histAn.map(function(d){ return { cabezas:d.cabezas }; }), color:'#5b9cf6' }),
         React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', marginTop:4 } },
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '1990'),
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2000'),
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2010'),
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2020'),
-          React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)' } }, '2025')
+          ['1990','1995','2000','2005','2010','2015','2020','2025'].map(function(y) {
+            return React.createElement(Mono, { key:y, style:{ fontSize:9, color:'var(--text3)' } }, y);
+          })
         )
       ),
 
-      // Hitos históricos
-      React.createElement('div', {
-        style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:20 }
-      },
-        [
-          { anio:2008, val:'16.1 M', label:'Máximo histórico', color:'var(--red)', desc:'Liquidación masiva de vientres por sequía y precios' },
-          { anio:2023, val:'14.5 M', label:'Máx. reciente', color:'#e8a020', desc:'Segunda liquidación por seca y ciclo de precios' },
-          { anio:2010, val:'11.6 M', label:'Mínimo moderno', color:'var(--green)', desc:'Retención post-liquidación 2008–2009' },
-          { anio:2025, val:'13.2 M', label:'Dato más reciente', color:'var(--accent)', desc:'Retención leve · peso récord de 231 kg' },
-        ].map(function(h) {
-          return React.createElement('div', { key:h.anio,
-            style:{ padding:'14px 16px', background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10 }
-          },
-            React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:8, marginBottom:4 } },
-              React.createElement(Mono, { style:{ fontSize:12, color:'var(--text3)' } }, h.anio),
-              React.createElement('span', { style:{ fontSize:18, fontWeight:700, color:h.color, fontFamily:'var(--mono)' } }, h.val),
-            ),
-            React.createElement('div', { style:{ fontSize:11, fontWeight:600, color:h.color, marginBottom:4 } }, h.label),
-            React.createElement('div', { style:{ fontSize:11, color:'var(--text3)', lineHeight:1.5 } }, h.desc)
-          );
-        })
-      ),
-
-      React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:380 } },
-        React.createElement('table', null,
+      // Tabla histórica
+      React.createElement('div', { className:'tbl-wrap tbl-scroll', style:{ maxHeight:400 } },
+        React.createElement('table', { style:{ minWidth:480 } },
           React.createElement('thead', null,
             React.createElement('tr', null,
-              React.createElement('th', null, 'Año'),
-              React.createElement('th', { className:'r' }, 'Cabezas'),
-              React.createElement('th', { className:'r' }, 'Variación'),
-              React.createElement('th', { className:'r' }, 'Peso res'),
-              React.createElement('th', { className:'r' }, 'Producción')
+              React.createElement('th', { style:{ minWidth:60 } }, 'Año'),
+              React.createElement('th', { className:'r', style:{ minWidth:100 } }, 'Cabezas'),
+              React.createElement('th', { className:'r', style:{ minWidth:80 } }, 'Variación'),
+              React.createElement('th', { className:'r', style:{ minWidth:90 } }, 'Peso res'),
+              React.createElement('th', { className:'r', style:{ minWidth:100 } }, 'Producción')
             )
           ),
           React.createElement('tbody', null,
@@ -1259,24 +1177,24 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
                 React.createElement('td', null, React.createElement(Mono, { style:{ fontSize:13, fontWeight:700, color:'var(--white)' } }, d.anio)),
                 React.createElement('td', { className:'r' },
                   React.createElement(Mono, { style:{ fontSize:13, fontWeight:600, color:'var(--accent)' } },
-                    (d.cabezas/1e6).toFixed(2) + ' M'
+                    (d.cabezas/1e6).toFixed(2)+' M'
                   )
                 ),
                 React.createElement('td', { className:'r' },
                   varPct != null
                     ? React.createElement(Mono, { style:{ fontSize:11, fontWeight:600, color:varPct>=0?'var(--green)':'var(--red)' } },
-                        (varPct>=0?'▲':'▼') + ' ' + Math.abs(varPct).toFixed(1) + '%'
+                        (varPct>=0?'▲':'▼')+' '+Math.abs(varPct).toFixed(1)+'%'
                       )
                     : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
                 ),
                 React.createElement('td', { className:'r' },
                   d.pesoRes != null
-                    ? React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)' } }, d.pesoRes + ' kg')
+                    ? React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)' } }, d.pesoRes+' kg')
                     : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
                 ),
                 React.createElement('td', { className:'r' },
                   d.produccion != null
-                    ? React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)' } }, d.produccion.toLocaleString('es-AR') + ' kt')
+                    ? React.createElement(Mono, { style:{ fontSize:11, color:'var(--text2)' } }, d.produccion.toLocaleString('es-AR')+' kt')
                     : React.createElement(Mono, { style:{ fontSize:11, color:'var(--text3)' } }, '—')
                 )
               );
@@ -1284,7 +1202,9 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
           )
         )
       ),
-      React.createElement('div', { className:'source', style:{ marginTop:8 } }, 'Fuente: MAGYP · DNCCA · SENASA · ex Junta Nacional de Carnes · 1990–2025')
+      React.createElement('div', { className:'source', style:{ marginTop:8 } },
+        'Fuente: MAGYP · DNCCA · SENASA · ex Junta Nacional de Carnes · 1990–2025'
+      )
     )
 
   );

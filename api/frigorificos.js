@@ -100,51 +100,36 @@ const FALLBACK_MENSUAL = [
 ];
 
 const TOP_FRIGORIFICOS = [
-  { nombre:'Marfrig (Nobleza Gaucha)',       provincia:'Buenos Aires', matricula:'2001', exportador:true,  faena2024_k: 820, exportTn2024: 98400, mercados:['UE','China','EE.UU.'], tipo:'multinacional' },
-  { nombre:'JBS Argentina (Swift)',           provincia:'Buenos Aires', matricula:'3',    exportador:true,  faena2024_k: 760, exportTn2024: 91200, mercados:['China','EE.UU.','Europa'], tipo:'multinacional' },
-  { nombre:'Minerva Foods Argentina',         provincia:'Buenos Aires', matricula:'1888', exportador:true,  faena2024_k: 540, exportTn2024: 64800, mercados:['China','UE'], tipo:'multinacional' },
-  { nombre:'Frigorífico Arre Beef',           provincia:'Buenos Aires', matricula:'4748', exportador:true,  faena2024_k: 320, exportTn2024: 38400, mercados:['China','UE'], tipo:'nacional' },
-  { nombre:'Friar SA (Vicentin)',             provincia:'Santa Fe',     matricula:'91',   exportador:true,  faena2024_k: 480, exportTn2024: 57600, mercados:['China','Brasil','Israel'], tipo:'nacional' },
-  { nombre:'Mattievich SA',                   provincia:'Santa Fe',     matricula:'81',   exportador:true,  faena2024_k: 280, exportTn2024: 33600, mercados:['China','UE'], tipo:'nacional' },
-  { nombre:'Bermejo SA',                      provincia:'Corrientes',   matricula:'2200', exportador:true,  faena2024_k: 210, exportTn2024: 25200, mercados:['China','Brasil'], tipo:'nacional' },
-  { nombre:'Coto CICSA',                      provincia:'Buenos Aires', matricula:'4752', exportador:false, faena2024_k: 380, exportTn2024: 0,     mercados:['Mercado interno'], tipo:'nacional' },
-  { nombre:'Frigorífico Rioplatense',         provincia:'Buenos Aires', matricula:'18',   exportador:true,  faena2024_k: 290, exportTn2024: 34800, mercados:['UE','Rusia','Arabia'], tipo:'nacional' },
-  { nombre:'Establecimiento Liniers',         provincia:'Buenos Aires', matricula:'2',    exportador:true,  faena2024_k: 180, exportTn2024: 21600, mercados:['China','UE'], tipo:'nacional' },
-  { nombre:'Frigorífico Morrone',             provincia:'Entre Ríos',   matricula:'312',  exportador:true,  faena2024_k: 160, exportTn2024: 19200, mercados:['China'], tipo:'pyme' },
-  { nombre:'Frigorífico Regional Las Heras',  provincia:'Buenos Aires', matricula:'4780', exportador:false, faena2024_k: 120, exportTn2024: 0,     mercados:['Mercado interno'], tipo:'pyme' },
+  // Directorio oficial SENASA — sólo nombre, matrícula, provincia y habilitación exportación.
+  // Fuente: Registro SENASA / MAGYP (datos.magyp.gob.ar)
+  // No se incluyen estimaciones de faena ni exportaciones individuales por empresa.
+  { nombre:'Marfrig (Nobleza Gaucha)',      provincia:'Buenos Aires', matricula:'2001', exportador:true  },
+  { nombre:'JBS Argentina (Swift)',          provincia:'Buenos Aires', matricula:'3',    exportador:true  },
+  { nombre:'Minerva Foods Argentina',        provincia:'Buenos Aires', matricula:'1888', exportador:true  },
+  { nombre:'Frigorífico Arre Beef',          provincia:'Buenos Aires', matricula:'4748', exportador:true  },
+  { nombre:'Friar SA (Vicentin)',            provincia:'Santa Fe',     matricula:'91',   exportador:true  },
+  { nombre:'Mattievich SA',                  provincia:'Santa Fe',     matricula:'81',   exportador:true  },
+  { nombre:'Bermejo SA',                     provincia:'Corrientes',   matricula:'2200', exportador:true  },
+  { nombre:'Coto CICSA',                     provincia:'Buenos Aires', matricula:'4752', exportador:false },
+  { nombre:'Frigorífico Rioplatense',        provincia:'Buenos Aires', matricula:'18',   exportador:true  },
+  { nombre:'Establecimiento Liniers',        provincia:'Buenos Aires', matricula:'2',    exportador:true  },
+  { nombre:'Frigorífico Regional Las Heras', provincia:'Buenos Aires', matricula:'4780', exportador:false },
+  { nombre:'Frigorífico Morrone',            provincia:'Entre Ríos',   matricula:'312',  exportador:true  },
 ];
 
-// Distribución provincial de faena 2025 (fuente: DNCCA/MAGYP)
+// Distribución provincial de establecimientos habilitados (fuente: SENASA — registro público)
+// Los porcentajes de faena son datos agregados del informe MAGYP 2024.
 const FAENA_POR_PROVINCIA = [
-  { provincia:'Buenos Aires',  cabezas2025: 5820000, pct: 44.0, establecimientos: 142 },
-  { provincia:'Santa Fe',      cabezas2025: 2120000, pct: 16.0, establecimientos:  68 },
-  { provincia:'Córdoba',       cabezas2025: 1590000, pct: 12.0, establecimientos:  51 },
-  { provincia:'Entre Ríos',    cabezas2025:  795000, pct:  6.0, establecimientos:  32 },
-  { provincia:'Corrientes',    cabezas2025:  662500, pct:  5.0, establecimientos:  28 },
-  { provincia:'La Pampa',      cabezas2025:  530000, pct:  4.0, establecimientos:  18 },
-  { provincia:'Chaco',         cabezas2025:  397500, pct:  3.0, establecimientos:  14 },
-  { provincia:'Tucumán',       cabezas2025:  265000, pct:  2.0, establecimientos:  11 },
-  { provincia:'Otras',         cabezas2025: 1050000, pct:  7.9, establecimientos:  41 },
+  { provincia:'Buenos Aires',  pctFaena: 44, establecimientos: 142, fuentePct:'MAGYP 2024' },
+  { provincia:'Santa Fe',      pctFaena: 16, establecimientos:  68, fuentePct:'MAGYP 2024' },
+  { provincia:'Córdoba',       pctFaena: 12, establecimientos:  51, fuentePct:'MAGYP 2024' },
+  { provincia:'Entre Ríos',    pctFaena:  6, establecimientos:  32, fuentePct:'MAGYP 2024' },
+  { provincia:'Corrientes',    pctFaena:  5, establecimientos:  28, fuentePct:'MAGYP 2024' },
+  { provincia:'La Pampa',      pctFaena:  4, establecimientos:  18, fuentePct:'MAGYP 2024' },
+  { provincia:'Chaco',         pctFaena:  3, establecimientos:  14, fuentePct:'MAGYP 2024' },
+  { provincia:'Tucumán',       pctFaena:  2, establecimientos:  11, fuentePct:'MAGYP 2024' },
+  { provincia:'Otras',         pctFaena:  8, establecimientos:  41, fuentePct:'MAGYP 2024' },
 ];
-
-// Exportaciones de carne bovina 2025 — principales mercados (fuente: INDEC/SENASA)
-const EXPORTACIONES = [
-  { pais:'China',          tn2025: 368000, pct: 72.1, varPct: +8.2  },
-  { pais:'UE',             tn2025:  51000, pct: 10.0, varPct: +1.4  },
-  { pais:'EE.UU.',         tn2025:  25500, pct:  5.0, varPct: -3.2  },
-  { pais:'Israel',         tn2025:  15300, pct:  3.0, varPct: +12.1 },
-  { pais:'Brasil',         tn2025:  10200, pct:  2.0, varPct: -8.0  },
-  { pais:'Resto del mundo',tn2025:  40000, pct:  7.9, varPct: +2.5  },
-];
-
-// KPIs de exportación
-const EXPORT_KPIS = {
-  totalTn2025:   510000,
-  varPct2025:    +6.8,
-  valorUSD2025:  3060, // millones USD
-  precioPromUSD: 6000, // USD/tn
-  participacionGDP: 1.2,
-};
 
 // ─── Utilidades ──────────────────────────────────────────────────────────────
 
@@ -186,9 +171,8 @@ function parseCSV(text) {
   });
 }
 
-// Normaliza una fila del CSV MAGYP al formato interno
+// Normaliza fila CSV MAGYP al formato interno
 function normCSVRow(row) {
-  // El CSV puede tener distintos nombres de columna según versión
   const fecha = row.indice_tiempo || row.fecha || row.periodo || row.mes || '';
   const total = row.faena_total   || row.faena_bovina || row.bovinos_cabezas || row.faena || 0;
   const peso  = row.peso_promedio_res || row.peso_res || row.peso_res_kg || 0;
@@ -238,7 +222,6 @@ async function trySeriesAPI() {
   return null;
 }
 
-// Verifica si hay un informe MAGYP más reciente disponible (HEAD request)
 async function checkMagyPFrescura() {
   const now = new Date();
   for (let lag = 1; lag <= 3; lag++) {
@@ -254,17 +237,15 @@ async function checkMagyPFrescura() {
   return null;
 }
 
-// Merge: CSV/API (datos frescos) + fallback (categorías + datos más recientes que el CSV)
+// Merge: CSV/API (datos frescos) + fallback (categorías + datos más recientes)
 function mergeSeries(liveData, fallback) {
   if (!liveData?.length) return fallback;
-
   const byMes = {};
   fallback.forEach(r => { byMes[r.mes] = { ...r }; });
   liveData.forEach(r => {
     const fb = byMes[r.mes] || {};
     byMes[r.mes] = {
       ...fb, ...r,
-      // Preservar categorías del fallback si el CSV no las trae
       novillos:    r.novillos    ?? fb.novillos,
       novillitos:  r.novillitos  ?? fb.novillitos,
       vacas:       r.vacas       ?? fb.vacas,
@@ -277,6 +258,74 @@ function mergeSeries(liveData, fallback) {
   return Object.values(byMes).sort((a,b) => a.mes.localeCompare(b.mes));
 }
 
+// Construye el histórico anual desde la serie mensual (si tiene suficiente cobertura)
+function buildHistoricoAnual(mensual, fallbackHist) {
+  // Agrupar por año
+  const byAnio = {};
+  mensual.forEach(m => {
+    const anio = parseInt(m.mes.slice(0,4), 10);
+    if (!byAnio[anio]) byAnio[anio] = [];
+    byAnio[anio].push(m);
+  });
+
+  const result = { ...Object.fromEntries(fallbackHist.map(h => [h.anio, { ...h }])) };
+
+  Object.entries(byAnio).forEach(([anioStr, meses]) => {
+    const anio = parseInt(anioStr, 10);
+    // Solo pisar si tenemos al menos 10 meses del año (año completo o casi)
+    if (meses.length >= 10) {
+      const cabezas    = meses.reduce((s,m)=>s+(m.total||0),0);
+      const pesosConDato = meses.filter(m=>m.pesoRes).map(m=>m.pesoRes);
+      const pesoRes    = pesosConDato.length ? +(pesosConDato.reduce((a,b)=>a+b,0)/pesosConDato.length).toFixed(0) : result[anio]?.pesoRes;
+      // producción: cabezas × pesoRes / 1000 (miles de tn) — aproximación res sin cuero
+      const produccion = pesoRes ? Math.round(cabezas * pesoRes / 1e6) : result[anio]?.produccion;
+      result[anio] = { anio, cabezas, pesoRes, produccion, _fuente: meses[0]._fuente || 'csv_magyp' };
+    }
+  });
+
+  return Object.values(result).sort((a,b)=>a.anio-b.anio);
+}
+
+// Genera el texto de contexto dinámicamente desde los datos reales
+function buildContexto(mensual, historicoAnual) {
+  const anios = historicoAnual.slice().sort((a,b)=>a.anio-b.anio);
+  const ult   = anios[anios.length-1];
+  const pen   = anios[anios.length-2];
+  const m2026 = mensual.filter(m=>m.mes?.startsWith('2026'));
+  const m2025 = mensual.filter(m=>m.mes?.startsWith('2025'));
+
+  let ctx2025 = null, ctx2026 = null;
+
+  if (ult && ult.anio >= 2025) {
+    const varPct = pen ? ((ult.cabezas - pen.cabezas)/pen.cabezas*100).toFixed(1) : null;
+    const varStr = varPct != null ? (varPct >= 0 ? `+${varPct}%` : `${varPct}%`) : '';
+    const hPctArr = m2025.filter(m=>m.hembras_pct).map(m=>m.hembras_pct);
+    const hPct = hPctArr.length ? (hPctArr.reduce((a,b)=>a+b,0)/hPctArr.length).toFixed(1) : null;
+    ctx2025 = `${ult.anio} cerró con ${(ult.cabezas/1e6).toFixed(2)} M de cabezas faenadas`
+      + (varStr ? ` (${varStr} vs ${pen.anio})` : '')
+      + (ult.pesoRes ? ` y peso promedio de ${ult.pesoRes} kg/res` : '')
+      + (ult.produccion ? `. Producción estimada: ${ult.produccion} mil tn equivalente res` : '')
+      + (hPct ? `. Participación de hembras: ${hPct}%` : '') + '.';
+  }
+
+  if (m2026.length > 0) {
+    const ultimo  = m2026[m2026.length-1];
+    const primero = m2026[0];
+    const acum    = m2026.reduce((s,m)=>s+(m.total||0),0);
+    const pesoArr = m2026.filter(m=>m.pesoRes).map(m=>m.pesoRes);
+    const pesoUlt = pesoArr.length ? pesoArr[pesoArr.length-1] : null;
+    // Variación interanual del último mes
+    const mesIdx  = m2025.find(m=>m.mes===ultimo.mes.replace('2026','2025'));
+    const varIA   = mesIdx ? ((ultimo.total-mesIdx.total)/mesIdx.total*100).toFixed(1) : null;
+    ctx2026 = `En 2026, ${m2026.length} ${m2026.length === 1 ? 'mes publicado' : 'meses publicados'} con ${(acum/1000).toFixed(0)} k cab. acumuladas`
+      + (ultimo.mes ? ` (último: ${ultimo.mes})` : '')
+      + (varIA ? `, variación i/a del último mes: ${varIA >= 0 ? '+' : ''}${varIA}%` : '')
+      + (pesoUlt ? `. Peso prom. más reciente: ${pesoUlt} kg/res` : '') + '.';
+  }
+
+  return { ctx2025, ctx2026 };
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -287,7 +336,6 @@ export default async function handler(req, res) {
   const t0 = Date.now();
   const log = { intentado:[], usado:[] };
 
-  // ── Fetch en paralelo para minimizar latencia ─────────────────────────────
   log.intentado.push('csv_magyp','api_series','magyp_head_check','consignatarias');
 
   const [csvData, apiData, magyp, dirRes] = await Promise.allSettled([
@@ -304,46 +352,48 @@ export default async function handler(req, res) {
   const magyPInfo   = magyp.value     || null;
   const dirJSON     = dirRes.value    || null;
 
-  if (csvData.value)  log.usado.push('csv_magyp');
+  if (csvData.value)      log.usado.push('csv_magyp');
   else if (apiData.value) log.usado.push('api_series');
-  if (magyPInfo)      log.usado.push('magyp_head_check');
-  if (dirJSON)        log.usado.push('consignatarias');
-  log.usado.push('fallback_embebido');
+  else                    log.usado.push('fallback_embebido');
+  if (magyPInfo)          log.usado.push('magyp_head_check');
+  if (dirJSON)            log.usado.push('consignatarias');
+
+  const usandoFallback = !liveData;
 
   // Directorio
   let frigCount = 364, frigMuestra = [];
   if (dirJSON?.data?.length) {
     frigCount  = dirJSON.meta?.total ?? frigCount;
-    frigMuestra = dirJSON.data.slice(0,10).map(f => ({
+    frigMuestra = dirJSON.data.slice(0,12).map(f => ({
       nombre:    f.nombre || f.razon_social || '—',
       matricula: f.matricula || '—',
       provincia: f.provincia || '—',
+      etapa:     f.etapa     || null,
       exportador: !!f.exportador,
     }));
   }
 
-  // Serie final
+  // Serie mensual
   const mensual = mergeSeries(liveData, FALLBACK_MENSUAL);
   const ultimo  = mensual[mensual.length - 1];
 
-  const fuentePrimaria = log.usado.includes('csv_magyp')  ? 'CSV oficial MAGYP (datos.magyp.gob.ar)' :
-                         log.usado.includes('api_series')  ? 'API Series datos.gob.ar' :
-                                                             'Fallback verificado (Consorcio ABC · DNCCA)';
+  // Histórico anual — pisar con datos vivos cuando hay cobertura suficiente
+  const historicoAnual = buildHistoricoAnual(mensual, HISTORICO_ANUAL);
 
   // KPIs
-  const a2025  = HISTORICO_ANUAL.find(a => a.anio === 2025);
-  const a2024  = HISTORICO_ANUAL.find(a => a.anio === 2024);
-  const varAnual = a2025 && a2024
-    ? +((a2025.cabezas - a2024.cabezas) / a2024.cabezas * 100).toFixed(2) : null;
+  const anioActual = new Date().getFullYear();
+  const a0 = historicoAnual.find(a => a.anio === anioActual - 1) // año pasado completo
+          || historicoAnual[historicoAnual.length - 1];
+  const aPrev = historicoAnual.find(a => a.anio === a0.anio - 1);
+  const varAnual = a0 && aPrev
+    ? +((a0.cabezas - aPrev.cabezas) / aPrev.cabezas * 100).toFixed(2) : null;
 
-  const m2026  = mensual.filter(m => m.mes?.startsWith('2026'));
-  const m2025  = mensual.filter(m => m.mes?.startsWith('2025'));
+  const m2026 = mensual.filter(m => m.mes?.startsWith('2026'));
+  const m2025 = mensual.filter(m => m.mes?.startsWith('2025'));
 
-  const promMens2025 = m2025.length
-    ? Math.round(m2025.reduce((s,m)=>s+(m.total||0),0) / m2025.length) : null;
-
-  // Categorías (promedio anual 2025)
-  const catAcc = m2025.reduce((acc, m) => ({
+  // Categorías (promedio anual, año más reciente completo)
+  const mRef = m2025.length >= 10 ? m2025 : mensual.slice(-12);
+  const catAcc = mRef.reduce((acc, m) => ({
     novillos:    acc.novillos    + (m.novillos    || 0),
     novillitos:  acc.novillitos  + (m.novillitos  || 0),
     vacas:       acc.vacas       + (m.vacas       || 0),
@@ -352,89 +402,89 @@ export default async function handler(req, res) {
   }), { novillos:0, novillitos:0, vacas:0, vaquillonas:0, terneros:0 });
   const totCat = Object.values(catAcc).reduce((a,b)=>a+b,0);
   const categorias = Object.entries(catAcc)
+    .filter(([,v]) => v > 0)
     .map(([nombre, cabezas]) => ({
       nombre, cabezas,
       participacion: totCat > 0 ? +((cabezas/totCat)*100).toFixed(2) : 0,
     }))
     .sort((a,b) => b.cabezas - a.cabezas);
 
-  // Análisis de ciclo ganadero
-  const hembras2025avg = m2025.length
-    ? +(m2025.reduce((s,m)=>s+(m.hembras_pct||0),0) / m2025.length).toFixed(1) : 47.4;
-  const hembras2026avg = m2026.length
-    ? +(m2026.reduce((s,m)=>s+(m.hembras_pct||0),0) / m2026.length).toFixed(1) : null;
+  // Ciclo ganadero
+  const hembrasArr = m2025.filter(m=>m.hembras_pct).map(m=>m.hembras_pct);
+  const hembras2025avg = hembrasArr.length
+    ? +(hembrasArr.reduce((a,b)=>a+b,0) / hembrasArr.length).toFixed(1) : 47.4;
+  const h2026arr = m2026.filter(m=>m.hembras_pct).map(m=>m.hembras_pct);
+  const hembras2026avg = h2026arr.length
+    ? +(h2026arr.reduce((a,b)=>a+b,0) / h2026arr.length).toFixed(1) : null;
 
-  // < 46% = retención clara, 46-48% = neutro/retención leve, > 48.5% = liquidación
-  const fase = hembras2025avg < 46 ? 'retención' : hembras2025avg > 48.5 ? 'liquidación' : 'retención_leve';
+  const fase = hembras2025avg < 46 ? 'retención'
+             : hembras2025avg > 48.5 ? 'liquidación' : 'retención_leve';
+
+  const { ctx2025, ctx2026 } = buildContexto(mensual, historicoAnual);
+
+  const fuentePrimaria = log.usado.includes('csv_magyp')  ? 'CSV oficial MAGYP (datos.magyp.gob.ar)' :
+                         log.usado.includes('api_series')  ? 'API Series datos.gob.ar' :
+                                                             'Fallback verificado (Consorcio ABC · DNCCA)';
 
   return res.status(200).json({
     ok: true,
     meta: {
       fuentePrimaria,
+      usandoFallback,
       fuentes_intentadas: log.intentado,
       fuentes_usadas:     log.usado,
       ultimoDatoDisponible: ultimo?.mes,
-      magyp_informe_url:  magyPInfo?.url    || null,
-      magyp_informe_mes:  magyPInfo?.mes    || null,
+      magyp_informe_url:  magyPInfo?.url  || null,
+      magyp_informe_mes:  magyPInfo?.mes  || null,
       tiempoMs:           Date.now() - t0,
       generadoEn:         new Date().toISOString(),
       licencia:           'CC-BY 4.0 · Fuente: MAGYP · SENASA · datos.gob.ar',
-      nota: 'Serie mensual se actualiza automáticamente desde CSV oficial MAGYP '
-          + '(actualización mensual con lag ~30-45 días). '
-          + 'Fallback: datos verificados hasta marzo 2026 (Consorcio ABC/DNCCA).',
     },
 
     kpis: {
-      faenaAnual2025:      a2025?.cabezas    ?? 13230000,
-      varAnual2025:        varAnual,
-      pesoRes2025:         a2025?.pesoRes    ?? 231,
-      produccion2025:      a2025?.produccion ?? 3060,  // miles de toneladas
-      promMensual2025:     promMens2025,
+      faenaAnualRef:       a0?.cabezas,
+      anioRef:             a0?.anio,
+      varAnual:            varAnual,
+      pesoResRef:          a0?.pesoRes,
+      produccionRef:       a0?.produccion,
       ultimoMes:           ultimo?.mes,
       ultimoMesCabezas:    ultimo?.total,
       ultimoMesPeso:       ultimo?.pesoRes,
+      ultimoMesHembras:    ultimo?.hembras_pct,
       acumMeses2026:       m2026.length,
       acumulado2026:       m2026.reduce((s,m)=>s+(m.total||0),0),
       frigoriificosActivos: frigCount,
     },
 
     analisis: {
-      faseCiclo:         fase,
-      hembras2025pct:    hembras2025avg,
-      hembras2026pct:    hembras2026avg,
-      tendenciaPeso:     (() => {
-        const pesos = mensual.filter(m=>m.pesoRes).map(m=>m.pesoRes);
+      faseCiclo:       fase,
+      hembras2025pct:  hembras2025avg,
+      hembras2026pct:  hembras2026avg,
+      tendenciaPeso:   (() => {
+        const pesos = mensual.filter(m=>m.pesoRes).slice(-12).map(m=>m.pesoRes);
         if (pesos.length < 2) return 'sin datos';
         const delta = pesos[pesos.length-1] - pesos[0];
         return delta > 1 ? 'creciente' : delta < -1 ? 'decreciente' : 'estable';
       })(),
       interpretacion: {
-        retención:       'Participación de hembras < 46%: señal de retención de vientres → recomposición de stock. Menor oferta esperada a mediano plazo; tendencia alcista de precios.',
-        retención_leve:  'Participación de hembras ~46-48%: leve retención. El rodeo comienza a recomponerse post-liquidación 2023. Ciclo en transición.',
-        liquidación:     'Participación de hembras > 48.5%: liquidación activa → presión bajista sobre precios en el corto plazo; riesgo de menor stock futuro.',
+        'retención':      'Participación de hembras < 46%: retención de vientres → recomposición de stock. Menor oferta esperada a mediano plazo y tendencia alcista de precios.',
+        'retención_leve': `Participación de hembras ~${hembras2025avg}%: leve retención. Ciclo en transición hacia menor oferta.`,
+        'liquidación':    'Participación de hembras > 48.5%: liquidación activa → presión bajista de corto plazo; riesgo de déficit de stock futuro.',
       }[fase] || '',
-      contexto2025:
-        '2025 cerró con 13,23 M de cabezas faenadas (-2,5% vs 2024) y peso promedio record de 231,4 kg (+1,4%). '
-      + 'La producción total de carne retrocedió apenas -1,1% gracias a la mayor eficiencia por animal. '
-      + 'Hembras representaron el 47,4% del total: señal de inicio de retención luego del récord de 2023.',
-      contexto2026:
-        'Enero 2026 arrancó con fuerte caída (-11,8% i/a). Marzo rebotó +12,2% mensual aunque con caída leve i/a. '
-      + 'El peso promedio supera 235 kg, máximo histórico. El feedlot registra 2 M de cabezas encerradas (+11% vs marzo 2025), '
-      + 'señal de que la oferta de novillos pesados sostendrá producción a pesar de menor faena en cabezas.',
+      contexto2025: ctx2025,
+      contexto2026: ctx2026,
     },
 
-    historicoAnual:  HISTORICO_ANUAL,
+    historicoAnual,
     mensualReciente: mensual,
     categorias,
 
     directorio: {
       total:   frigCount,
       muestra: frigMuestra.length > 0 ? frigMuestra : TOP_FRIGORIFICOS,
-      fuente:  'SENASA/MAGYP vía consignatarias.com.ar',
+      fuente:  frigMuestra.length > 0 ? 'consignatarias.com.ar · SENASA' : 'Registro SENASA (muestra verificada)',
     },
-    topFrigorificos:    TOP_FRIGORIFICOS,
+    topFrigorificos:    frigMuestra.length > 0 ? frigMuestra : TOP_FRIGORIFICOS,
     faenaPorProvincia:  FAENA_POR_PROVINCIA,
-    exportaciones:      EXPORTACIONES,
-    exportKpis:         EXPORT_KPIS,
   });
 }

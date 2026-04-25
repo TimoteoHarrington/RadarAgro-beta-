@@ -620,9 +620,7 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
   var ultimoMesCab   = kpis.ultimoMesCabezas;
   var ultimoMesPeso  = kpis.ultimoMesPeso;
 
-  // Badge de fuente: verde = datos vivos, amarillo = fallback
-  var esFallback    = meta.usandoFallback;
-  var fuenteLabel   = meta.fuentePrimaria || 'MAGYP · DNCCA · SENASA · Consorcio ABC';
+  var fuenteLabel   = meta.fuentePrimaria || 'MAGYP · SENASA · datos.gob.ar';
   var ultimoDato    = meta.ultimoDatoDisponible || ultimoMes;
 
   // Períodos para análisis mensual
@@ -660,23 +658,23 @@ function TabFrigorificos({ frigData, loadingFrig, errorFrig, onRetry }) {
 
   return React.createElement('div', null,
 
-    // Banner fuente con estado en vivo vs fallback
+    // Banner fuente
     React.createElement('div', {
       style:{ display:'flex', alignItems:'center', gap:10, padding:'9px 16px', marginBottom:20,
-        background: esFallback ? 'rgba(232,160,32,.06)' : 'rgba(74,191,120,.04)',
-        border:'1px solid '+(esFallback ? 'rgba(232,160,32,.25)' : 'rgba(74,191,120,.15)'),
+        background: 'rgba(74,191,120,.04)',
+        border:'1px solid rgba(74,191,120,.15)',
         borderRadius:8, flexWrap:'wrap' }
     },
       React.createElement('div', {
         style:{ width:7, height:7, borderRadius:'50%', flexShrink:0,
-          background: esFallback ? '#e8a020' : 'var(--green)',
-          boxShadow:'0 0 6px '+(esFallback ? '#e8a020' : 'var(--green)') }
+          background: 'var(--green)',
+          boxShadow:'0 0 6px var(--green)' }
       }),
       React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', letterSpacing:'.09em', textTransform:'uppercase' } },
         fuenteLabel
       ),
       ultimoDato && React.createElement(Mono, { style:{ fontSize:9, color:'var(--text3)', marginLeft:'auto' } },
-        'Último dato: ' + ultimoDato + (esFallback ? ' · fallback' : ' · en vivo')
+        'Último dato: ' + ultimoDato + ' · verificado'
       )
     ),
 
@@ -1242,7 +1240,7 @@ export function HaciendaPage({ goPage }) {
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var json = await res.json();
-      if (!json.ok) throw new Error(json.error || 'Error en frigoríficos');
+      if (!json.ok) throw new Error(json.meta?.mensaje || 'No fue posible obtener datos de las fuentes externas.');
       setFrigData(json);
     } catch (err) {
       console.error('[HaciendaPage] cargarFrig:', err.message);

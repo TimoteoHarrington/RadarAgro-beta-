@@ -1236,23 +1236,26 @@ export function HaciendaPage({ goPage }) {
     setErrorFrig(null);
     try {
       var res  = await fetch('/api/frigorificos');
+      // Manejar 304 — contenido no modificado, reintentar con cache bypass
+      if (res.status === 304) {
+        res = await fetch('/api/frigorificos?t=' + Date.now());
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var json = await res.json();
-      if (!json.ok) throw new Error(json.error || 'Error');
+      if (!json.ok) throw new Error(json.error || 'Error en frigoríficos');
       setFrigData(json);
     } catch (err) {
+      console.error('[HaciendaPage] cargarFrig:', err.message);
       setErrorFrig(err.message);
     } finally {
       setLoadingFrig(false);
     }
   }, []);
 
-  // Cargar datos de frigoríficos al primer click en ese tab
+  // Cargar frigData junto con hacienda — no esperar al click del tab
   useEffect(function() {
-    if (tab === 'frigorificos' && !frigData && !loadingFrig && !errorFrig) {
-      cargarFrig();
-    }
-  }, [tab, frigData, loadingFrig, errorFrig, cargarFrig]);
+    cargarFrig();
+  }, [cargarFrig]);
 
   var cargar = useCallback(async function() {
     setEstado('loading');

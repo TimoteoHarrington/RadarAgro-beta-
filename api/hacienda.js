@@ -69,10 +69,23 @@ async function fetchJSON(url, timeoutMs = 15000) {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { 'Accept': 'application/json', 'User-Agent': 'RadarAgro/2.0' },
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'RadarAgro/2.0',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
     });
+    // 304: reintentar sin cache
+    if (res.status === 304) {
+      clearTimeout(timer);
+      res = await fetch(url + (url.includes('?') ? '&' : '?') + '_nc=' + Date.now(), {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { 'Accept': 'application/json', 'User-Agent': 'RadarAgro/2.0' },
+      });
+    }
     if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
     return await res.json();
   } finally {

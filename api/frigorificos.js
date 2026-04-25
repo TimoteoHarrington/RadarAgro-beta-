@@ -140,8 +140,25 @@ async function fetchText(url, ms = 12000) {
     const r = await fetch(url, {
       signal:   ctrl.signal,
       redirect: 'follow',
-      headers:  { 'User-Agent': 'RadarAgro/2.0', Accept: '*/*' },
+      headers:  {
+        'User-Agent':      'RadarAgro/2.0',
+        'Accept':          'text/csv,text/plain,application/json,*/*',
+        'Cache-Control':   'no-cache',   // evitar 304 por cache del runtime
+        'Pragma':          'no-cache',
+      },
     });
+    // 304 Not Modified: el runtime ya tiene el body en cache — lo pedimos sin If-None-Match
+    // En ese caso r.ok === false pero el body podría estar vacío. Reintentar sin cache-headers.
+    if (r.status === 304) {
+      const r2 = await fetch(url, {
+        signal: AbortSignal.timeout(ms),
+        redirect: 'follow',
+        cache: 'no-store',
+        headers: { 'User-Agent': 'RadarAgro/2.0', 'Accept': '*/*' },
+      });
+      if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+      return await r2.text();
+    }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.text();
   } finally { clearTimeout(timer); }

@@ -430,23 +430,29 @@ function InsumosHistorialChart({ card, onClose }) {
       const px   = i => pad.l + i * xS;
       const py   = v => H - pad.b - (v - vmin) * yS;
 
+      // Detectar light/dark mode para colores del canvas
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const gridLine   = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+      const gridLineBo = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+      const labelColor = isDark ? 'rgba(160,165,180,0.8)'  : 'rgba(90,100,120,0.75)';
+
       // Grid
       for (let i = 0; i <= 4; i++) {
         const v = vmin + (vmax - vmin) * i / 4;
         const y = py(v);
-        ctx.strokeStyle = i === 0 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.04)';
+        ctx.strokeStyle = i === 0 ? gridLineBo : gridLine;
         ctx.lineWidth = 1;
         ctx.setLineDash(i === 0 ? [] : [3, 5]);
         ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(90,101,133,0.75)';
+        ctx.fillStyle = labelColor;
         ctx.font = '9px JetBrains Mono,monospace';
         ctx.textAlign = 'right';
         ctx.fillText('$\u00a0' + Math.round(v).toLocaleString('es-AR'), pad.l - 5, y + 3);
       }
 
       // Eje X
-      ctx.fillStyle = 'rgba(90,101,133,0.6)';
+      ctx.fillStyle = labelColor;
       ctx.font = '8px JetBrains Mono,monospace';
       ctx.textAlign = 'center';
       labels.forEach((l, i) => {
@@ -457,8 +463,9 @@ function InsumosHistorialChart({ card, onClose }) {
 
       // Área
       const color = card?.color ?? 'rgba(91,156,246,0.85)';
+      const areaOpacity = isDark ? 0.22 : 0.15;
       const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      grad.addColorStop(0, toRgba(color, 0.18));
+      grad.addColorStop(0, toRgba(color, areaOpacity));
       grad.addColorStop(1, toRgba(color, 0.01));
       ctx.beginPath();
       ctx.moveTo(px(0), py(vals[0]));
@@ -478,16 +485,21 @@ function InsumosHistorialChart({ card, onClose }) {
       ctx.lineJoin = 'round';
       ctx.stroke();
 
-      // Punto final
+      // Punto final + label (siempre a la izquierda del punto para no salir del canvas)
       const lv = vals[n - 1];
+      const lvX = px(n - 1);
+      const lvY = py(lv);
       ctx.beginPath();
-      ctx.arc(px(n - 1), py(lv), 3.5, 0, Math.PI * 2);
+      ctx.arc(lvX, lvY, 3.5, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.fillStyle = color;
       ctx.font = 'bold 10px JetBrains Mono,monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText('$\u00a0' + Math.round(lv).toLocaleString('es-AR'), px(n - 1) - 7, py(lv) - 6);
+      // Si el punto está cerca del borde derecho, poner label a la izquierda; sino a la derecha
+      const labelStr = '$\u00a0' + Math.round(lv).toLocaleString('es-AR');
+      const nearRight = lvX > W - pad.r - 70;
+      ctx.textAlign = nearRight ? 'right' : 'left';
+      ctx.fillText(labelStr, nearRight ? lvX - 8 : lvX + 8, lvY - 6);
     };
 
     draw();

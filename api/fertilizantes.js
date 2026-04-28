@@ -67,18 +67,29 @@ function parseIndexMundi(html) {
 
   if (filas.length < 2) return null;
 
-  // IndexMundi muestra los datos del más reciente al más antiguo
-  // El primer elemento es el precio actual
-  const precioActual = filas[0].usd;
-  const precioAnterior = filas[1].usd;
-  const varPct = precioAnterior > 0
-    ? parseFloat(((precioActual - precioAnterior) / precioAnterior * 100).toFixed(2))
+  // Detectar si IndexMundi entrega orden descendente (reciente→antiguo) o ascendente.
+  // Comparamos las fechas de las dos primeras filas para saberlo.
+  const parseFecha = str => {
+    const [mon, yr] = str.split(' ');
+    const meses = { Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11 };
+    return new Date(parseInt(yr), meses[mon] ?? 0);
+  };
+  const d0 = parseFecha(filas[0].fecha);
+  const d1 = parseFecha(filas[1].fecha);
+  const descendente = d0 > d1;
+
+  // Normalizar siempre a orden cronológico ascendente (antiguo → reciente)
+  const cronologico = descendente ? filas.slice().reverse() : filas.slice();
+
+  // Precio actual = último punto cronológico
+  const ultimo    = cronologico[cronologico.length - 1];
+  const penultimo = cronologico[cronologico.length - 2];
+  const precioActual = ultimo.usd;
+  const varPct = penultimo?.usd > 0
+    ? parseFloat(((precioActual - penultimo.usd) / penultimo.usd * 100).toFixed(2))
     : null;
 
-  // Historial en orden cronológico (del más antiguo al más reciente)
-  const historial = filas.slice().reverse();
-
-  return { usd: precioActual, varPct, historial, fecha: filas[0].fecha };
+  return { usd: precioActual, varPct, historial: cronologico, fecha: ultimo.fecha };
 }
 
 // ─── Fetch IndexMundi ─────────────────────────────────────────────────────────

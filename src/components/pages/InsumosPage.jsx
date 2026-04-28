@@ -123,8 +123,9 @@ const FERT_COLORS = {
 // Badge de fuente — muestra de dónde viene el dato
 function FuenteBadge({ fuente }) {
   const cfg = {
-    agrofy: { label: 'AGROFY · EN VIVO', color: 'var(--green)',  bg: 'rgba(70,185,110,.12)' },
-    bcr:    { label: 'BCR · EN VIVO',    color: 'var(--green)',  bg: 'rgba(70,185,110,.12)' },
+    agrofy:      { label: 'AGROFY · EN VIVO',         color: 'var(--green)',  bg: 'rgba(70,185,110,.12)' },
+    bcr:         { label: 'BCR · EN VIVO',             color: 'var(--green)',  bg: 'rgba(70,185,110,.12)' },
+    indexmundi:  { label: 'WORLD BANK · MENSUAL',      color: 'var(--accent)', bg: 'rgba(91,156,246,.12)' },
   };
   const c = cfg[fuente] ?? { label: 'EN VIVO', color: 'var(--green)', bg: 'rgba(70,185,110,.12)' };
   return (
@@ -171,14 +172,18 @@ function TabFertilizantes() {
 
   const activeF = fertilizantes.find(f => f.id === selectedId) ?? null;
   const activeCard = activeF ? {
-    histKey: activeF.id,
-    nombre:  activeF.nombre,
-    ambito:  'Zona Núcleo',
-    unidad:  'ARS/tn',
-    color:   FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
-    valor:   activeF.ars,
-    fuente:  fuente === 'agrofy' ? 'Agrofy' : fuente === 'bcr' ? 'BCR Rosario' : 'Fertilizar AC · CIAFA',
-    fecha:   activeF.fecha ?? fecha,
+    histKey:    activeF.id,
+    nombre:     activeF.nombre,
+    ambito:     'FOB Internacional',
+    unidad:     activeF.ars ? 'ARS/tn' : 'USD/tn',
+    color:      FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
+    valor:      activeF.ars ?? activeF.usd,
+    fuente:     'IndexMundi · World Bank Pink Sheet',
+    fecha:      activeF.fecha ?? fecha,
+    // datos reales del historial — el chart los usa directamente si están presentes
+    histData:   activeF.hist?.length ? activeF.hist : null,
+    histLabels: activeF.histFechas?.length ? activeF.histFechas : null,
+    estimado:   activeF.estimado ?? false,
   } : null;
 
   // ── Loading ──
@@ -344,7 +349,8 @@ function TabFertilizantes() {
       </div>
 
       <div className="source">
-        Fuente: {fuente === 'agrofy' ? 'Agrofy (precios de mercado zona núcleo)' : 'BCR Rosario'}
+        Fuente: IndexMundi · World Bank Pink Sheet (FOB internacional, USD/tn · conversión dólar mayorista)
+        {fertilizantes.some(f => f.estimado) && ' · MAP y UAN estimados por correlación'}
       </div>
     </div>
   );
@@ -359,42 +365,43 @@ function InsumosHistorialChart({ card, onClose }) {
   const [tooltip, setTooltip] = useState('');
   const [range, setRange]     = useState('MAX');
 
-  // Datos mock de historial 12 meses para cada combustible
-  // (cuando la API provea serie temporal, reemplazar aquí)
-  const HIST_DATA = {
+  // Historial de combustibles (mock fijo — no cambia con IndexMundi)
+  const HIST_DATA_COMBUSTIBLES = {
     'g2-nucleo': [1325, 1397, 1463, 1531, 1576, 1654, 1749, 1783, 1812, 2042, 2306, null],
     'g3-nucleo': [1506, 1585, 1664, 1736, 1780, 1865, 1949, 1973, 2027, 2250, 2498, null],
     'ns-nucleo': [1310, 1375, 1444, 1510, 1549, 1635, 1723, 1722, 1729, 1929, 2125, null],
     'np-nucleo': [1536, 1621, 1699, 1782, 1824, 1910, 1992, 1980, 1995, 2179, 2354, null],
-    'g2-pais': [1327, 1399, 1468, 1535, 1579, 1658, 1753, 1786, 1813, 2040, 2302, null],
-    'g3-pais': [1510, 1591, 1671, 1745, 1788, 1870, 1954, 1975, 2028, 2252, 2494, null],
-    'ns-pais': [1285, 1349, 1422, 1489, 1520, 1614, 1702, 1695, 1706, 1910, 2109, null],
-    'np-pais': [1511, 1596, 1679, 1762, 1795, 1889, 1970, 1953, 1976, 2163, 2344, null],
-    // --- Fertilizantes (Aún fijos hasta que conectes su API) ---
-    'urea':      [280, 295, 310, 330, 355, 370, 390, 410, 430, 455, 476, 484],
-    'map':       [310, 325, 340, 365, 385, 405, 430, 460, 500, 530, 572, 572],
-    'dap':       [300, 315, 332, 350, 368, 390, 415, 445, 490, 520, 544, 548],
-    'uan':       [170, 180, 195, 210, 225, 240, 255, 275, 290, 302, 312, 312],
+    'g2-pais':   [1327, 1399, 1468, 1535, 1579, 1658, 1753, 1786, 1813, 2040, 2302, null],
+    'g3-pais':   [1510, 1591, 1671, 1745, 1788, 1870, 1954, 1975, 2028, 2252, 2494, null],
+    'ns-pais':   [1285, 1349, 1422, 1489, 1520, 1614, 1702, 1695, 1706, 1910, 2109, null],
+    'np-pais':   [1511, 1596, 1679, 1762, 1795, 1889, 1970, 1953, 1976, 2163, 2344, null],
   };
-  
-  const rawSeries = HIST_DATA[card?.histKey] ?? [];
-  // Rellenar el último punto null con el valor actual si existe
-  const filledSeries = rawSeries.map((v, i) =>
-    v == null && card?.valor != null ? card.valor : v
-  ).filter(v => v != null);
+
+  // Si el card tiene datos reales de la API (fertilizantes), los usamos directamente.
+  // Si no (combustibles), caemos al mock hardcodeado.
+  const rawSeries = card?.histData
+    ? card.histData
+    : (HIST_DATA_COMBUSTIBLES[card?.histKey] ?? []);
+
+  const filledSeries = rawSeries
+    .map(v => v == null && card?.valor != null ? card.valor : v)
+    .filter(v => v != null);
+
+  // Labels: si la API mandó fechas reales las usamos; sino generamos los últimos N meses
+  const rawLabels = card?.histLabels?.length
+    ? card.histLabels
+    : HIST_MESES.slice(HIST_MESES.length - filledSeries.length);
 
   const getSlice = () => {
-    if (!filledSeries.length) return [];
-    if (range === '3M') return filledSeries.slice(-3);
-    if (range === '6M') return filledSeries.slice(-6);
-    if (range === '1A') return filledSeries.slice(-12);
-    return filledSeries;
+    if (!filledSeries.length) return { vals: [], lbls: [] };
+    const sliceCount = range === '3M' ? 3 : range === '6M' ? 6 : range === '1A' ? 12 : filledSeries.length;
+    return {
+      vals: filledSeries.slice(-sliceCount),
+      lbls: rawLabels.slice(-sliceCount),
+    };
   };
 
-  const series = getSlice();
-  const labels = HIST_MESES.slice(HIST_MESES.length - filledSeries.length).slice(
-    filledSeries.length - series.length
-  );
+  const { vals: series, lbls: labels } = getSlice();
 
   useEffect(() => {
     const canvas = canvasRef.current;

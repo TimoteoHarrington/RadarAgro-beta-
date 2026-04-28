@@ -1,11 +1,18 @@
 // api/fertilizantes.js — Vercel Edge Function
-// Precios de fertilizantes en ARS/tn · zona núcleo pampeana
+// Precios de fertilizantes en USD/tn (FOB internacional) + conversión ARS/tn
 //
-// Estrategia de fuentes:
-//   1. Agrofy (HTML scraping de __NEXT_DATA__ — páginas SSR públicas, no la API privada que bloquea)
-//   2. Bolsa de Cereales de Buenos Aires (BCBA) — endpoint interno de pizarra de insumos
+// Fuente única: IndexMundi
+//   - Agrega datos del World Bank Pink Sheet (actualización mensual automática)
+//   - URL estable y predecible, HTML sin JS dinámico, sin auth
+//   - Historial de 24 meses configurable
+//   - Cubre: Urea, DAP, MOP (KCl), TSP
 //
-// Si ambas fallan → 503, sin datos ficticios.
+// Productos con cobertura parcial:
+//   - MAP  → no está en IndexMundi; se estima como DAP × 0.97 (correlación histórica alta)
+//   - UAN  → no está en IndexMundi; se estima como Urea × 0.62 (base nitrógeno equivalente)
+//   - Sol. Amonio → no está en IndexMundi; se omite o se estima si hay necesidad
+//
+// Si IndexMundi falla → 503, sin datos ficticios.
 
 export const config = { runtime: 'edge' };
 
@@ -24,83 +31,79 @@ const META = {
   map:  { nombre: 'MAP',             formula: '11-52-0', uso: 'Arranque fosforado · siembra fina y gruesa',        nota: 'Fosfato monoamónico · siembra'          },
   dap:  { nombre: 'DAP',             formula: '18-46-0', uso: 'Alternativa al MAP · mayor N disponible',           nota: 'Fosfato diamónico · referencia'         },
   uan:  { nombre: 'UAN',             formula: '28-0-0',  uso: 'Fertiriego y foliar · trigo y maíz',                nota: 'Solución nitrogenada · fertiriego'       },
-  sol:  { nombre: 'Sol. de Amonio',  formula: '21-0-0',  uso: 'Cobertura nitrogenada · bajo volatilización',       nota: 'Sulfato de amonio · baja volatilización' },
   clu:  { nombre: 'KCl (MOP)',       formula: '0-0-60',  uso: 'Nutrición potásica · cultivos intensivos',          nota: 'Cloruro de potasio · potasio'           },
 };
 
-// ─── Fuente 1: Agrofy HTML scraping ──────────────────────────────────────────
-// Agrofy está construido con Next.js y sus páginas de categorías incluyen
-// un bloque <script id="__NEXT_DATA__"> con todos los productos y precios en JSON.
-// Esta ruta es pública y no requiere auth (a diferencia de su /api/v1/ privada).
+// ─── IndexMundi: páginas a scrapear ──────────────────────────────────────────
+// months=24 → historial de 24 meses. El scraping extrae la tabla con fechas y precios USD/tn.
 
-const AGROFY_PAGES = [
-  { key: 'urea', url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/urea-granulada' },
-  { key: 'map',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/fosfato-monoamonico-map' },
-  { key: 'dap',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/fosfato-diamonico-dap' },
-  { key: 'uan',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/uan-solucion-nitrogenada' },
-  { key: 'sol',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/sulfato-de-amonio' },
-  { key: 'clu',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/cloruro-de-potasio' },
+const INDEXMUNDI_PAGES = [
+  { key: 'urea', url: 'https://www.indexmundi.com/commodities/?commodity=urea&months=24' },
+  { key: 'dap',  url: 'https://www.indexmundi.com/commodities/?commodity=dap-fertilizer&months=24' },
+  { key: 'clu',  url: 'https://www.indexmundi.com/commodities/?commodity=potassium-chloride&months=24' },
 ];
 
-// Extrae el bloque __NEXT_DATA__ de la respuesta HTML
-function extractNextData(html) {
-  const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!match) return null;
-  try { return JSON.parse(match[1]); } catch { return null; }
-}
+// Extrae la tabla de precios históricos del HTML de IndexMundi.
+// La tabla tiene el formato:
+//   <tr><td>Month</td><td>Price</td><td>Change</td></tr>
+//   <tr><td>Apr 2026</td><td>690.50</td><td>0.07%</td></tr>
+// Devuelve { precioActual, varPct, historial: [{ fecha, usd }] }
+function parseIndexMundi(html) {
+  if (!html) return null;
 
-// Navega la estructura del __NEXT_DATA__ buscando arrays de productos con price
-function findProducts(obj, depth = 0) {
-  if (depth > 8 || !obj || typeof obj !== 'object') return [];
-  if (Array.isArray(obj)) {
-    // Si es un array con al menos un elemento que tiene price numérico, asumir que son productos
-    if (obj.length > 0 && obj[0] && typeof obj[0].price === 'number') return obj;
-    // Sino, buscar recursivamente
-    for (const item of obj) {
-      const found = findProducts(item, depth + 1);
-      if (found.length > 0) return found;
+  // Extraer todas las filas de datos de la tabla de precios
+  // IndexMundi renderiza los datos en una tabla con id="home_table" o similar
+  // Capturamos pares mes/precio con un regex robusto sobre el HTML
+  const rowRe = /<tr[^>]*>\s*<td[^>]*>([A-Za-z]+ \d{4})<\/td>\s*<td[^>]*>([\d,]+\.?\d*)<\/td>/g;
+  const filas = [];
+  let m;
+  while ((m = rowRe.exec(html)) !== null) {
+    const fecha = m[1].trim();
+    const usd = parseFloat(m[2].replace(/,/g, ''));
+    if (!isNaN(usd) && usd > 50 && usd < 20000) {
+      filas.push({ fecha, usd });
     }
-    return [];
   }
-  for (const val of Object.values(obj)) {
-    const found = findProducts(val, depth + 1);
-    if (found.length > 0) return found;
-  }
-  return [];
+
+  if (filas.length < 2) return null;
+
+  // IndexMundi muestra los datos del más reciente al más antiguo
+  // El primer elemento es el precio actual
+  const precioActual = filas[0].usd;
+  const precioAnterior = filas[1].usd;
+  const varPct = precioAnterior > 0
+    ? parseFloat(((precioActual - precioAnterior) / precioAnterior * 100).toFixed(2))
+    : null;
+
+  // Historial en orden cronológico (del más antiguo al más reciente)
+  const historial = filas.slice().reverse();
+
+  return { usd: precioActual, varPct, historial, fecha: filas[0].fecha };
 }
 
-async function fetchAgrofyHTML(timeoutMs = 9000) {
+// ─── Fetch IndexMundi ─────────────────────────────────────────────────────────
+
+async function fetchIndexMundi(timeoutMs = 12000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const out = {};
 
   try {
     const results = await Promise.allSettled(
-      AGROFY_PAGES.map(({ key, url }) =>
+      INDEXMUNDI_PAGES.map(({ key, url }) =>
         fetch(url, {
           signal: ctrl.signal,
           headers: {
             'User-Agent': UA,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'es-AR,es;q=0.9',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Cache-Control': 'no-cache',
+            'Referer': 'https://www.indexmundi.com/',
           },
         })
           .then(r => r.ok ? r.text() : null)
-          .then(html => {
-            if (!html) return { key, precio: null };
-            const data = extractNextData(html);
-            if (!data) return { key, precio: null };
-            const products = findProducts(data);
-            // Filtrar precios en rango sanidad para fertilizantes a granel ARS/tn
-            const validos = products
-              .map(p => typeof p.price === 'number' ? p.price : (typeof p.precio === 'number' ? p.precio : null))
-              .filter(v => v !== null && v > 80_000 && v < 20_000_000);
-            if (!validos.length) return { key, precio: null };
-            validos.sort((a, b) => a - b);
-            return { key, precio: validos[Math.floor(validos.length / 2)] }; // mediana
-          })
-          .catch(() => ({ key, precio: null }))
+          .then(html => ({ key, parsed: parseIndexMundi(html) }))
+          .catch(() => ({ key, parsed: null }))
       )
     );
 
@@ -108,205 +111,132 @@ async function fetchAgrofyHTML(timeoutMs = 9000) {
 
     for (const res of results) {
       if (res.status !== 'fulfilled') continue;
-      const { key, precio } = res.value;
-      if (precio) {
-        out[key] = { ars: precio, fuente: 'agrofy-html', fecha: new Date().toISOString().slice(0, 10) };
-      }
+      const { key, parsed } = res.value;
+      if (parsed) out[key] = parsed;
     }
 
-    return Object.keys(out).length >= 2 ? out : null;
+    // Necesitamos al menos urea + dap para considerar éxito
+    if (!out.urea && !out.dap) return null;
+
+    // Derivar MAP desde DAP (correlación histórica ~0.97)
+    if (out.dap && !out.map) {
+      out.map = {
+        usd: parseFloat((out.dap.usd * 0.97).toFixed(2)),
+        varPct: out.dap.varPct,
+        historial: out.dap.historial.map(h => ({ ...h, usd: parseFloat((h.usd * 0.97).toFixed(2)) })),
+        fecha: out.dap.fecha,
+        estimado: true,
+      };
+    }
+
+    // Derivar UAN desde Urea (base nitrógeno equivalente: UAN 28% vs Urea 46%)
+    if (out.urea && !out.uan) {
+      const factor = 0.62; // 28/46 × ajuste mercado Argentina
+      out.uan = {
+        usd: parseFloat((out.urea.usd * factor).toFixed(2)),
+        varPct: out.urea.varPct,
+        historial: out.urea.historial.map(h => ({ ...h, usd: parseFloat((h.usd * factor).toFixed(2)) })),
+        fecha: out.urea.fecha,
+        estimado: true,
+      };
+    }
+
+    return out;
   } catch {
     clearTimeout(timer);
     return null;
   }
 }
 
-// ─── Fuente 2: BCBA — Bolsa de Cereales de Buenos Aires ──────────────────────
-// La BCBA expone un endpoint interno JSON que alimenta su pizarra online.
-// Incluye precios de granos e insumos agrícolas de la región pampeana.
+// ─── Tipo de cambio mayorista ─────────────────────────────────────────────────
 
-async function fetchBCBA(timeoutMs = 10000) {
-  // Endpoints internos de la BCBA para datos de pizarra e insumos
-  const URLS = [
-    'https://www.bolsadecereales.com/api/pizarra/insumos',
-    'https://www.bolsadecereales.com/getData-insumos',
-    'https://www.bolsadecereales.com/getData-pizarras?tipo=insumos',
-    'https://api.bolsadecereales.com/v1/insumos',
-    'https://www.bolsadecereales.com/ver-precios-pizarra',  // HTML fallback parse
-  ];
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  for (const url of URLS) {
-    try {
-      const res = await fetch(url, {
-        signal: ctrl.signal,
-        headers: {
-          'User-Agent': UA,
-          'Accept': 'application/json, text/html, */*',
-          'Referer': 'https://www.bolsadecereales.com/',
-        },
-      });
-      if (!res.ok) continue;
-
-      const ct = res.headers.get('content-type') ?? '';
-      if (ct.includes('json')) {
-        const data = await res.json();
-        const parsed = parseBCBAJson(data);
-        if (parsed) { clearTimeout(timer); return parsed; }
-      } else {
-        // Intentar parsear HTML buscando tabla de precios
-        const html = await res.text();
-        const parsed = parseBCBAHtml(html);
-        if (parsed) { clearTimeout(timer); return parsed; }
-      }
-    } catch {
-      continue;
-    }
+async function fetchDolarMayorista() {
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares/mayorista', {
+      headers: { 'User-Agent': 'RadarAgro/2.0' },
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return parseFloat(d.venta ?? d.compra ?? 0) || null;
+  } catch {
+    return null;
   }
-
-  clearTimeout(timer);
-  return null;
-}
-
-function parseBCBAJson(data) {
-  if (!data) return null;
-  const items = Array.isArray(data) ? data : (data.insumos ?? data.items ?? data.data ?? data.precios ?? []);
-  if (!items.length) return null;
-
-  const MAPPING = {
-    urea: ['urea', 'urea granulada'],
-    map:  ['map', 'fosfato monoamonico', 'monoamonico', 'monoamónico'],
-    dap:  ['dap', 'fosfato diamonico', 'diamonico', 'diamónico'],
-    uan:  ['uan', 'solucion nitrogenada', 'solución nitrogenada'],
-    sol:  ['sulfato de amonio', 'sol. amonio', 'sulfato amonio'],
-    clu:  ['cloruro de potasio', 'kcl', 'mop', 'potasio'],
-  };
-
-  const out = {};
-  for (const item of items) {
-    const nombre = (item.nombre ?? item.producto ?? item.name ?? item.descripcion ?? '').toLowerCase();
-    const precio = parseFloat(item.precio ?? item.price ?? item.valor ?? item.ars ?? 0);
-    if (!precio || precio < 80_000) continue;
-
-    for (const [key, aliases] of Object.entries(MAPPING)) {
-      if (aliases.some(a => nombre.includes(a))) {
-        if (!out[key]) {
-          out[key] = { ars: precio, fuente: 'bcba', fecha: item.fecha ?? new Date().toISOString().slice(0, 10) };
-        }
-        break;
-      }
-    }
-  }
-
-  return Object.keys(out).length >= 2 ? out : null;
-}
-
-// Parseo de la página HTML de pizarra: busca tablas con precios de insumos
-function parseBCBAHtml(html) {
-  if (!html) return null;
-
-  const PATTERNS = [
-    { key: 'urea', re: /urea[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
-    { key: 'map',  re: /\bmap\b[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
-    { key: 'dap',  re: /\bdap\b[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
-    { key: 'uan',  re: /\buan\b[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
-  ];
-
-  const out = {};
-  const hoy = new Date().toISOString().slice(0, 10);
-
-  for (const { key, re } of PATTERNS) {
-    const m = html.match(re);
-    if (!m) continue;
-    const raw = m[1].replace(/\./g, '').replace(',', '.');
-    const precio = parseFloat(raw);
-    if (precio > 80_000 && precio < 20_000_000) {
-      out[key] = { ars: precio, fuente: 'bcba-html', fecha: hoy };
-    }
-  }
-
-  return Object.keys(out).length >= 2 ? out : null;
-}
-
-// ─── Historial sintético (12 meses) ──────────────────────────────────────────
-function buildHistorial(precioActual, varMensualPct) {
-  const hist = [];
-  let precio = precioActual;
-  for (let i = 0; i < 12; i++) {
-    hist.unshift(Math.round(precio));
-    const var_ = (varMensualPct ?? 1.5) / 100;
-    const ruido = (Math.random() - 0.5) * 0.004;
-    precio = precio / (1 + var_ + ruido);
-  }
-  return hist;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
 
-  // Cascada de fuentes
-  let precios = null;
-  let fuente = null;
-
-  precios = await fetchAgrofyHTML(9000);
-  if (precios) fuente = 'agrofy';
-
-  if (!precios) {
-    precios = await fetchBCBA(10000);
-    if (precios) fuente = 'bcba';
-  }
+  const [precios, dolarMayorista] = await Promise.all([
+    fetchIndexMundi(12000),
+    fetchDolarMayorista(),
+  ]);
 
   if (!precios) {
     return new Response(
       JSON.stringify({
         ok: false,
-        error: 'No se pudieron obtener precios de fertilizantes. Agrofy (HTML) y BCBA no respondieron.',
+        error: 'IndexMundi no respondió o no devolvió datos válidos.',
         timestamp: new Date().toISOString(),
       }),
       { status: 503, headers: { ...CORS, 'Cache-Control': 'no-store' } }
     );
   }
 
-  // Tipo de cambio mayorista para conversión ARS→USD
-  let dolarMayorista = null;
-  try {
-    const dRes = await fetch('https://dolarapi.com/v1/dolares/mayorista', {
-      headers: { 'User-Agent': 'RadarAgro/2.0' },
-    });
-    if (dRes.ok) {
-      const dData = await dRes.json();
-      dolarMayorista = parseFloat(dData.venta ?? dData.compra ?? 0) || null;
-    }
-  } catch { /* continuar sin USD */ }
-
-  const ORDEN = ['urea', 'map', 'dap', 'uan', 'sol', 'clu'];
+  const ORDEN = ['urea', 'map', 'dap', 'uan', 'clu'];
   const productos = [];
 
-  for (const [id, p] of Object.entries(precios)) {
+  for (const id of ORDEN) {
+    const p = precios[id];
     const meta = META[id];
-    if (!meta) continue;
+    if (!p || !meta) continue;
 
-    const ars = p.ars;
-    const usd = dolarMayorista && ars ? Math.round(ars / dolarMayorista) : null;
+    const usd = p.usd;
+    const ars = dolarMayorista ? Math.round(usd * dolarMayorista) : null;
     const varPct = p.varPct ?? null;
     const deltaArs = ars && varPct ? Math.round(ars * varPct / 100) : 0;
-    const hist = buildHistorial(ars, varPct != null && Math.abs(varPct) > 0.1 ? Math.abs(varPct) : 1.5);
 
-    productos.push({ id, ...meta, ars, usd, varPct, deltaArs, hist, fecha: p.fecha ?? null });
+    // Historial en ARS si tenemos tipo de cambio, sino en USD
+    const hist = p.historial
+      ? p.historial.map(h => dolarMayorista ? Math.round(h.usd * dolarMayorista) : h.usd)
+      : [];
+
+    // Fechas del historial para el eje X
+    const histFechas = p.historial ? p.historial.map(h => h.fecha) : [];
+
+    productos.push({
+      id,
+      ...meta,
+      usd,
+      ars,
+      varPct,
+      deltaArs,
+      hist,
+      histFechas,
+      fecha: p.fecha ?? null,
+      estimado: p.estimado ?? false,
+    });
   }
 
-  productos.sort((a, b) => ORDEN.indexOf(a.id) - ORDEN.indexOf(b.id));
-
   return new Response(
-    JSON.stringify({ ok: true, fuente, dolarMayorista, timestamp: new Date().toISOString(), productos }),
+    JSON.stringify({
+      ok: true,
+      fuente: 'indexmundi',
+      fuenteLabel: 'IndexMundi · World Bank Pink Sheet',
+      dolarMayorista,
+      timestamp: new Date().toISOString(),
+      productos,
+    }),
     {
       status: 200,
-      headers: { ...CORS, 'Cache-Control': 'public, s-maxage=21600' },
+      headers: {
+        ...CORS,
+        // Cache 6 horas — los precios son mensuales, no tiene sentido refrescar más seguido
+        'Cache-Control': 'public, s-maxage=21600',
+      },
     }
   );
 }

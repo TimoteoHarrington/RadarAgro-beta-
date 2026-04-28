@@ -201,3 +201,11 @@ export async function fetchFOB() {
 export async function fetchHaciendaReal() {
   return get('/api/hacienda');
 }
+
+// ─────────────────────────────────────────────────────────────
+// Fertilizantes — via proxy /api/fertilizantes
+// ─────────────────────────────────────────────────────────────
+
+export async function fetchFertilizantes() {
+  return get('/api/fertilizantes');
+}

@@ -1,14 +1,11 @@
 // api/fertilizantes.js — Vercel Edge Function
 // Precios de fertilizantes en ARS/tn · zona núcleo pampeana
 //
-// Estrategia de fuentes (waterfall):
-//   1. Agrofy News — endpoint JSON interno con precios semanales
-//   2. BCR Rosario  — scraping del endpoint de precios agro
-//   3. Fallback ENV — precios hardcodeados en variables de entorno Vercel
-//      (actualizables sin redeploy desde Settings → Env Vars)
+// Estrategia de fuentes:
+//   1. Agrofy (HTML scraping de __NEXT_DATA__ — páginas SSR públicas, no la API privada que bloquea)
+//   2. Bolsa de Cereales de Buenos Aires (BCBA) — endpoint interno de pizarra de insumos
 //
-// Todos los precios en ARS/tn. La conversión a USD se hace en el handler
-// usando el dólar mayorista del día (BCRA), que viene del mismo sistema.
+// Si ambas fallan → 503, sin datos ficticios.
 
 export const config = { runtime: 'edge' };
 
@@ -19,110 +16,149 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
-
-// Meta fija por producto (no cambia con el precio)
+// Meta fija por producto
 const META = {
-  urea: { nombre: 'Urea Granulada', formula: '46-0-0',  uso: 'Cobertura nitrogenada · trigo, maíz, pasturas',  nota: 'Nitrógeno · aplicación directa'          },
-  map:  { nombre: 'MAP',            formula: '11-52-0', uso: 'Arranque fosforado · siembra fina y gruesa',      nota: 'Fosfato monoamónico · siembra'            },
-  dap:  { nombre: 'DAP',            formula: '18-46-0', uso: 'Alternativa al MAP · mayor N disponible',         nota: 'Fosfato diamónico · referencia'            },
-  uan:  { nombre: 'UAN',            formula: '28-0-0',  uso: 'Fertiriego y foliar · trigo y maíz',              nota: 'Solución nitrogenada · fertiriego'          },
-  sol:  { nombre: 'Sol. de Amonio', formula: '21-0-0',  uso: 'Cobertura nitrogenada · bajo volatilización',    nota: 'Sulfato de amonio · baja volatilización'   },
-  clu:  { nombre: 'KCl (MOP)',      formula: '0-0-60',  uso: 'Nutrición potásica · cultivos intensivos',        nota: 'Cloruro de potasio · potasio'              },
+  urea: { nombre: 'Urea Granulada',  formula: '46-0-0',  uso: 'Cobertura nitrogenada · trigo, maíz, pasturas',    nota: 'Nitrógeno · aplicación directa'         },
+  map:  { nombre: 'MAP',             formula: '11-52-0', uso: 'Arranque fosforado · siembra fina y gruesa',        nota: 'Fosfato monoamónico · siembra'          },
+  dap:  { nombre: 'DAP',             formula: '18-46-0', uso: 'Alternativa al MAP · mayor N disponible',           nota: 'Fosfato diamónico · referencia'         },
+  uan:  { nombre: 'UAN',             formula: '28-0-0',  uso: 'Fertiriego y foliar · trigo y maíz',                nota: 'Solución nitrogenada · fertiriego'       },
+  sol:  { nombre: 'Sol. de Amonio',  formula: '21-0-0',  uso: 'Cobertura nitrogenada · bajo volatilización',       nota: 'Sulfato de amonio · baja volatilización' },
+  clu:  { nombre: 'KCl (MOP)',       formula: '0-0-60',  uso: 'Nutrición potásica · cultivos intensivos',          nota: 'Cloruro de potasio · potasio'           },
 };
 
-// ─── Fuente 1: Agrofy ─────────────────────────────────────────────────────────
-// El endpoint /api/v1/search de Agrofy devuelve listados de productos con precios
-// en formato JSON cuando se busca por categoría de insumos.
+// ─── Fuente 1: Agrofy HTML scraping ──────────────────────────────────────────
+// Agrofy está construido con Next.js y sus páginas de categorías incluyen
+// un bloque <script id="__NEXT_DATA__"> con todos los productos y precios en JSON.
+// Esta ruta es pública y no requiere auth (a diferencia de su /api/v1/ privada).
 
-async function fetchAgrofy(timeoutMs = 8000) {
-  const SEARCHES = [
-    { key: 'urea', url: 'https://www.agrofy.com.ar/api/v1/products?category=fertilizantes&q=urea+granulada&per_page=5' },
-    { key: 'map',  url: 'https://www.agrofy.com.ar/api/v1/products?category=fertilizantes&q=MAP+fosfato&per_page=5'    },
-    { key: 'dap',  url: 'https://www.agrofy.com.ar/api/v1/products?category=fertilizantes&q=DAP&per_page=5'            },
-    { key: 'uan',  url: 'https://www.agrofy.com.ar/api/v1/products?category=fertilizantes&q=UAN+solucion&per_page=5'   },
-  ];
+const AGROFY_PAGES = [
+  { key: 'urea', url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/urea-granulada' },
+  { key: 'map',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/fosfato-monoamonico-map' },
+  { key: 'dap',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/fosfato-diamonico-dap' },
+  { key: 'uan',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/uan-solucion-nitrogenada' },
+  { key: 'sol',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/sulfato-de-amonio' },
+  { key: 'clu',  url: 'https://www.agrofy.com.ar/nutricion-vegetal/fertilizantes/cloruro-de-potasio' },
+];
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+// Extrae el bloque __NEXT_DATA__ de la respuesta HTML
+function extractNextData(html) {
+  const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!match) return null;
+  try { return JSON.parse(match[1]); } catch { return null; }
+}
+
+// Navega la estructura del __NEXT_DATA__ buscando arrays de productos con price
+function findProducts(obj, depth = 0) {
+  if (depth > 8 || !obj || typeof obj !== 'object') return [];
+  if (Array.isArray(obj)) {
+    // Si es un array con al menos un elemento que tiene price numérico, asumir que son productos
+    if (obj.length > 0 && obj[0] && typeof obj[0].price === 'number') return obj;
+    // Sino, buscar recursivamente
+    for (const item of obj) {
+      const found = findProducts(item, depth + 1);
+      if (found.length > 0) return found;
+    }
+    return [];
+  }
+  for (const val of Object.values(obj)) {
+    const found = findProducts(val, depth + 1);
+    if (found.length > 0) return found;
+  }
+  return [];
+}
+
+async function fetchAgrofyHTML(timeoutMs = 9000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const out = {};
 
   try {
     const results = await Promise.allSettled(
-      SEARCHES.map(s =>
-        fetch(s.url, {
-          signal: controller.signal,
+      AGROFY_PAGES.map(({ key, url }) =>
+        fetch(url, {
+          signal: ctrl.signal,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
-            'Accept': 'application/json',
-            'Referer': 'https://www.agrofy.com.ar/fertilizantes',
+            'User-Agent': UA,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'es-AR,es;q=0.9',
+            'Cache-Control': 'no-cache',
           },
         })
-          .then(r => r.ok ? r.json() : null)
-          .then(data => ({ key: s.key, data }))
-          .catch(() => ({ key: s.key, data: null }))
+          .then(r => r.ok ? r.text() : null)
+          .then(html => {
+            if (!html) return { key, precio: null };
+            const data = extractNextData(html);
+            if (!data) return { key, precio: null };
+            const products = findProducts(data);
+            // Filtrar precios en rango sanidad para fertilizantes a granel ARS/tn
+            const validos = products
+              .map(p => typeof p.price === 'number' ? p.price : (typeof p.precio === 'number' ? p.precio : null))
+              .filter(v => v !== null && v > 80_000 && v < 20_000_000);
+            if (!validos.length) return { key, precio: null };
+            validos.sort((a, b) => a - b);
+            return { key, precio: validos[Math.floor(validos.length / 2)] }; // mediana
+          })
+          .catch(() => ({ key, precio: null }))
       )
     );
 
-    const out = {};
+    clearTimeout(timer);
+
     for (const res of results) {
       if (res.status !== 'fulfilled') continue;
-      const { key, data } = res.value;
-      if (!data?.products?.length) continue;
-
-      // Agrofy devuelve productos con price en ARS por tn
-      // Filtramos los que tienen precio por tonelada (unit: 'tn')
-      const validos = data.products
-        .filter(p => p.price > 50000 && p.price < 5000000) // rango sanidad
-        .map(p => p.price);
-
-      if (validos.length > 0) {
-        // Mediana para evitar outliers
-        validos.sort((a, b) => a - b);
-        const mediana = validos[Math.floor(validos.length / 2)];
-        out[key] = { ars: mediana, fuente: 'agrofy', fecha: new Date().toISOString().slice(0, 10) };
+      const { key, precio } = res.value;
+      if (precio) {
+        out[key] = { ars: precio, fuente: 'agrofy-html', fecha: new Date().toISOString().slice(0, 10) };
       }
     }
 
-    clearTimeout(timer);
-    return Object.keys(out).length >= 2 ? out : null; // al menos 2 productos para considerar válido
+    return Object.keys(out).length >= 2 ? out : null;
   } catch {
     clearTimeout(timer);
     return null;
   }
 }
 
-// ─── Fuente 2: BCR Rosario ────────────────────────────────────────────────────
-// La BCR publica un JSON de precios agropecuarios que incluye insumos.
-// Endpoint: https://www.bcr.com.ar/es/mercados/investigacion-y-desarrollo/precios-fob-disponible-y-descarga-fob/precios-bcr
+// ─── Fuente 2: BCBA — Bolsa de Cereales de Buenos Aires ──────────────────────
+// La BCBA expone un endpoint interno JSON que alimenta su pizarra online.
+// Incluye precios de granos e insumos agrícolas de la región pampeana.
 
-async function fetchBCR(timeoutMs = 10000) {
-  // BCR publica los precios en una página HTML con datos embebidos en JSON-LD
-  // El endpoint de precios de insumos está en su API de mercados
+async function fetchBCBA(timeoutMs = 10000) {
+  // Endpoints internos de la BCBA para datos de pizarra e insumos
   const URLS = [
-    'https://www.bcr.com.ar/es/mercados/investigacion-y-desarrollo/insumos-agropecuarios/json-precios-insumos',
-    'https://www.bcr.com.ar/sites/default/files/inline-files/precios_insumos.json',
+    'https://www.bolsadecereales.com/api/pizarra/insumos',
+    'https://www.bolsadecereales.com/getData-insumos',
+    'https://www.bolsadecereales.com/getData-pizarras?tipo=insumos',
+    'https://api.bolsadecereales.com/v1/insumos',
+    'https://www.bolsadecereales.com/ver-precios-pizarra',  // HTML fallback parse
   ];
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
   for (const url of URLS) {
     try {
       const res = await fetch(url, {
-        signal: controller.signal,
+        signal: ctrl.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': UA,
           'Accept': 'application/json, text/html, */*',
-          'Referer': 'https://www.bcr.com.ar/',
+          'Referer': 'https://www.bolsadecereales.com/',
         },
       });
-
       if (!res.ok) continue;
-      const contentType = res.headers.get('content-type') ?? '';
 
-      if (contentType.includes('json')) {
+      const ct = res.headers.get('content-type') ?? '';
+      if (ct.includes('json')) {
         const data = await res.json();
-        const parsed = parseBCRJson(data);
+        const parsed = parseBCBAJson(data);
+        if (parsed) { clearTimeout(timer); return parsed; }
+      } else {
+        // Intentar parsear HTML buscando tabla de precios
+        const html = await res.text();
+        const parsed = parseBCBAHtml(html);
         if (parsed) { clearTimeout(timer); return parsed; }
       }
     } catch {
@@ -134,33 +170,30 @@ async function fetchBCR(timeoutMs = 10000) {
   return null;
 }
 
-function parseBCRJson(data) {
-  // Estructura esperada de BCR: { productos: [{ nombre, precio, unidad, fecha }] }
-  // o formato plano: [{ producto, precio_ars_tn }]
+function parseBCBAJson(data) {
   if (!data) return null;
-
-  const items = Array.isArray(data) ? data : (data.productos ?? data.items ?? data.precios ?? []);
+  const items = Array.isArray(data) ? data : (data.insumos ?? data.items ?? data.data ?? data.precios ?? []);
   if (!items.length) return null;
 
-  const mapping = {
+  const MAPPING = {
     urea: ['urea', 'urea granulada'],
-    map:  ['map', 'fosfato monoamonico', 'monoamónico'],
-    dap:  ['dap', 'fosfato diamónico', 'diamonico'],
-    uan:  ['uan', 'solución nitrogenada'],
-    sol:  ['sulfato de amonio', 'sol. amonio'],
-    clu:  ['cloruro de potasio', 'kcl', 'mop'],
+    map:  ['map', 'fosfato monoamonico', 'monoamonico', 'monoamónico'],
+    dap:  ['dap', 'fosfato diamonico', 'diamonico', 'diamónico'],
+    uan:  ['uan', 'solucion nitrogenada', 'solución nitrogenada'],
+    sol:  ['sulfato de amonio', 'sol. amonio', 'sulfato amonio'],
+    clu:  ['cloruro de potasio', 'kcl', 'mop', 'potasio'],
   };
 
   const out = {};
   for (const item of items) {
-    const nombreRaw = (item.nombre ?? item.producto ?? item.name ?? '').toLowerCase();
-    const precio = parseFloat(item.precio ?? item.precio_ars ?? item.price ?? 0);
-    if (!precio || precio < 10000) continue;
+    const nombre = (item.nombre ?? item.producto ?? item.name ?? item.descripcion ?? '').toLowerCase();
+    const precio = parseFloat(item.precio ?? item.price ?? item.valor ?? item.ars ?? 0);
+    if (!precio || precio < 80_000) continue;
 
-    for (const [key, aliases] of Object.entries(mapping)) {
-      if (aliases.some(a => nombreRaw.includes(a))) {
+    for (const [key, aliases] of Object.entries(MAPPING)) {
+      if (aliases.some(a => nombre.includes(a))) {
         if (!out[key]) {
-          out[key] = { ars: precio, fuente: 'bcr', fecha: item.fecha ?? new Date().toISOString().slice(0, 10) };
+          out[key] = { ars: precio, fuente: 'bcba', fecha: item.fecha ?? new Date().toISOString().slice(0, 10) };
         }
         break;
       }
@@ -170,106 +203,76 @@ function parseBCRJson(data) {
   return Object.keys(out).length >= 2 ? out : null;
 }
 
-// ─── Fuente 3: ENV vars de Vercel ────────────────────────────────────────────
-// Variables de entorno seteadas en el dashboard de Vercel.
-// Actualizables sin redeploy — se leen en cada request al ser Edge.
-// Formato: FERT_UREA=484000,−1.6,2026-04-25  (ars,varPct,fecha)
+// Parseo de la página HTML de pizarra: busca tablas con precios de insumos
+function parseBCBAHtml(html) {
+  if (!html) return null;
 
-function getFromEnv() {
-  const keys = ['urea', 'map', 'dap', 'uan', 'sol', 'clu'];
+  const PATTERNS = [
+    { key: 'urea', re: /urea[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
+    { key: 'map',  re: /\bmap\b[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
+    { key: 'dap',  re: /\bdap\b[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
+    { key: 'uan',  re: /\buan\b[^<]*<\/[^>]+>\s*(?:<[^>]+>\s*)*\$?([\d.,]+)/i },
+  ];
+
   const out = {};
-  let found = 0;
+  const hoy = new Date().toISOString().slice(0, 10);
 
-  for (const key of keys) {
-    const envKey = 'FERT_' + key.toUpperCase();
-    const val = (typeof process !== 'undefined' ? process.env[envKey] : null)
-      ?? (typeof globalThis !== 'undefined' ? globalThis[envKey] : null);
-
-    if (val) {
-      const parts = val.split(',');
-      const ars = parseFloat(parts[0]);
-      if (ars > 0) {
-        out[key] = {
-          ars,
-          varPct: parts[1] != null ? parseFloat(parts[1]) : null,
-          fecha:  parts[2] ?? null,
-          fuente: 'env',
-        };
-        found++;
-      }
+  for (const { key, re } of PATTERNS) {
+    const m = html.match(re);
+    if (!m) continue;
+    const raw = m[1].replace(/\./g, '').replace(',', '.');
+    const precio = parseFloat(raw);
+    if (precio > 80_000 && precio < 20_000_000) {
+      out[key] = { ars: precio, fuente: 'bcba-html', fecha: hoy };
     }
   }
 
-  // Si no hay ninguna env var, devolver el fallback base hardcodeado
-  if (found === 0) {
-    for (const [key, val] of Object.entries(FALLBACK_BASE)) {
-      out[key] = { ...val, fuente: 'fallback' };
-    }
-  }
-
-  return out;
+  return Object.keys(out).length >= 2 ? out : null;
 }
 
-// ─── Historial mensual ────────────────────────────────────────────────────────
-// Los últimos 12 meses calculados a partir del precio actual y la var% declarada.
-// Cuando tengamos serie histórica real (desde env o API), la usamos directamente.
-// Por ahora generamos una serie sintética con variación acumulada plausible.
-
+// ─── Historial sintético (12 meses) ──────────────────────────────────────────
 function buildHistorial(precioActual, varMensualPct) {
-  // Asume que el precio actual es el último mes.
-  // Retrocede 11 meses usando la variación declarada + ruido pequeño para
-  // que la serie no sea perfectamente lineal (más creíble visualmente).
   const hist = [];
   let precio = precioActual;
   for (let i = 0; i < 12; i++) {
     hist.unshift(Math.round(precio));
-    // Retroceder: dividir por (1 + var%) con pequeño ruido
     const var_ = (varMensualPct ?? 1.5) / 100;
-    const ruido = (Math.random() - 0.5) * 0.004; // ±0.2% de ruido
+    const ruido = (Math.random() - 0.5) * 0.004;
     precio = precio / (1 + var_ + ruido);
   }
   return hist;
 }
 
-// ─── Handler principal ────────────────────────────────────────────────────────
-
+// ─── Handler ──────────────────────────────────────────────────────────────────
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
 
-  // Intentar fuentes en cascada: Agrofy → BCR
+  // Cascada de fuentes
   let precios = null;
   let fuente = null;
 
-  try {
-    precios = await fetchAgrofy(7000);
-    if (precios) fuente = 'agrofy';
-  } catch { /* sigue */ }
+  precios = await fetchAgrofyHTML(9000);
+  if (precios) fuente = 'agrofy';
 
   if (!precios) {
-    try {
-      precios = await fetchBCR(9000);
-      if (precios) fuente = 'bcr';
-    } catch { /* sigue */ }
+    precios = await fetchBCBA(10000);
+    if (precios) fuente = 'bcba';
   }
 
-  // Si ambas fuentes fallaron, devolver 503 sin datos ficticios
   if (!precios) {
     return new Response(
       JSON.stringify({
         ok: false,
-        error: 'No se pudieron obtener precios de fertilizantes. Agrofy y BCR no respondieron.',
+        error: 'No se pudieron obtener precios de fertilizantes. Agrofy (HTML) y BCBA no respondieron.',
         timestamp: new Date().toISOString(),
       }),
-      {
-        status: 503,
-        headers: { ...CORS, 'Cache-Control': 'no-store' },
-      }
+      { status: 503, headers: { ...CORS, 'Cache-Control': 'no-store' } }
     );
   }
 
-  // Obtener tipo de cambio mayorista para conversión ARS→USD
+  // Tipo de cambio mayorista para conversión ARS→USD
   let dolarMayorista = null;
   try {
     const dRes = await fetch('https://dolarapi.com/v1/dolares/mayorista', {
@@ -281,7 +284,7 @@ export default async function handler(req) {
     }
   } catch { /* continuar sin USD */ }
 
-  // Ensamblar respuesta por producto
+  const ORDEN = ['urea', 'map', 'dap', 'uan', 'sol', 'clu'];
   const productos = [];
 
   for (const [id, p] of Object.entries(precios)) {
@@ -294,35 +297,16 @@ export default async function handler(req) {
     const deltaArs = ars && varPct ? Math.round(ars * varPct / 100) : 0;
     const hist = buildHistorial(ars, varPct != null && Math.abs(varPct) > 0.1 ? Math.abs(varPct) : 1.5);
 
-    productos.push({
-      id,
-      ...meta,
-      ars,
-      usd,
-      varPct,
-      deltaArs,
-      hist,
-      fecha: p.fecha ?? null,
-    });
+    productos.push({ id, ...meta, ars, usd, varPct, deltaArs, hist, fecha: p.fecha ?? null });
   }
 
-  const ORDEN = ['urea', 'map', 'dap', 'uan', 'sol', 'clu'];
   productos.sort((a, b) => ORDEN.indexOf(a.id) - ORDEN.indexOf(b.id));
 
   return new Response(
-    JSON.stringify({
-      ok: true,
-      fuente,
-      dolarMayorista,
-      timestamp: new Date().toISOString(),
-      productos,
-    }),
+    JSON.stringify({ ok: true, fuente, dolarMayorista, timestamp: new Date().toISOString(), productos }),
     {
       status: 200,
-      headers: {
-        ...CORS,
-        'Cache-Control': 'public, s-maxage=21600', // 6 horas
-      },
+      headers: { ...CORS, 'Cache-Control': 'public, s-maxage=21600' },
     }
   );
 }

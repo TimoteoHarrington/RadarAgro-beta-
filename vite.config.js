@@ -30,6 +30,7 @@ function vercelFunctionsPlugin() {
           insumos:             path.resolve('./api/insumos.js'),
           fob:                 path.resolve('./api/fob.js'),
           hacienda:            path.resolve('./api/hacienda.js'),
+          fertilizantes:       path.resolve('./api/fertilizantes.js'),
           'riesgo-pais-latam': path.resolve('./api/riesgo-pais-latam.js'),
         };
 

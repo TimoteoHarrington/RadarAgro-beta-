@@ -8,7 +8,8 @@
     "api/hacienda.js":          { "maxDuration": 30 },
     "api/frigorificos.js":      { "maxDuration": 30 },
     "api/riesgo-pais-latam.js": { "maxDuration": 25 },
-    "api/insumos.js":           { "maxDuration": 30 }
+    "api/insumos.js":           { "maxDuration": 30 },
+    "api/fertilizantes.js":     { "maxDuration": 20 }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },

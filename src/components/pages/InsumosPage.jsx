@@ -1,66 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchInsumosAll } from '../../services/api';
-
-// ── Mock data ─────────────────────────────────────────────────
-
-const FERTILIZANTES = [
-  {
-    id: 'urea',
-    nombre: 'Urea Granulada',
-    formula: '46-0-0',
-    ars: 484000,
-    usd: 388,
-    varPct: -1.6,
-    deltaArs: -8000,
-    sojaRel: 0.94,
-    relStatus: 'warn',
-    nota: 'Nitrógeno · aplicación directa',
-    hist: [280, 295, 310, 330, 355, 370, 390, 410, 430, 455, 476, 484],
-    uso: 'Cobertura nitrogenada · trigo, maíz, pasturas',
-  },
-  {
-    id: 'map',
-    nombre: 'MAP',
-    formula: '11-52-0',
-    ars: 572000,
-    usd: 459,
-    varPct: 0,
-    deltaArs: 0,
-    sojaRel: null,
-    relStatus: 'fl',
-    nota: 'Fosfato monoamónico · siembra',
-    hist: [310, 325, 340, 365, 385, 405, 430, 460, 500, 530, 572, 572],
-    uso: 'Arranque fosforado · siembra fina y gruesa',
-  },
-  {
-    id: 'dap',
-    nombre: 'DAP',
-    formula: '18-46-0',
-    ars: 548000,
-    usd: 440,
-    varPct: 0.7,
-    deltaArs: 4000,
-    sojaRel: null,
-    relStatus: 'fl',
-    nota: 'Fosfato diamónico · referencia',
-    hist: [300, 315, 332, 350, 368, 390, 415, 445, 490, 520, 544, 548],
-    uso: 'Alternativa al MAP · mayor N disponible',
-  },
-  {
-    id: 'uan',
-    nombre: 'UAN',
-    formula: '28-0-0',
-    ars: 312000,
-    usd: 250,
-    varPct: 0,
-    deltaArs: 0,
-    sojaRel: null,
-    relStatus: 'fl',
-    nota: 'Solución nitrogenada · fertiriego',
-    hist: [170, 180, 195, 210, 225, 240, 255, 275, 290, 302, 312, 312],
-    uso: 'Fertiriego y foliar · trigo y maíz',
-  },
-];
+import { fetchInsumosAll, fetchFertilizantes } from '../../services/api';
 
 const RELACIONES = [
   {
@@ -171,31 +110,133 @@ function Spark({ data, color }) {
 
 // ── Tab: Fertilizantes ────────────────────────────────────────
 
-// Colores por fertilizante (consistentes con el gráfico combinado anterior)
-const FERT_COLORS = { urea: '#f0d050', map: '#4d9ef0', dap: '#56c97a', uan: '#e07090' };
+// Colores por producto (paleta consistente con el resto del sistema)
+const FERT_COLORS = {
+  urea: '#f0d050',
+  map:  '#4d9ef0',
+  dap:  '#56c97a',
+  uan:  '#e07090',
+  sol:  '#f09050',
+  clu:  '#a070e0',
+};
+
+// Badge de fuente — muestra de dónde viene el dato
+function FuenteBadge({ fuente }) {
+  const cfg = {
+    agrofy: { label: 'AGROFY · EN VIVO', color: 'var(--green)',  bg: 'rgba(70,185,110,.12)' },
+    bcr:    { label: 'BCR · EN VIVO',    color: 'var(--green)',  bg: 'rgba(70,185,110,.12)' },
+  };
+  const c = cfg[fuente] ?? { label: 'EN VIVO', color: 'var(--green)', bg: 'rgba(70,185,110,.12)' };
+  return (
+    <span style={{
+      fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700,
+      color: c.color, background: c.bg,
+      border: `1px solid ${c.color}33`,
+      padding: '2px 10px', borderRadius: 5, letterSpacing: '.06em',
+    }}>
+      {c.label}
+    </span>
+  );
+}
 
 function TabFertilizantes() {
-  const [selectedId, setSelectedId] = useState(null);
+  const [fertilizantes, setFertilizantes] = useState([]);
+  const [fuente,        setFuente]        = useState(null);
+  const [dolarMay,      setDolarMay]      = useState(null);
+  const [fecha,         setFecha]         = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(null);
+  const [selectedId,    setSelectedId]    = useState(null);
 
-  const activeF = FERTILIZANTES.find(f => f.id === selectedId) ?? null;
+  const doFetch = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetchFertilizantes()
+      .then(({ data, error: e }) => {
+        if (e || !data?.productos?.length) {
+          setError(e || 'Sin datos de fertilizantes');
+          setLoading(false);
+          return;
+        }
+        setFertilizantes(data.productos);
+        setFuente(data.fuente);
+        setDolarMay(data.dolarMayorista);
+        setFecha(data.timestamp ? data.timestamp.slice(0, 10) : null);
+        setLoading(false);
+      })
+      .catch(err => { setError(err?.message ?? 'Error de red'); setLoading(false); });
+  }, []);
+
+  useEffect(() => { doFetch(); }, [doFetch]);
+
+  const activeF = fertilizantes.find(f => f.id === selectedId) ?? null;
   const activeCard = activeF ? {
-    histKey:  activeF.id,
-    nombre:   activeF.nombre,
-    ambito:   'Zona Núcleo',
-    unidad:   'ARS/tn',
-    color:    FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
-    valor:    activeF.ars,
-    fuente:   'Fertilizar AC · CIAFA',
-    fecha:    'Feb 2026',
+    histKey: activeF.id,
+    nombre:  activeF.nombre,
+    ambito:  'Zona Núcleo',
+    unidad:  'ARS/tn',
+    color:   FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
+    valor:   activeF.ars,
+    fuente:  fuente === 'agrofy' ? 'Agrofy' : fuente === 'bcr' ? 'BCR Rosario' : 'Fertilizar AC · CIAFA',
+    fecha:   activeF.fecha ?? fecha,
   } : null;
 
+  // ── Loading ──
+  if (loading) {
+    return (
+      <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+        Consultando precios de fertilizantes…
+      </div>
+    );
+  }
+
+  // ── Error ──
+  if (error || !fertilizantes.length) {
+    return (
+      <div style={{ padding: '32px 20px', textAlign: 'center', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 12 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--red)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+          Error al cargar fertilizantes
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 20 }}>
+          {error || 'Sin datos disponibles'}
+        </div>
+        <button onClick={doFetch} style={{ fontFamily: 'var(--mono)', fontSize: 10, padding: '8px 20px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--acc-bg)', color: 'var(--accent)', cursor: 'pointer' }}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  // ── Datos OK ──
   return (
     <div>
+      {/* Header fuente */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Fuente</span>
+          <FuenteBadge fuente={fuente} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {dolarMay && (
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)' }}>
+              USD may. <span style={{ color: 'var(--text)', fontWeight: 600 }}>${Math.round(dolarMay).toLocaleString('es-AR')}</span>
+            </span>
+          )}
+          {fecha && (
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: 'var(--accent)', background: 'var(--acc-bg)', border: '1px solid rgba(91,156,246,.22)', padding: '2px 10px', borderRadius: 5 }}>
+              {fecha}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Cards seleccionables */}
       <div className="grid grid-4" style={{ marginBottom: 0 }}>
-        {FERTILIZANTES.map(f => {
-          const d = dir(f.varPct);
-          const varTxt = (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%';
+        {fertilizantes.map(f => {
+          const d = dir(f.varPct ?? 0);
+          const varTxt = f.varPct != null
+            ? (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%'
+            : '—';
           const isSelected = selectedId === f.id;
           const color = FERT_COLORS[f.id] ?? 'var(--accent)';
           return (
@@ -216,19 +257,29 @@ function TabFertilizantes() {
                       GRAF ▾
                     </span>
                   )}
-                  <span className={`stat-badge ${d}`}>{varTxt}</span>
+                  {f.varPct != null && <span className={`stat-badge ${d}`}>{varTxt}</span>}
                 </span>
               </div>
 
               <div className="stat-val">{fmtARS(f.ars)}</div>
-              {f.deltaArs !== 0 ? (
+              {f.deltaArs && f.deltaArs !== 0 ? (
                 <div className={`stat-delta ${d}`}>
                   {d === 'up' ? '▲' : '▼'} {fmtARS(Math.abs(f.deltaArs))} vs sem. ant.
                 </div>
               ) : (
                 <div className="stat-delta fl">— Sin cambios esta semana</div>
               )}
-              <div className="stat-meta" style={{ marginTop: 6 }}>{fmtUSD(f.usd)}/tn · {f.formula}</div>
+
+              {/* USD si disponible */}
+              {f.usd ? (
+                <div className="stat-meta" style={{ marginTop: 6 }}>
+                  {fmtUSD(f.usd)}/tn · <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{f.formula}</span>
+                </div>
+              ) : (
+                <div className="stat-meta" style={{ marginTop: 6 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{f.formula}</span>
+                </div>
+              )}
               <div className="stat-meta">{f.uso}</div>
             </div>
           );
@@ -267,16 +318,19 @@ function TabFertilizantes() {
               </tr>
             </thead>
             <tbody>
-              {FERTILIZANTES.map(f => {
-                const d = dir(f.varPct);
+              {fertilizantes.map(f => {
+                const d = dir(f.varPct ?? 0);
                 return (
-                  <tr key={f.id} style={{ cursor: 'pointer', opacity: selectedId && selectedId !== f.id ? 0.6 : 1, transition: 'opacity .15s' }}
+                  <tr key={f.id}
+                    style={{ cursor: 'pointer', opacity: selectedId && selectedId !== f.id ? 0.6 : 1, transition: 'opacity .15s' }}
                     onClick={() => setSelectedId(selectedId === f.id ? null : f.id)}>
                     <td className="bold" style={{ color: FERT_COLORS[f.id] }}>{f.nombre}</td>
                     <td className="dim mono" style={{ fontSize: 11 }}>{f.formula}</td>
                     <td className="r w mono">{fmtARS(f.ars)}</td>
-                    <td className="r mono">{fmtUSD(f.usd)}</td>
-                    <td className="r"><Pill d={d}>{fmtPct(f.varPct)}</Pill></td>
+                    <td className="r mono">{f.usd ? fmtUSD(f.usd) : '—'}</td>
+                    <td className="r">
+                      {f.varPct != null ? <Pill d={d}>{fmtPct(f.varPct)}</Pill> : <span className="dim">—</span>}
+                    </td>
                     <td className="r">
                       <Spark data={f.hist} color={FERT_COLORS[f.id] ?? (d === 'dn' ? 'var(--red)' : d === 'up' ? 'var(--green)' : 'var(--text3)')} />
                     </td>
@@ -288,7 +342,10 @@ function TabFertilizantes() {
           </table>
         </div>
       </div>
-      <div className="source">Fuente: Fertilizar AC · CIAFA · Feb 2026</div>
+
+      <div className="source">
+        Fuente: {fuente === 'agrofy' ? 'Agrofy (precios de mercado zona núcleo)' : 'BCR Rosario'}
+      </div>
     </div>
   );
 }
@@ -932,6 +989,7 @@ export function InsumosPage({ goPage }) {
   const [tab,          setTab]          = useState('combustibles');
   const [insumosData,  setInsumosData]  = useState(null);
   const [insumosReady, setInsumosReady] = useState(false);
+  const [fertData,     setFertData]     = useState(null);   // ← nuevo: datos fertilizantes para KPIs
 
   useEffect(() => {
     // FIX 11: En caso de fallo la UI mostrará "—" en los KPIs pero no se quedará
@@ -947,18 +1005,62 @@ export function InsumosPage({ goPage }) {
       .catch(() => {
         setInsumosReady(true); // desbloquear render aunque fallen los datos
       });
+
+    // Cargar fertilizantes para los KPIs del header
+    fetchFertilizantes()
+      .then(({ data }) => { if (data?.productos?.length) setFertData(data); })
+      .catch(() => {});
   }, []);
 
   const g2Nucleo  = insumosData?.gasoil?.g2?.nucleo?.promedio ?? null;
   const g3Nucleo  = insumosData?.gasoil?.g3?.nucleo?.promedio ?? null;
   const fmtKpi = v => v == null ? '…' : '$\u00a0' + Math.round(v).toLocaleString('es-AR');
 
-  // KPIs superiores: 2 fertilizantes clave + 2 combustibles reales
+  // KPIs: 2 fertilizantes desde la API (con fallback a valores de referencia) + 2 combustibles reales
+  const ureaLive = fertData?.productos?.find(p => p.id === 'urea');
+  const mapLive  = fertData?.productos?.find(p => p.id === 'map');
+
   const topKpis = [
-    { label: 'Urea Granulada', val: fmtKpi(484000), sub: 'ARS/tn · fertilizante',   delta: '-1,6%',     deltaDir: 'dn', tag: '46-0-0' },
-    { label: 'MAP',            val: fmtKpi(572000), sub: 'ARS/tn · fertilizante',   delta: '= 0%',      deltaDir: 'fl', tag: '11-52-0' },
-    { label: 'Gasoil G2',      val: insumosReady ? fmtKpi(g2Nucleo) : '…', sub: 'ARS/L · zona núcleo', delta: insumosReady && g2Nucleo ? 'LIVE · Sec. Energía' : 'cargando…', deltaDir: 'fl', tag: null },
-    { label: 'Gasoil G3',      val: insumosReady ? fmtKpi(g3Nucleo) : '…', sub: 'ARS/L · zona núcleo', delta: insumosReady && g3Nucleo ? 'LIVE · Sec. Energía' : 'cargando…', deltaDir: 'fl', tag: null },
+    {
+      label: ureaLive?.nombre ?? 'Urea Granulada',
+      val:      fmtKpi(ureaLive?.ars ?? null),
+      sub:      'ARS/tn · fertilizante',
+      delta:    ureaLive?.varPct != null
+        ? (ureaLive.varPct > 0 ? '+' : '') + ureaLive.varPct.toFixed(1) + '%'
+        : fertData ? '= 0%' : '…',
+      deltaDir: ureaLive?.varPct != null
+        ? (ureaLive.varPct > 0 ? 'up' : ureaLive.varPct < 0 ? 'dn' : 'fl')
+        : 'fl',
+      tag: ureaLive?.formula ?? '46-0-0',
+    },
+    {
+      label: mapLive?.nombre ?? 'MAP',
+      val:      fmtKpi(mapLive?.ars ?? null),
+      sub:      'ARS/tn · fertilizante',
+      delta:    mapLive?.varPct != null
+        ? (mapLive.varPct > 0 ? '+' : '') + mapLive.varPct.toFixed(1) + '%'
+        : fertData ? '= 0%' : '…',
+      deltaDir: mapLive?.varPct != null
+        ? (mapLive.varPct > 0 ? 'up' : mapLive.varPct < 0 ? 'dn' : 'fl')
+        : 'fl',
+      tag: mapLive?.formula ?? '11-52-0',
+    },
+    {
+      label: 'Gasoil G2',
+      val: insumosReady ? fmtKpi(g2Nucleo) : '…',
+      sub: 'ARS/L · zona núcleo',
+      delta: insumosReady && g2Nucleo ? 'LIVE · Sec. Energía' : 'cargando…',
+      deltaDir: 'fl',
+      tag: null,
+    },
+    {
+      label: 'Gasoil G3',
+      val: insumosReady ? fmtKpi(g3Nucleo) : '…',
+      sub: 'ARS/L · zona núcleo',
+      delta: insumosReady && g3Nucleo ? 'LIVE · Sec. Energía' : 'cargando…',
+      deltaDir: 'fl',
+      tag: null,
+    },
   ];
 
   return (

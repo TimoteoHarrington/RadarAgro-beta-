@@ -307,7 +307,7 @@ function TabFertilizantes() {
       }
 
       {/* Tabla detalle */}
-      <div className="section-title" style={{ marginTop: 28 }}>Detalle · zona núcleo · ARS/tonelada</div>
+      <div className="section-title" style={{ marginTop: 28 }}>Detalle · FOB internacional · USD/tn → ARS/tn (dólar mayorista)</div>
       <div className="tbl-wrap" style={{ marginBottom: 28 }}>
         <div className="tbl-scroll">
           <table>
@@ -979,7 +979,7 @@ function TabRelaciones() {
           Relaciones calculadas sobre precios de pizarra BCR (zona núcleo) y precios YPF al surtidor. La línea vertical en las barras indica el umbral de referencia histórico. Los valores de combustible se calculan en litros por tonelada producida usando el precio del gasoil agro con subsidio.
         </div>
       </div>
-      <div className="source">Fuente: BCR · YPF · Fertilizar AC · Feb 2026</div>
+      <div className="source">Fuente: BCR · YPF · IndexMundi · World Bank Pink Sheet</div>
     </div>
   );
 }

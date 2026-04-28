@@ -361,11 +361,11 @@ function TabFertilizantes() {
 const MESES_C = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 function InsumosHistorialChart({ card, onClose }) {
-  const canvasRef = useRef(null);
-  const [tooltip, setTooltip] = useState('');
+  const canvasRef  = useRef(null);
+  const [tooltip, setTooltip] = useState(null); // { x, val, label }
   const [range, setRange]     = useState('MAX');
 
-  // Historial de combustibles (mock fijo — no cambia con IndexMundi)
+  // ── datos base ──────────────────────────────────────────────
   const HIST_DATA_COMBUSTIBLES = {
     'g2-nucleo': [1325, 1397, 1463, 1531, 1576, 1654, 1749, 1783, 1812, 2042, 2306, null],
     'g3-nucleo': [1506, 1585, 1664, 1736, 1780, 1865, 1949, 1973, 2027, 2250, 2498, null],
@@ -377,211 +377,283 @@ function InsumosHistorialChart({ card, onClose }) {
     'np-pais':   [1511, 1596, 1679, 1762, 1795, 1889, 1970, 1953, 1976, 2163, 2344, null],
   };
 
-  // Si el card tiene datos reales de la API (fertilizantes), los usamos directamente.
-  // Si no (combustibles), caemos al mock hardcodeado.
-  const rawSeries = card?.histData
+  const rawVals = card?.histData
     ? card.histData
     : (HIST_DATA_COMBUSTIBLES[card?.histKey] ?? []);
 
-  const filledSeries = rawSeries
-    .map(v => v == null && card?.valor != null ? card.valor : v)
-    .filter(v => v != null);
-
-  // Labels: si la API mandó fechas reales las usamos; sino generamos los últimos N meses
   const rawLabels = card?.histLabels?.length
     ? card.histLabels
-    : HIST_MESES.slice(HIST_MESES.length - filledSeries.length);
+    : HIST_MESES.slice(HIST_MESES.length - rawVals.length);
 
-  const getSlice = () => {
-    if (!filledSeries.length) return { vals: [], lbls: [] };
-    const sliceCount = range === '3M' ? 3 : range === '6M' ? 6 : range === '1A' ? 12 : filledSeries.length;
+  const allVals   = rawVals.map(v => v == null && card?.valor != null ? card.valor : v).filter(v => v != null);
+  const allLabels = rawLabels.slice(rawLabels.length - allVals.length);
+
+  const sliceCount = range === '3M' ? 3 : range === '6M' ? 6 : range === '1A' ? 12 : allVals.length;
+  const series = allVals.slice(-sliceCount);
+  const labels = allLabels.slice(-sliceCount);
+  const n = series.length;
+
+  // ── variación del período ────────────────────────────────────
+  const rangeChg = (() => {
+    if (series.length < 2) return null;
+    const first = series[0], last = series[series.length - 1];
+    if (!first) return null;
+    const pct = ((last - first) / first) * 100;
+    const abs = last - first;
+    const sign = pct > 0 ? '+' : '';
     return {
-      vals: filledSeries.slice(-sliceCount),
-      lbls: rawLabels.slice(-sliceCount),
+      pct:   sign + pct.toFixed(1).replace('.', ',') + '%',
+      abs:   (abs > 0 ? '+' : '') + Math.round(abs).toLocaleString('es-AR'),
+      color: pct > 0 ? 'var(--green)' : pct < 0 ? 'var(--red)' : 'var(--text3)',
+      up: pct > 0, dn: pct < 0,
     };
-  };
+  })();
 
-  const { vals: series, lbls: labels } = getSlice();
+  const RANGE_LABEL = { '3M': '3 meses', '6M': '6 meses', '1A': '1 año', 'MAX': 'máx. disponible' };
+
+  // ── canvas draw ──────────────────────────────────────────────
+  const LINE_COLOR  = 'rgba(154,176,196,0.9)';
+  const FILL_START  = 'rgba(154,176,196,0.12)';
+  const FILL_END    = 'rgba(154,176,196,0.00)';
+  const PAD = { t: 20, r: 18, b: 32, l: 70 };
+
+  const draw = useCallback((canvas, hoverIdx = null) => {
+    if (!canvas || series.length < 2) return;
+    const dpr  = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = rect.width  * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+    const vals = series.map(Number);
+    const mn   = Math.min(...vals) * 0.997;
+    const mx   = Math.max(...vals) * 1.003;
+    const rng  = mx - mn || 1;
+    const pxi  = i => PAD.l + (i / (n - 1)) * (W - PAD.l - PAD.r);
+    const pyv  = v => H - PAD.b - ((v - mn) / rng) * (H - PAD.t - PAD.b);
+
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const gridClr  = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const lblColor = isDark ? 'rgba(154,176,196,0.55)' : 'rgba(90,110,130,0.65)';
+
+    // Grid horizontal
+    for (let g = 0; g <= 3; g++) {
+      const v = mn + (rng * g / 3);
+      const y = pyv(v);
+      ctx.strokeStyle = gridClr;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(W - PAD.r, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = lblColor;
+      ctx.font = '9px JetBrains Mono,monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('$ ' + Math.round(v).toLocaleString('es-AR'), PAD.l - 5, y + 3);
+    }
+
+    // Eje X — mostrar hasta 6 etiquetas bien espaciadas
+    ctx.fillStyle = lblColor;
+    ctx.font = '8px JetBrains Mono,monospace';
+    ctx.textAlign = 'center';
+    const ticks = n <= 6
+      ? Array.from({ length: n }, (_, i) => i)
+      : [0, Math.floor(n * .2), Math.floor(n * .4), Math.floor(n * .6), Math.floor(n * .8), n - 1];
+    ticks.forEach(i => ctx.fillText(labels[i] ?? '', pxi(i), H - PAD.b + 12));
+
+    // Fill
+    const grad = ctx.createLinearGradient(0, PAD.t, 0, H - PAD.b);
+    grad.addColorStop(0, FILL_START);
+    grad.addColorStop(1, FILL_END);
+    ctx.beginPath();
+    ctx.moveTo(pxi(0), pyv(vals[0]));
+    vals.forEach((v, i) => { if (i > 0) ctx.lineTo(pxi(i), pyv(v)); });
+    ctx.lineTo(pxi(n - 1), H - PAD.b);
+    ctx.lineTo(pxi(0), H - PAD.b);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Línea
+    ctx.beginPath();
+    ctx.moveTo(pxi(0), pyv(vals[0]));
+    vals.forEach((v, i) => { if (i > 0) ctx.lineTo(pxi(i), pyv(v)); });
+    ctx.strokeStyle = LINE_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+    ctx.stroke();
+
+    // Punto final
+    ctx.beginPath();
+    ctx.arc(pxi(n - 1), pyv(vals[n - 1]), 3, 0, Math.PI * 2);
+    ctx.fillStyle = LINE_COLOR;
+    ctx.fill();
+
+    // Cursor hover
+    if (hoverIdx !== null) {
+      const hx = pxi(hoverIdx);
+      const hy = pyv(vals[hoverIdx]);
+      ctx.beginPath();
+      ctx.moveTo(hx, PAD.t);
+      ctx.lineTo(hx, H - PAD.b);
+      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = isDark ? '#ffffff' : '#1a1a2e';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(hx, hy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = LINE_COLOR;
+      ctx.fill();
+    }
+  }, [series, labels, n]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !series.length) return;
-
-    const toRgba = (c, alpha) => {
-      const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : c;
-    };
-
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width  = rect.width  * dpr;
-      canvas.height = rect.height * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(dpr, dpr);
-      const W = rect.width, H = rect.height;
-      const pad = { t: 18, r: 16, b: 32, l: 62 };
-      const vals = series.map(Number);
-      const vmin = Math.min(...vals) * 0.96;
-      const vmax = Math.max(...vals) * 1.04;
-      const n    = vals.length;
-      const xS   = (W - pad.l - pad.r) / (n - 1 || 1);
-      const yS   = (H - pad.t - pad.b) / (vmax - vmin || 1);
-      const px   = i => pad.l + i * xS;
-      const py   = v => H - pad.b - (v - vmin) * yS;
-
-      // Detectar light/dark mode para colores del canvas
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const gridLine   = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
-      const gridLineBo = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
-      const labelColor = isDark ? 'rgba(160,165,180,0.8)'  : 'rgba(90,100,120,0.75)';
-
-      // Grid
-      for (let i = 0; i <= 4; i++) {
-        const v = vmin + (vmax - vmin) * i / 4;
-        const y = py(v);
-        ctx.strokeStyle = i === 0 ? gridLineBo : gridLine;
-        ctx.lineWidth = 1;
-        ctx.setLineDash(i === 0 ? [] : [3, 5]);
-        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = labelColor;
-        ctx.font = '9px JetBrains Mono,monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText('$\u00a0' + Math.round(v).toLocaleString('es-AR'), pad.l - 5, y + 3);
-      }
-
-      // Eje X
-      ctx.fillStyle = labelColor;
-      ctx.font = '8px JetBrains Mono,monospace';
-      ctx.textAlign = 'center';
-      labels.forEach((l, i) => {
-        if (i === 0 || i === n - 1 || i % Math.max(1, Math.floor(n / 6)) === 0) {
-          ctx.fillText(l, px(i), H - pad.b + 13);
-        }
-      });
-
-      // Área
-      const color = card?.color ?? 'rgba(91,156,246,0.85)';
-      const areaOpacity = isDark ? 0.22 : 0.15;
-      const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
-      grad.addColorStop(0, toRgba(color, areaOpacity));
-      grad.addColorStop(1, toRgba(color, 0.01));
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(vals[0]));
-      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
-      ctx.lineTo(px(n - 1), H - pad.b);
-      ctx.lineTo(px(0), H - pad.b);
-      ctx.closePath();
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Línea
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(vals[0]));
-      vals.forEach((v, i) => { if (i > 0) ctx.lineTo(px(i), py(v)); });
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-
-      // Punto final + label (siempre a la izquierda del punto para no salir del canvas)
-      const lv = vals[n - 1];
-      const lvX = px(n - 1);
-      const lvY = py(lv);
-      ctx.beginPath();
-      ctx.arc(lvX, lvY, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.fillStyle = color;
-      ctx.font = 'bold 10px JetBrains Mono,monospace';
-      // Si el punto está cerca del borde derecho, poner label a la izquierda; sino a la derecha
-      const labelStr = '$\u00a0' + Math.round(lv).toLocaleString('es-AR');
-      const nearRight = lvX > W - pad.r - 70;
-      ctx.textAlign = nearRight ? 'right' : 'left';
-      ctx.fillText(labelStr, nearRight ? lvX - 8 : lvX + 8, lvY - 6);
-    };
-
-    draw();
-    const ro = new ResizeObserver(draw);
+    if (!canvas) return;
+    draw(canvas, null);
+    const ro = new ResizeObserver(() => draw(canvas, null));
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [series, card]);
+  }, [draw]);
 
-  const handleMouseMove = e => {
-    if (!series.length) return;
+  const handleMouseMove = useCallback(e => {
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const xS = (rect.width - 78) / (series.length - 1 || 1);
-    const idx = Math.max(0, Math.min(series.length - 1, Math.round((e.clientX - rect.left - 62) / xS)));
-    const v = series[idx];
-    const l = labels[idx] ?? `Mes ${idx + 1}`;
-    if (v != null) setTooltip(`${l}  ·  $\u00a0${Math.round(v).toLocaleString('es-AR')} ${card?.unidad ?? 'ARS/L'}`);
-  };
+    if (!canvas || n < 2) return;
+    const rect   = canvas.getBoundingClientRect();
+    const chartW = rect.width - PAD.l - PAD.r;
+    const rawIdx = (e.clientX - rect.left - PAD.l) / chartW * (n - 1);
+    const idx    = Math.max(0, Math.min(n - 1, Math.round(rawIdx)));
+    const x      = PAD.l + (idx / (n - 1)) * chartW;
+    setTooltip({ x, val: series[idx], label: labels[idx] ?? '' });
+    draw(canvas, idx);
+  }, [series, labels, n, draw]);
+
+  const handleMouseLeave = useCallback(() => {
+    setTooltip(null);
+    draw(canvasRef.current, null);
+  }, [draw]);
 
   if (!card) return null;
 
   return (
-    <div style={{ background: 'var(--bg1)', border: '1px solid var(--accent)', borderRadius: 12, padding: '18px 20px', marginTop: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+    <div style={{
+      background: 'var(--bg1)',
+      border: '1px solid var(--line)',
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginTop: 16,
+    }}>
+      {/* Header — igual a DetailPanel de MundoPage */}
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: card.color, flexShrink: 0, display: 'inline-block' }} />
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>
-              {card.nombre} — historial
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: 'var(--display)', fontSize: 16, fontWeight: 700, color: 'var(--white)' }}>
+              {card.nombre}
             </span>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {card.ambito} · {card.unidad}
-            {card.fecha && (
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 700, color: 'var(--accent)', background: 'var(--acc-bg)', border: '1px solid rgba(91,156,246,.22)', padding: '1px 8px', borderRadius: 4 }}>
-                último dato: {card.fecha}
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, color: 'var(--white)' }}>
+              {'$ '}{card.valor != null ? Math.round(card.valor).toLocaleString('es-AR') : '—'}
+            </span>
+            {rangeChg && (
+              <span style={{
+                fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700,
+                color: rangeChg.color,
+                padding: '2px 7px', borderRadius: 4,
+                background: rangeChg.up ? 'var(--green-bg)' : rangeChg.dn ? 'var(--red-bg)' : 'transparent',
+              }}>
+                {rangeChg.up ? '▲' : rangeChg.dn ? '▼' : ''} {rangeChg.pct}
               </span>
             )}
           </div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3, fontFamily: 'var(--mono)' }}>
+            {card.ambito} · {card.fuente ?? 'IndexMundi'}
+            {rangeChg && (
+              <span style={{ marginLeft: 8, color: rangeChg.color }}>
+                · {rangeChg.abs} en {RANGE_LABEL[range]}
+              </span>
+            )}
+            {card.estimado && (
+              <span style={{ marginLeft: 8, color: 'var(--text3)', fontStyle: 'italic' }}>· estimado</span>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {['3M', '6M', '1A', 'MAX'].map(r => (
-            <button key={r} onClick={() => setRange(r)}
-              style={{
-                fontFamily: 'var(--mono)', fontSize: 9, padding: '3px 10px', borderRadius: 4,
-                border: `1px solid ${r === range ? 'var(--accent)' : 'var(--line2)'}`,
-                background: r === range ? 'var(--acc-bg)' : 'transparent',
-                color: r === range ? 'var(--accent)' : 'var(--text3)',
-                cursor: 'pointer', transition: 'all .12s',
-              }}>
-              {r}
-            </button>
-          ))}
-          {onClose && (
-            <button onClick={onClose}
-              style={{
-                marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 13, lineHeight: 1,
-                padding: '2px 7px', borderRadius: 4,
-                border: '1px solid var(--line2)', background: 'transparent',
-                color: 'var(--text3)', cursor: 'pointer', transition: 'all .12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = 'var(--red)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line2)'; e.currentTarget.style.color = 'var(--text3)'; }}
-              title="Cerrar gráfico">
-              ×
-            </button>
-          )}
-        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, color: 'var(--text3)', padding: '4px 10px', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--mono)' }}
+          >
+            cerrar ×
+          </button>
+        )}
       </div>
-      {series.length === 0
-        ? <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>Sin datos</div>
-        : <>
-            <canvas ref={canvasRef}
-              style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={() => setTooltip('')}
-            />
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text2)', minHeight: 14, marginTop: 6, textAlign: 'center' }}>{tooltip}</div>
-          </>
-      }
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', marginTop: 4, textAlign: 'right' }}>
-        Fuente: {card.fuente ?? 'Sec. de Energía'}
+
+      {/* Range selector */}
+      <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 6, alignItems: 'center' }}>
+        {['3M', '6M', '1A', 'MAX'].map(r => (
+          <button key={r} onClick={() => setRange(r)} style={{
+            background: range === r ? 'var(--acc-bg)' : 'none',
+            border: `1px solid ${range === r ? 'var(--accent)' : 'var(--line)'}`,
+            borderRadius: 6, color: range === r ? 'var(--accent)' : 'var(--text3)',
+            padding: '4px 12px', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 11,
+            transition: 'all .15s',
+          }}>
+            {r}
+          </button>
+        ))}
+        {rangeChg && (
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 700, color: rangeChg.color }}>
+            {rangeChg.up ? '▲' : rangeChg.dn ? '▼' : ''} {rangeChg.pct}
+            <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text3)', marginLeft: 5 }}>en {RANGE_LABEL[range]}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Chart */}
+      <div style={{ padding: '20px 20px 4px', position: 'relative' }}>
+        {series.length < 2
+          ? <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 11 }}>Sin datos</div>
+          : <>
+              <canvas
+                ref={canvasRef}
+                style={{ width: '100%', height: '200px', display: 'block', cursor: 'crosshair' }}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+              />
+              {tooltip && (
+                <div style={{
+                  position: 'absolute',
+                  left: Math.min(tooltip.x + PAD.l + 12, 9999),
+                  top: 24,
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--line2)',
+                  borderRadius: 6,
+                  padding: '5px 10px',
+                  pointerEvents: 'none',
+                  fontFamily: 'var(--mono)',
+                  whiteSpace: 'nowrap',
+                  zIndex: 10,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--white)' }}>
+                    {'$ '}{Math.round(tooltip.val).toLocaleString('es-AR')}
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--text3)', marginTop: 1 }}>{tooltip.label}</div>
+                </div>
+              )}
+            </>
+        }
+      </div>
+
+      {/* Footer fuente */}
+      <div style={{ padding: '4px 20px 12px', textAlign: 'right' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)' }}>
+          {card.fuente ?? 'IndexMundi · World Bank Pink Sheet'}{card.unidad ? ' · ' + card.unidad : ''}
+          {card.fecha ? ' · último dato: ' + card.fecha : ''}
+        </span>
       </div>
     </div>
   );

@@ -82,8 +82,8 @@ const HIST_MESES = (() => {
 })();
 
 // ── Color único — igual que gráficos de granos (MundoPage) ──────────────────
-const CHART_COLOR = 'rgba(154,176,196,0.9)';
-const CHART_FILL  = 'rgba(154,176,196,0.12)';
+const CHART_COLOR = 'rgba(91,156,246,0.85)';  // azul accent — igual que resto del sistema
+const CHART_FILL  = 'rgba(91,156,246,0.10)';
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -409,7 +409,7 @@ function InsumosHistorialChart({ card, onClose }) {
   // Usa las constantes globales del módulo
   const LINE_COLOR = CHART_COLOR;
   const FILL_START = CHART_FILL;
-  const FILL_END   = 'rgba(154,176,196,0.00)';
+  const FILL_END   = 'rgba(91,156,246,0.00)';
   const PAD = { t: 20, r: 18, b: 32, l: 70 };
 
   const draw = useCallback((canvas, hoverIdx = null) => {
@@ -499,7 +499,7 @@ function InsumosHistorialChart({ card, onClose }) {
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
-      ctx.fillStyle = isDark ? '#ffffff' : '#1a1a2e';
+      ctx.fillStyle = isDark ? 'rgba(20,22,35,1)' : 'rgba(255,255,255,1)';
       ctx.fill();
       ctx.beginPath();
       ctx.arc(hx, hy, 3, 0, Math.PI * 2);
@@ -619,10 +619,16 @@ function InsumosHistorialChart({ card, onClose }) {
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
               />
-              {tooltip && (
+              {tooltip && (() => {
+                // Si el cursor está en el 60% derecho del chart → mostrar tooltip a la izquierda
+                const canvasW = canvasRef.current?.getBoundingClientRect().width ?? 600;
+                const flipLeft = (tooltip.x + PAD.l) > canvasW * 0.55;
+                return (
                 <div style={{
                   position: 'absolute',
-                  left: Math.min(tooltip.x + PAD.l + 12, 9999),
+                  ...(flipLeft
+                    ? { right: `calc(100% - ${tooltip.x + PAD.l - 10}px)` }
+                    : { left: tooltip.x + PAD.l + 10 }),
                   top: 24,
                   background: 'var(--bg2)',
                   border: '1px solid var(--line2)',
@@ -638,7 +644,8 @@ function InsumosHistorialChart({ card, onClose }) {
                   </div>
                   <div style={{ fontSize: 9, color: 'var(--text3)', marginTop: 1 }}>{tooltip.label}</div>
                 </div>
-              )}
+                );
+              })()}
             </>
         }
       </div>

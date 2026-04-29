@@ -1,74 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchInsumosAll, fetchFertilizantes } from '../../services/api';
 
-const RELACIONES = [
-  {
-    id: 'soja-urea',
-    label: 'Soja / Urea',
-    valor: 0.94,
-    unidad: 'tn soja/tn urea',
-    barPct: 47,
-    color: 'var(--red)',
-    status: 'warn',
-    statusLabel: 'bajo presión',
-    nota: 'hace 1m: 0,97',
-    refPct: 50,
-    desc: 'Toneladas de soja necesarias para comprar 1 tn de Urea. Umbral saludable: ≥ 1,0',
-  },
-  {
-    id: 'maiz-urea',
-    label: 'Maíz / Urea',
-    valor: 0.52,
-    unidad: 'tn maíz/tn urea',
-    barPct: 26,
-    color: 'var(--red)',
-    status: 'warn',
-    statusLabel: 'bajo presión',
-    nota: 'hace 1m: 0,54',
-    refPct: 50,
-    desc: 'Toneladas de maíz para comprar 1 tn de Urea. Umbral saludable: ≥ 0,6',
-  },
-  {
-    id: 'trigo-map',
-    label: 'Trigo / MAP',
-    valor: 0.43,
-    unidad: 'tn trigo/tn MAP',
-    barPct: 21.5,
-    color: 'var(--red)',
-    status: 'warn',
-    statusLabel: 'bajo presión',
-    nota: 'hace 1m: 0,45',
-    refPct: 50,
-    desc: 'Toneladas de trigo para comprar 1 tn de MAP. Umbral saludable: ≥ 0,5',
-  },
-  {
-    id: 'soja-gasoil-rel',
-    label: 'Soja / Gasoil',
-    valor: '365 L',
-    unidad: 'litros/tn soja',
-    barPct: 73,
-    color: 'var(--accent)',
-    status: 'mid',
-    statusLabel: 'normal',
-    nota: 'hace 1m: 362',
-    refPct: null,
-    desc: 'Litros de gasoil que se pueden comprar con 1 tn de soja vendida a pizarra.',
-  },
-  {
-    id: 'ternero-gasoil',
-    label: 'Ternero / Gasoil',
-    valor: '5,46 L',
-    unidad: 'litros/kg ternero',
-    barPct: 54.6,
-    color: 'var(--accent)',
-    status: 'mid',
-    statusLabel: 'normal',
-    nota: 'hace 1m: 5,22',
-    refPct: null,
-    desc: 'Litros de gasoil equivalentes por kg de ternero al destete.',
-  },
-];
-
 // Genera dinámicamente los últimos 12 meses (ej. termina en 'Abr' si estamos en Abril)
 const HIST_MESES = (() => {
   const nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -948,136 +880,6 @@ function TabCombustibles({ prefetch = {} }) {
 
 
 
-// ── Tab: Relaciones ───────────────────────────────────────────
-
-function TabRelaciones() {
-  return (
-    <div>
-      <div className="alert-strip info" style={{ marginBottom: 24 }}>
-        <span className="alert-icon">i</span>
-        <span className="alert-text">
-          Las relaciones insumo/producto miden el <strong>poder adquisitivo del campo</strong>: cuántas unidades de producto (grano, hacienda) se necesitan para comprar una unidad de insumo. Rojo = presión sobre la rentabilidad.
-        </span>
-      </div>
-
-      {/* Relaciones Grano / Fertilizante — formato .stat */}
-      <div className="section-title" style={{ marginBottom: 12 }}>Relaciones Grano / Fertilizante</div>
-      <div className="grid grid-3" style={{ marginBottom: 28 }}>
-        {RELACIONES.slice(0, 3).map(r => {
-          const badgeCls = r.status === 'warn' ? 'dn' : r.status === 'mid' ? 'info' : 'up';
-          const prevVal  = parseFloat(r.nota.replace('hace 1m: ', '').replace(',', '.'));
-          const currVal  = typeof r.valor === 'number' ? r.valor : parseFloat(String(r.valor).replace(',', '.'));
-          const delta    = !isNaN(prevVal) && !isNaN(currVal) ? currVal - prevVal : null;
-          return (
-            <div key={r.id} className="stat" style={{ cursor: 'default' }}>
-              <div className="stat-label">
-                <span>{r.label}</span>
-                <span className={`stat-badge ${badgeCls}`}>{r.statusLabel}</span>
-              </div>
-              <div className="stat-val" style={{ color: r.color, fontSize: 28 }}>{r.valor}</div>
-              <div className="stat-delta fl" style={{ marginBottom: 6 }}>{r.unidad}</div>
-              {delta !== null && (
-                <div className={`stat-delta ${delta > 0 ? 'up' : delta < 0 ? 'dn' : 'fl'}`}>
-                  {delta > 0 ? '▲' : delta < 0 ? '▼' : '—'} {Math.abs(delta).toFixed(2)} vs mes anterior
-                </div>
-              )}
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Presión relativa</span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)' }}>{r.barPct}%</span>
-                </div>
-                <div className="gauge-bar-wrap" style={{ marginBottom: 0 }}>
-                  <div className={`gauge-bar-fill ${r.status === 'warn' ? 'warn' : 'mid'}`} style={{ width: `${r.barPct}%` }} />
-                  {r.refPct && <div className="gauge-bar-ref" style={{ left: `${r.refPct}%` }} />}
-                </div>
-              </div>
-              <div className="stat-meta" style={{ marginTop: 8 }}>{r.desc}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Relaciones Hacienda / Combustible — formato .stat */}
-      <div className="section-title" style={{ marginBottom: 12 }}>Relaciones Hacienda / Combustible</div>
-      <div className="grid grid-3" style={{ marginBottom: 28 }}>
-        {RELACIONES.slice(3).map(r => {
-          const badgeCls = r.status === 'warn' ? 'dn' : r.status === 'mid' ? 'info' : 'up';
-          return (
-            <div key={r.id} className="stat" style={{ cursor: 'default' }}>
-              <div className="stat-label">
-                <span>{r.label}</span>
-                <span className={`stat-badge ${badgeCls}`}>{r.statusLabel}</span>
-              </div>
-              <div className="stat-val" style={{ color: r.color, fontSize: 28 }}>{r.valor}</div>
-              <div className="stat-delta fl" style={{ marginBottom: 6 }}>{r.unidad}</div>
-              <div className="stat-meta">{r.nota}</div>
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Nivel</span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)' }}>{r.barPct}%</span>
-                </div>
-                <div className="gauge-bar-wrap" style={{ marginBottom: 0 }}>
-                  <div className="gauge-bar-fill mid" style={{ width: `${r.barPct}%` }} />
-                </div>
-              </div>
-              <div className="stat-meta" style={{ marginTop: 8 }}>{r.desc}</div>
-            </div>
-          );
-        })}
-        <div />
-      </div>
-
-      <div className="section-title">Detalle · todas las relaciones</div>
-      <div className="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Relación</th>
-              <th className="r">Valor actual</th>
-              <th className="r">hace 1m</th>
-              <th>Estado</th>
-              <th>Descripción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {RELACIONES.map(r => (
-              <tr key={r.id}>
-                <td className="bold">{r.label}</td>
-                <td className="r">
-                  <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: r.color }}>{r.valor}</span>
-                </td>
-                <td className="r dim mono" style={{ fontSize: 11 }}>{r.nota.replace('hace 1m: ', '')}</td>
-                <td>
-                  <span className={`pill ${r.status === 'warn' ? 'dn' : r.status === 'mid' ? 'info' : 'fl'}`}>
-                    {r.statusLabel}
-                  </span>
-                </td>
-                <td className="dim" style={{ fontSize: 11 }}>{r.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--bg1)', border: '1px solid var(--line)', borderRadius: 8 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 6 }}>Metodología</div>
-        <div style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
-          Relaciones calculadas sobre precios de pizarra BCR (zona núcleo) y precios YPF al surtidor. La línea vertical en las barras indica el umbral de referencia histórico. Los valores de combustible se calculan en litros por tonelada producida usando el precio del gasoil agro con subsidio.
-        </div>
-      </div>
-      <div className="source">Fuente: BCR · YPF · IndexMundi · World Bank Pink Sheet</div>
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────
-
-const TABS = [
-  { id: 'combustibles',  label: 'Combustibles' },
-  { id: 'fertilizantes', label: 'Fertilizantes' },
-  { id: 'relaciones',    label: 'Relaciones I/P' },
-];
-
 export function InsumosPage({ goPage }) {
   const [tab,          setTab]          = useState('combustibles');
   const [insumosData,  setInsumosData]  = useState(null);
@@ -1164,7 +966,7 @@ export function InsumosPage({ goPage }) {
             Insumos
             <span className="help-pip" onClick={() => goPage('ayuda', 'glosario-insumos')} title="Ayuda">?</span>
           </div>
-          <div className="ph-sub">Fertilizantes · Combustibles · Relaciones insumo/producto</div>
+          <div className="ph-sub">Fertilizantes · Combustibles</div>
         </div>
         <div className="ph-right">
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '.06em' }}>
@@ -1205,7 +1007,7 @@ export function InsumosPage({ goPage }) {
       <div className="section">
         {tab === 'fertilizantes' && <TabFertilizantes />}
         {tab === 'combustibles'  && <TabCombustibles prefetch={{ data: insumosData, ready: insumosReady }} />}
-        {tab === 'relaciones'    && <TabRelaciones />}
+
       </div>
     </div>
   );

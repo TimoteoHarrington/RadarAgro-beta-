@@ -6,10 +6,7 @@ import {
   GRANOS_PIZARRAS,
   GRANOS_OVERVIEW,  // usado por IndicesWidget y RetencionesWidget (cálculos internos)
 } from '../../data/granos';
-import {
-  HACIENDA_OVERVIEW, HACIENDA_NOVILLITOS, HACIENDA_NOVILLOS,
-  HACIENDA_VACAS, HACIENDA_FAENA,
-} from '../../data/hacienda';
+// Hacienda: datos live desde /api/hacienda (scraping MAG Cañuelas)
 
 // ── Helpers de formato ────────────────────────────────────────
 const fARS = v => v != null ? '$\u00a0' + Math.round(v).toLocaleString('es-AR') : '…';
@@ -146,32 +143,29 @@ function buildCbotW(mundo) {
   });
 }
 
-const HACIENDA_W = [
-  ...HACIENDA_NOVILLITOS.slice(0, 2).map(h => ({
-    name:  h.categoria,
-    sub:   `Invernada · ${h.fuente}`,
-    pts:   '0,17 14,15 28,12 42,10 56,8',
-    price: fARS(h.promedio),
-    badge: fPct(h.varPct),
-    cls:   h.varDir,
-  })),
-  ...HACIENDA_NOVILLOS.slice(0, 2).map(h => ({
-    name:  h.categoria,
-    sub:   `Faena · ${h.fuente}`,
-    pts:   '0,16 14,14 28,12 42,11 56,9',
-    price: fARS(h.promedio),
-    badge: fPct(h.varPct),
-    cls:   h.varDir,
-  })),
-  ...HACIENDA_VACAS.slice(0, 1).map(h => ({
-    name:  h.categoria,
-    sub:   `Faena · ${h.fuente}`,
-    pts:   '0,11 18,11 36,11 56,11',
-    price: fARS(h.promedio),
-    badge: fPct(h.varPct),
-    cls:   h.varDir,
-  })),
-];
+// Hook compartido para datos live de hacienda (MAG Cañuelas scraping)
+// Se cachea en módulo para no hacer múltiples fetches si hay varios widgets
+let _haciendaCache   = null;
+let _haciendaPromise = null;
+
+function fetchHaciendaLive() {
+  if (_haciendaCache)   return Promise.resolve(_haciendaCache);
+  if (_haciendaPromise) return _haciendaPromise;
+  _haciendaPromise = fetch('/api/hacienda')
+    .then(r => r.json())
+    .then(j => { _haciendaCache = j.ok ? j : null; return _haciendaCache; })
+    .catch(() => null);
+  return _haciendaPromise;
+}
+
+function useHaciendaWidget() {
+  const [data, setData] = React.useState(_haciendaCache);
+  React.useEffect(() => {
+    if (_haciendaCache) { setData(_haciendaCache); return; }
+    fetchHaciendaLive().then(d => setData(d));
+  }, []);
+  return data;
+}
 
 const INS = [
   { name: 'Urea granulada',  sub: 'ARS/tn · USD 388 · semanal', pts: '0,9 14,11 28,10 42,12 56,14',  price: '$484.000', badge: '−1,6%', cls: 'dn' },
@@ -261,62 +255,93 @@ function GranosPizarraWidget({ size, goPage, fobData, dolares }) {
 
 // ─────────────────────────────────────────────────────────────
 // WIDGET: Hacienda
-// Datos: data/hacienda.js (precios del último remate MAG · fallback estático)
+// Datos: /api/hacienda (scraping MAG Cañuelas · live)
 // ─────────────────────────────────────────────────────────────
 function HaciendaWidget({ size, goPage }) {
-  const overview = HACIENDA_OVERVIEW;
-  const hdr = <WHeader title="Hacienda · ARS/kg vivo · Cañuelas" dotColor="var(--green)" page="hacienda" goPage={goPage} />;
+  const live = useHaciendaWidget();
+  const hdr  = <WHeader title="Hacienda · ARS/kg vivo · Cañuelas" dotColor={live ? 'var(--green)' : 'var(--text3)'} page="hacienda" goPage={goPage} />;
+
+  // Construir filas de categorías desde grupos live
+  const rows = React.useMemo(() => {
+    if (!live?.grupos) return [];
+    const out = [];
+    const agregar = (grupoId, n) => {
+      const g = live.grupos.find(g => g.id === grupoId);
+      if (!g) return;
+      g.items.slice(0, n).forEach(cat => out.push({
+        name:  cat.nombre,
+        sub:   `${g.label} · MAG Cañuelas · ARS/kg vivo`,
+        pts:   '0,12 14,11 28,10 42,9 56,8',
+        price: cat.promedio != null ? fARS(cat.promedio) : '…',
+        badge: '',
+        cls:   'fl',
+      }));
+    };
+    agregar('novillitos', 2);
+    agregar('novillos',   2);
+    agregar('vacas',      1);
+    return out;
+  }, [live]);
+
+  // KPIs para vista normal/wide: novillito, novillo, IGMAG
+  const novillito = live?.grupos?.find(g => g.id === 'novillitos')?.items?.find(c => /300\/390/i.test(c.nombre));
+  const novillo   = live?.grupos?.find(g => g.id === 'novillos')?.items?.find(c => /431\/460/i.test(c.nombre));
 
   if (size === 'normal') return (
     <>
       {hdr}
       <Wkc2 items={[
-        { label: 'Novillito Esp.', val: fARS(overview[1]?.precio), delta: fPct(overview[1]?.var), cls: overview[1]?.varDir },
-        { label: 'Novillo Esp.',   val: fARS(overview[0]?.precio), delta: fPct(overview[0]?.var), cls: overview[0]?.varDir },
+        { label: 'Novillito EyB', val: novillito ? fARS(novillito.promedio) : '…', delta: 'MAG Cañuelas', cls: 'fl' },
+        { label: 'Novillo EyB',   val: novillo   ? fARS(novillo.promedio)   : '…', delta: 'MAG Cañuelas', cls: 'fl' },
       ]} />
-      {HACIENDA_W.slice(0, 3).map((g, i) => <GrainRowCompact key={i} g={g} goPage={goPage} page="hacienda" />)}
+      {rows.slice(0, 3).map((g, i) => <GrainRowCompact key={i} g={g} goPage={goPage} page="hacienda" />)}
     </>
   );
   if (size === 'wide') return (
     <>
       {hdr}
       <div className="widget-hero">
-        {overview.slice(0, 4).map(h => (
-          <div className="widget-kpi" key={h.id}>
-            <div className="widget-kpi-label">{h.nombre}</div>
-            <div className="widget-kpi-val">{fARS(h.precio)}</div>
-            <div className={`widget-kpi-delta ${h.varDir}`}>{fPct(h.var)}</div>
+        {[
+          { label: 'IGMAG',       val: live ? fARS(live.igmag)            : '…' },
+          { label: 'Novillito',   val: novillito ? fARS(novillito.promedio) : '…' },
+          { label: 'Novillo',     val: novillo   ? fARS(novillo.promedio)   : '…' },
+          { label: 'Cabezas',     val: live ? (live.cabezasHoy ?? live.totalCabezas)?.toLocaleString('es-AR') ?? '…' : '…' },
+        ].map(k => (
+          <div className="widget-kpi" key={k.label}>
+            <div className="widget-kpi-label">{k.label}</div>
+            <div className="widget-kpi-val">{k.val}</div>
+            <div className="widget-kpi-delta fl">MAG Cañuelas</div>
           </div>
         ))}
       </div>
-      {HACIENDA_W.slice(0, 4).map((g, i) => <GrainRow key={i} g={g} goPage={goPage} page="hacienda" />)}
+      {rows.slice(0, 4).map((g, i) => <GrainRow key={i} g={g} goPage={goPage} page="hacienda" />)}
     </>
   );
+  // size === 'tall'
   return (
     <>
       {hdr}
-      <div className="widget-hero" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
-        {overview.slice(0, 5).map(h => (
-          <div className="widget-kpi" key={h.id}>
-            <div className="widget-kpi-label">{h.nombre}</div>
-            <div className="widget-kpi-val">{fARS(h.precio)}</div>
-            <div className={`widget-kpi-delta ${h.varDir}`}>{fPct(h.var)}</div>
+      <div className="widget-hero" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        {[
+          { label: 'IGMAG',     val: live ? fARS(live.igmag) : '…',            sub: 'índice general' },
+          { label: 'Novillito', val: novillito ? fARS(novillito.promedio) : '…', sub: 'EyB 300/390 kg' },
+          { label: 'Novillo',   val: novillo   ? fARS(novillo.promedio)   : '…', sub: 'EyB 431/460 kg' },
+        ].map(k => (
+          <div className="widget-kpi" key={k.label}>
+            <div className="widget-kpi-label">{k.label}</div>
+            <div className="widget-kpi-val">{k.val}</div>
+            <div className="widget-kpi-delta fl">{k.sub}</div>
           </div>
         ))}
       </div>
-      {HACIENDA_W.map((g, i) => <GrainRow key={i} g={g} goPage={goPage} page="hacienda" />)}
-      <div style={{ padding: '14px 18px 8px', borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '10px' }}>Vientres · ARS/cabeza (estimado)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-          {[['Vaca con cría', '$1.900.000', '+2,7%'], ['Vaca usada c/cría', '$1.550.000', '+3,3%'], ['Vaquillona c/cría', '$1.900.000', '+4,4%']].map(([l, v, d]) => (
-            <div key={l} style={{ background: 'var(--bg1)', borderRadius: '8px', padding: '12px 14px', border: '1px solid var(--line)' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '8px', color: 'var(--text3)', marginBottom: '4px' }}>{l}</div>
-              <div style={{ fontFamily: 'var(--display)', fontSize: '15px', fontWeight: 600, color: 'var(--white)' }}>{v}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--green)' }}>{d}</div>
-            </div>
-          ))}
+      {rows.map((g, i) => <GrainRow key={i} g={g} goPage={goPage} page="hacienda" />)}
+      {live && (
+        <div style={{ padding: '8px 18px', borderTop: '1px solid var(--line)', background: 'var(--bg2)' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text3)' }}>
+            {live.esFallback ? '⚠ Fallback' : '● Live'} · {live.fuente} · {live.fecha ?? ''}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -619,20 +644,27 @@ function MacroWidget({ size, goPage, inflacion, riesgoPais, indec, bcra }) {
 
 // ─────────────────────────────────────────────────────────────
 // WIDGET: Índices estructurales
-// Datos: calculados desde granos/hacienda (data estática)
+// Datos: calculados desde granos (estático) + hacienda (live)
 // ─────────────────────────────────────────────────────────────
 function IndicesWidget({ size, goPage }) {
-  // Calcular índices en tiempo real desde los datos de granos y hacienda
+  const live = useHaciendaWidget();
+
   const soja  = GRANOS_OVERVIEW.find(g => g.id === 'soja');
   const maiz  = GRANOS_OVERVIEW.find(g => g.id === 'maiz');
-  const nov   = HACIENDA_OVERVIEW.find(h => h.id === 'novillo');
-  const novit = HACIENDA_OVERVIEW.find(h => h.id === 'novillito');
 
-  const urea    = 484000;  // ARS/tn
-  const ternero = HACIENDA_OVERVIEW.find(h => h.id === 'rosgan-inv')?.precio ?? 6250;
+  // Precios de hacienda desde el endpoint live
+  const novGrupo  = live?.grupos?.find(g => g.id === 'novillos');
+  const novitGrupo= live?.grupos?.find(g => g.id === 'novillitos');
+  const novPrecio = novGrupo?.items?.find(c => /431\/460/i.test(c.nombre))?.promedio
+                 ?? novGrupo?.promedioPonderado ?? null;
+  const novitPrecio = novitGrupo?.items?.find(c => /300\/390/i.test(c.nombre))?.promedio
+                   ?? novitGrupo?.promedioPonderado ?? null;
 
-  const feedlot = nov && maiz ? (nov.precio * 1000) / maiz.precioARS : null;
-  const criaRat = novit && nov ? novit.precio / nov.precio : null;
+  const urea    = 484000;  // ARS/tn — actualizar en Paso 5 (Insumos live)
+  const ternero = 6250;    // ARS/kg vivo — pendiente ROSGAN Paso 5
+
+  const feedlot = novPrecio && maiz ? (novPrecio * 1000) / maiz.precioARS : null;
+  const criaRat = novitPrecio && novPrecio ? novitPrecio / novPrecio : null;
   const sojaUre = soja && urea ? soja.precioARS / urea : null;
   const maizTer = maiz && ternero ? (maiz.precioARS / 1000) / (ternero / 1000) : null;
   const maizSoj = maiz && soja ? maiz.precioARS / soja.precioARS : null;

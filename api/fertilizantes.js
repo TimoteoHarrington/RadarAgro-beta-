@@ -197,7 +197,7 @@ export default async function handler(req) {
     );
   }
 
-  const ORDEN = ['urea', 'map', 'dap', 'uan', 'clu'];
+  const ORDEN = ['urea', 'map', 'uan', 'clu']; // Los 4 principales del mercado argentino
   const productos = [];
 
   for (const id of ORDEN) {

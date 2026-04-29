@@ -81,6 +81,10 @@ const HIST_MESES = (() => {
   return meses;
 })();
 
+// ── Color único — igual que gráficos de granos (MundoPage) ──────────────────
+const CHART_COLOR = 'rgba(154,176,196,0.9)';
+const CHART_FILL  = 'rgba(154,176,196,0.12)';
+
 // ── Helpers ───────────────────────────────────────────────────
 
 const fmtARS = v => v == null ? '—' : '$\u00a0' + v.toLocaleString('es-AR');
@@ -109,16 +113,6 @@ function Spark({ data, color }) {
 }
 
 // ── Tab: Fertilizantes ────────────────────────────────────────
-
-// Colores por producto (paleta consistente con el resto del sistema)
-const FERT_COLORS = {
-  urea: '#f0d050',
-  map:  '#4d9ef0',
-  dap:  '#56c97a',
-  uan:  '#e07090',
-  sol:  '#f09050',
-  clu:  '#a070e0',
-};
 
 // Badge de fuente — muestra de dónde viene el dato
 function FuenteBadge({ fuente }) {
@@ -176,7 +170,7 @@ function TabFertilizantes() {
     nombre:     activeF.nombre,
     ambito:     'FOB Internacional',
     unidad:     activeF.ars ? 'ARS/tn' : 'USD/tn',
-    color:      FERT_COLORS[activeF.id] ?? 'rgba(91,156,246,0.85)',
+    color:      CHART_COLOR,
     valor:      activeF.ars ?? activeF.usd,
     fuente:     'IndexMundi · World Bank Pink Sheet',
     fecha:      activeF.fecha ?? fecha,
@@ -243,7 +237,7 @@ function TabFertilizantes() {
             ? (f.varPct > 0 ? '+' : '') + f.varPct.toFixed(1).replace('.', ',') + '%'
             : '—';
           const isSelected = selectedId === f.id;
-          const color = FERT_COLORS[f.id] ?? 'var(--accent)';
+          const color = CHART_COLOR;
           return (
             <div key={f.id} className="stat"
               onClick={() => setSelectedId(isSelected ? null : f.id)}
@@ -329,7 +323,7 @@ function TabFertilizantes() {
                   <tr key={f.id}
                     style={{ cursor: 'pointer', opacity: selectedId && selectedId !== f.id ? 0.6 : 1, transition: 'opacity .15s' }}
                     onClick={() => setSelectedId(selectedId === f.id ? null : f.id)}>
-                    <td className="bold" style={{ color: FERT_COLORS[f.id] }}>{f.nombre}</td>
+                    <td className="bold" style={{ color: 'var(--white)' }}>{f.nombre}</td>
                     <td className="dim mono" style={{ fontSize: 11 }}>{f.formula}</td>
                     <td className="r w mono">{fmtARS(f.ars)}</td>
                     <td className="r mono">{f.usd ? fmtUSD(f.usd) : '—'}</td>
@@ -337,7 +331,7 @@ function TabFertilizantes() {
                       {f.varPct != null ? <Pill d={d}>{fmtPct(f.varPct)}</Pill> : <span className="dim">—</span>}
                     </td>
                     <td className="r">
-                      <Spark data={f.hist} color={FERT_COLORS[f.id] ?? (d === 'dn' ? 'var(--red)' : d === 'up' ? 'var(--green)' : 'var(--text3)')} />
+                      <Spark data={f.hist} color={CHART_COLOR} />
                     </td>
                     <td className="dim" style={{ fontSize: 11 }}>{f.nota}</td>
                   </tr>
@@ -412,9 +406,10 @@ function InsumosHistorialChart({ card, onClose }) {
   const RANGE_LABEL = { '3M': '3 meses', '6M': '6 meses', '1A': '1 año', 'MAX': 'máx. disponible' };
 
   // ── canvas draw ──────────────────────────────────────────────
-  const LINE_COLOR  = 'rgba(154,176,196,0.9)';
-  const FILL_START  = 'rgba(154,176,196,0.12)';
-  const FILL_END    = 'rgba(154,176,196,0.00)';
+  // Usa las constantes globales del módulo
+  const LINE_COLOR = CHART_COLOR;
+  const FILL_START = CHART_FILL;
+  const FILL_END   = 'rgba(154,176,196,0.00)';
   const PAD = { t: 20, r: 18, b: 32, l: 70 };
 
   const draw = useCallback((canvas, hoverIdx = null) => {

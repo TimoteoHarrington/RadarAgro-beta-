@@ -878,7 +878,10 @@ function TabCombustibles({ prefetch = {} }) {
   );
 }
 
-
+const TABS = [
+  { id: 'fertilizantes', label: 'Fertilizantes' },
+  { id: 'combustibles',  label: 'Combustibles'  },
+];
 
 export function InsumosPage({ goPage }) {
   const [tab,          setTab]          = useState('combustibles');

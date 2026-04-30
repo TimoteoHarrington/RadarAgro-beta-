@@ -206,6 +206,10 @@ export async function fetchHaciendaFaena() {
   return get('/api/hacienda-faena');
 }
 
+export async function fetchHaciendaHistorico(desde = 2022) {
+  return get(`/api/hacienda-historico?desde=${desde}`);
+}
+
 // ─────────────────────────────────────────────────────────────
 // Fertilizantes — via proxy /api/fertilizantes
 // ─────────────────────────────────────────────────────────────

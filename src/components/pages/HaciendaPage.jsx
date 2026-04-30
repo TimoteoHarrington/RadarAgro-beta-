@@ -1,7 +1,7 @@
 // HaciendaPage.jsx — Live data: MAG Cañuelas scraping + MAGYP XLS faena
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { DATA } from '../../data/haciendaXLS.js';
-import { fetchHaciendaFaena } from '../../services/api.js';
+import { fetchHaciendaFaena, fetchHaciendaHistorico } from '../../services/api.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fARS = v => v == null ? '—' : '$ ' + Math.round(v).toLocaleString('es-AR');
@@ -303,6 +303,32 @@ const GRUPO_COLORS = {
   terneros:    '#c8d8f8',
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook: serie histórica IGMAG/INMAG desde /api/hacienda-historico
+// Solo carga cuando el usuario abre "Histórico mensual"
+// ─────────────────────────────────────────────────────────────────────────────
+function useHaciendaHistorico(enabled) {
+  const [data,   setData]   = useState(null);
+  const [status, setStatus] = useState('idle');
+
+  useEffect(() => {
+    if (!enabled || status !== 'idle') return;
+    setStatus('loading');
+    fetchHaciendaHistorico(2022)
+      .then(({ data: json, error }) => {
+        if (error || !json?.ok) throw new Error(error ?? 'sin datos');
+        setData(json);
+        setStatus(json.esFallback ? 'fallback' : 'ok');
+      })
+      .catch(err => {
+        console.warn('[HaciendaPage] /api/hacienda-historico:', err.message);
+        setStatus('error');
+      });
+  }, [enabled, status]);
+
+  return { data, status };
+}
+
 function TablaRemateLive({ liveData, status }) {
   const [grupoAbierto, setGrupoAbierto] = useState(null);
 
@@ -481,21 +507,27 @@ function TablaRemateLive({ liveData, status }) {
 // ─────────────────────────────────────────────────────────────────────────────
 function TabPrecios() {
   const { data: liveData, status, reload } = useHaciendaLive();
-  const [vista, setVista] = useState('remate'); // 'remate' | 'historico'
-  const [cat, setCat] = useState('ig');
+  const [vista, setVista] = useState('remate');
+  const [cat, setCat]     = useState('igmag');
+
+  // Histórico live — solo carga cuando el usuario abre esa vista
+  const histEnabled = vista === 'historico';
+  const { data: histData, status: histStatus } = useHaciendaHistorico(histEnabled);
+
   const CATS = [
-    { key:'ig', label:'IGMAG',      color:'var(--accent)' },
-    { key:'no', label:'Novillos',   color:'#5b9cf6' },
-    { key:'nt', label:'Novillitos', color:'#4080d8' },
-    { key:'vq', label:'Vaquillonas',color:'#6faafc' },
-    { key:'va', label:'Vacas',      color:'#8fb8f0' },
-    { key:'to', label:'Toros',      color:'#3268c5' },
+    { key:'igmag', label:'IGMAG', color:'var(--accent)' },
+    { key:'inmag', label:'INMAG', color:'#5b9cf6' },
   ];
-  const sel = CATS.find(c=>c.key===cat);
-  // datos históricos para la vista de series
-  const data = precios.filter(p => p[cat] != null);
-  const vals = data.map(p => p[cat]);
-  const maxV = Math.max(...vals), minV = Math.min(...vals);
+  const sel = CATS.find(c => c.key === cat) ?? CATS[0];
+
+  // Serie a mostrar: live si disponible, fallback al XLS para IGMAG
+  const serieLive  = histData?.serie ?? [];
+  const serieXLS   = precios.filter(p => p.ig != null); // del haciendaXLS.js
+  const serieActiva = serieLive.length > 0 ? serieLive : serieXLS.map(p => ({ f:p.f, igmag:p.ig, inmag:p.no }));
+
+  const vals = serieActiva.map(d => cat === 'igmag' ? d.igmag : d.inmag).filter(Boolean);
+  const maxV = vals.length ? Math.max(...vals) : 0;
+  const minV = vals.length ? Math.min(...vals) : 0;
 
   return (
     <div>
@@ -531,9 +563,31 @@ function TabPrecios() {
       {/* ── Vista: Histórico mensual ── */}
       {vista === 'historico' && (
         <div>
-          {/* Selector de categoría */}
+          {/* Banner fuente */}
+          {histStatus === 'loading' && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
+              background:'rgba(90,150,246,.05)', border:'1px solid rgba(90,150,246,.15)', borderRadius:8 }}>
+              <Mono style={{ fontSize:9, color:'var(--accent)' }}>⟳ CARGANDO SERIE HISTÓRICA DEL MAG…</Mono>
+            </div>
+          )}
+          {histStatus === 'ok' && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
+              background:'rgba(74,191,120,.05)', border:'1px solid rgba(74,191,120,.15)', borderRadius:8 }}>
+              <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)', boxShadow:'0 0 5px var(--green)' }}/>
+              <Mono style={{ fontSize:9, color:'var(--green)', fontWeight:700, letterSpacing:'.08em' }}>LIVE</Mono>
+              <Mono style={{ fontSize:9, color:'var(--text2)' }}>{histData?.fuente} · {histData?.total} meses</Mono>
+            </div>
+          )}
+          {histStatus === 'fallback' && (
+            <div style={{ padding:'8px 14px', marginBottom:16,
+              background:'rgba(232,160,32,.05)', border:'1px solid rgba(232,160,32,.2)', borderRadius:8 }}>
+              <Mono style={{ fontSize:9, color:'#e8a020' }}>⚠ FALLBACK · {histData?.fuente}</Mono>
+            </div>
+          )}
+
+          {/* Selector IGMAG / INMAG */}
           <div style={{ display:'flex', gap:6, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
-            <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', marginRight:4 }}>SERIE</Mono>
+            <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em', marginRight:4 }}>ÍNDICE</Mono>
             {CATS.map(c => {
               const active = cat === c.key;
               return (
@@ -549,70 +603,100 @@ function TabPrecios() {
             })}
           </div>
 
-          {/* Stats */}
+          {/* KPIs */}
           <div className="grid grid-3" style={{ marginBottom:16 }}>
             {[
-              { l:'Mínimo histórico', v:fARS(minV), c:'var(--red)' },
-              { l:'Máximo histórico', v:fARS(maxV), c:'var(--green)' },
-              { l:'Último mes',       v:fARS(vals[vals.length-1]), c:sel.color },
+              { l:'Mínimo período',   v: minV ? fARS(minV) : '—', c:'var(--text2)' },
+              { l:'Máximo período',   v: maxV ? fARS(maxV) : '—', c:'var(--text2)' },
+              { l:'Último mes',       v: vals.length ? fARS(vals[vals.length-1]) : '—', c: sel.color },
             ].map((s, i) => (
               <div key={i} className="stat" style={{ cursor:'default', padding:'12px 16px' }}>
-                <Mono style={{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6, letterSpacing:'.08em', textTransform:'uppercase' }}>{s.l}</Mono>
+                <Mono style={{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:6,
+                  letterSpacing:'.08em', textTransform:'uppercase' }}>{s.l}</Mono>
                 <div style={{ fontSize:20, fontWeight:700, color:s.c, fontFamily:'var(--mono)' }}>{s.v}</div>
               </div>
             ))}
           </div>
 
-          {/* Sparkline */}
-          <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
-              <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' }}>
-                {sel.label} · 2016–2026 · ARS/kg vivo
+          {/* Variación interanual */}
+          {histData?.stats?.igmag?.varInteranual != null && (
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', marginBottom:16,
+              background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8 }}>
+              <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.08em' }}>VAR. INTERANUAL IGMAG</Mono>
+              <Mono style={{ fontSize:16, fontWeight:700,
+                color: histData.stats.igmag.varInteranual >= 0 ? 'var(--red)' : 'var(--green)' }}>
+                {histData.stats.igmag.varInteranual >= 0 ? '+' : ''}{histData.stats.igmag.varInteranual}%
               </Mono>
-              <Mono style={{ fontSize:9, color:'var(--text3)' }}>
-                {data[0]?.f} – {data[data.length-1]?.f}
-              </Mono>
+              <Mono style={{ fontSize:9, color:'var(--text3)' }}>vs mismo mes año anterior</Mono>
             </div>
-            <Sparkline data={vals} color={sel.color} height={72}/>
-            <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
-              {['2016','2018','2020','2022','2024','2026'].map(y => (
-                <Mono key={y} style={{ fontSize:9, color:'var(--text3)' }}>{y}</Mono>
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* Tabla últimos 24 meses */}
-          <div className="section-title">Histórico mensual · últimos 24 meses</div>
+          {/* Sparkline */}
+          {histStatus === 'loading' ? (
+            <div style={{ height:100, background:'var(--bg1)', border:'1px solid var(--line)',
+              borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16 }}>
+              <Mono style={{ fontSize:9, color:'var(--text3)' }}>Cargando…</Mono>
+            </div>
+          ) : (
+            <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10,
+              padding:'16px 20px', marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+                <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' }}>
+                  {sel.label} · ARS/kg vivo · {serieActiva[0]?.f} – {serieActiva[serieActiva.length-1]?.f}
+                </Mono>
+              </div>
+              <Sparkline data={vals} color={sel.color} height={72}/>
+              <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
+                {['2023','2024','2025','2026'].map(y => (
+                  <Mono key={y} style={{ fontSize:9, color:'var(--text3)' }}>{y}</Mono>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tabla */}
+          <div className="section-title">Histórico mensual · 2023–2026</div>
           <div className="tbl-wrap tbl-scroll" style={{ maxHeight:360 }}>
             <table>
               <thead>
                 <tr>
                   <th>Mes</th>
                   <th className="r">IGMAG</th>
-                  <th className="r">Novillos</th>
-                  <th className="r">Novillitos</th>
-                  <th className="r">Vacas</th>
-                  <th className="r">Vaquillonas</th>
+                  <th className="r">INMAG</th>
+                  <th className="r">Cabezas</th>
                   <th className="r">Var. m/m</th>
+                  <th className="r">Var. i/a</th>
                 </tr>
               </thead>
               <tbody>
-                {[...precios.slice(-24)].reverse().map((p, i, arr) => {
-                  const prev = arr[i+1];
-                  const vr = (prev && prev.ig) ? ((p.ig - prev.ig) / prev.ig * 100) : null;
-                  const { label } = parseFecha(p.f);
+                {[...serieActiva].reverse().map((d, i, arr) => {
+                  const prev   = arr[i + 1];
+                  const prev12 = arr[i + 12];
+                  const vr  = (prev?.igmag   && d.igmag) ? ((d.igmag - prev.igmag)   / prev.igmag   * 100) : null;
+                  const via = (prev12?.igmag  && d.igmag) ? ((d.igmag - prev12.igmag) / prev12.igmag * 100) : null;
                   return (
-                    <tr key={p.f}>
-                      <td><Mono style={{ fontSize:12 }}>{label}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{fARS(p.ig)}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'#5b9cf6' }}>{fARS(p.no)}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'#4080d8' }}>{fARS(p.nt)}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'#8fb8f0' }}>{fARS(p.va)}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'#6faafc' }}>{fARS(p.vq)}</Mono></td>
+                    <tr key={d.f}>
+                      <td><Mono style={{ fontSize:12 }}>{parseFecha(d.f).label}</Mono></td>
+                      <td className="r"><Mono style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>
+                        {d.igmag ? fARS(d.igmag) : '—'}
+                      </Mono></td>
+                      <td className="r"><Mono style={{ fontSize:11, color:'#5b9cf6' }}>
+                        {d.inmag ? fARS(d.inmag) : '—'}
+                      </Mono></td>
+                      <td className="r"><Mono style={{ fontSize:11, color:'var(--text2)' }}>
+                        {d.cab ? fK(d.cab) : '—'}
+                      </Mono></td>
                       <td className="r">
                         {vr != null
                           ? <Mono style={{ fontSize:10, fontWeight:700, color:vr>=0?'var(--green)':'var(--red)' }}>
                               {vr>=0?'▲ +':'▼ '}{Math.abs(vr).toFixed(1)}%
+                            </Mono>
+                          : <Mono style={{ color:'var(--text3)', fontSize:10 }}>—</Mono>}
+                      </td>
+                      <td className="r">
+                        {via != null
+                          ? <Mono style={{ fontSize:10, fontWeight:700, color:via>=0?'var(--red)':'var(--green)' }}>
+                              {via>=0?'+':''}{via.toFixed(1)}%
                             </Mono>
                           : <Mono style={{ color:'var(--text3)', fontSize:10 }}>—</Mono>}
                       </td>
@@ -623,7 +707,7 @@ function TabPrecios() {
             </table>
           </div>
           <div className="source" style={{ marginTop:8 }}>
-            Fuente: Mercado Agroganadero SA · Comercialización MAG 2016–2026
+            Fuente: Mercado Agroganadero S.A. (Cañuelas) · IGMAG e INMAG mensuales
           </div>
         </div>
       )}

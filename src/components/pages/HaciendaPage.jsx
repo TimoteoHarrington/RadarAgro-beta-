@@ -637,73 +637,149 @@ function TabPrecios() {
 function TabFaena({ faenaLive, faenaStatus }) {
   const [vista, setVista] = useState('mensual');
 
-  // Usar datos live si están disponibles, sino el XLS estático como fallback visual
-  const faenaData   = faenaLive?.faena ?? faena;
-  const esFallback  = !faenaLive || faenaStatus === 'error' || faenaStatus === 'idle' || faenaStatus === 'loading';
-  const ultimoLive  = faenaLive?.ultimo ?? null;
+  // Datos live del MAGYP XLS. Si no están disponibles, usar el fallback del haciendaXLS
+  const faenaData = faenaLive?.faena?.length > 0 ? faenaLive.faena : faena;
+  const isLive    = faenaStatus === 'ok' || faenaStatus === 'fallback';
 
-  const faena12 = faenaData.slice(-12);
-  const totalFaena12 = faenaLive?.kpis?.faena12meses ?? faena12.reduce((s,d) => s+(d.t||0), 0);
-  const pesoPromFaena12 = (() => {
-    const r = faena12.filter(d => d.pr);
-    return r.length ? (r.reduce((s,d)=>s+d.pr,0)/r.length).toFixed(1) : null;
+  // KPIs calculados desde los datos reales
+  const ult12     = faenaData.slice(-12);
+  const total12   = ult12.reduce((s, d) => s + (d.t || 0), 0);
+  const pesoUlt   = faenaData[faenaData.length - 1]?.pr ?? null;
+  const phUlt     = faenaData[faenaData.length - 1]?.ph ?? null;
+
+  const cicloActual = (() => {
+    const ph = phUlt;
+    if (ph == null) return { label:'—', color:'var(--text3)' };
+    if (ph < 44)   return { label:'Retención fuerte',   color:'var(--green)' };
+    if (ph < 46)   return { label:'Retención moderada', color:'var(--green)' };
+    if (ph < 48.5) return { label:'Retención leve',     color:'#f5c518' };
+    if (ph < 50)   return { label:'Zona de alerta',     color:'#e8a020' };
+    return             { label:'Liquidación',           color:'var(--red)' };
   })();
-  const phPromFaena12 = (() => {
-    const r = faena12.filter(d => d.ph);
-    return r.length ? (r.reduce((s,d)=>s+d.ph,0)/r.length).toFixed(1) : null;
-  })();
-  const cicloFaseActual = faenaLive?.kpis?.cicloGanadero ?? cicloFase;
+
+  // Composición último mes disponible
+  const ultMes = faenaData[faenaData.length - 1];
+  const totalUlt = ultMes?.t ?? 0;
+  const composicion = totalUlt > 0 ? [
+    { label: 'Novillitos',  val: ultMes?.nt, color: '#4080d8' },
+    { label: 'Vaquillonas', val: ultMes?.vq, color: '#6faafc' },
+    { label: 'Vacas',       val: ultMes?.va, color: '#8fb8f0' },
+    { label: 'Novillos',    val: ultMes?.no, color: '#5b9cf6' },
+    { label: 'MEJ',         val: ultMes?.me, color: '#94c4ff' },
+    { label: 'Toros',       val: ultMes?.to, color: '#3268c5' },
+  ].filter(c => c.val) : [];
 
   return (
     <div>
-      {/* Banner estado fuente */}
-      {faenaStatus === 'loading' && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
-          background:'rgba(90,150,246,.05)', border:'1px solid rgba(90,150,246,.15)', borderRadius:8 }}>
-          <Mono style={{ fontSize:9, color:'var(--accent)' }}>CARGANDO DATOS DE FAENA DEL MAGYP…</Mono>
-        </div>
-      )}
-      {faenaStatus === 'ok' && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
-          background:'rgba(74,191,120,.05)', border:'1px solid rgba(74,191,120,.15)', borderRadius:8 }}>
+      {/* Banner fuente */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:10, padding:'9px 14px', marginBottom:20,
+        background: faenaStatus === 'ok' ? 'rgba(74,191,120,.05)' : faenaStatus === 'loading' ? 'rgba(90,150,246,.05)' : 'rgba(232,160,32,.05)',
+        border: `1px solid ${faenaStatus === 'ok' ? 'rgba(74,191,120,.2)' : faenaStatus === 'loading' ? 'rgba(90,150,246,.2)' : 'rgba(232,160,32,.25)'}`,
+        borderRadius: 8, flexWrap:'wrap',
+      }}>
+        {faenaStatus === 'loading' && <Mono style={{ fontSize:9, color:'var(--accent)' }}>⟳ DESCARGANDO XLS DEL MAGYP…</Mono>}
+        {faenaStatus === 'ok' && <>
           <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)', boxShadow:'0 0 5px var(--green)' }}/>
           <Mono style={{ fontSize:9, color:'var(--green)', fontWeight:700, letterSpacing:'.08em' }}>LIVE</Mono>
-          <Mono style={{ fontSize:9, color:'var(--text2)' }}>{faenaLive.fuente}</Mono>
-        </div>
-      )}
-      {faenaStatus === 'fallback' && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
-          background:'rgba(232,160,32,.05)', border:'1px solid rgba(232,160,32,.2)', borderRadius:8 }}>
-          <Mono style={{ fontSize:9, color:'#e8a020' }}>⚠ FALLBACK · {faenaLive?.fuente}</Mono>
-        </div>
-      )}
+          <Mono style={{ fontSize:9, color:'var(--text2)' }}>{faenaLive?.fuente}</Mono>
+        </>}
+        {faenaStatus === 'fallback' && <Mono style={{ fontSize:9, color:'#e8a020' }}>⚠ {faenaLive?.fuente}</Mono>}
+        {(faenaStatus === 'idle' || faenaStatus === 'error') && <Mono style={{ fontSize:9, color:'var(--text3)' }}>Fuente: MAGYP/DNCCA · Faena Bovina 2019–2026</Mono>}
+      </div>
 
-      {/* Tabs internas */}
+      {/* Sub-tabs */}
       <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' }}>
-        {[{id:'mensual',label:'Mensual 2019–2026'},{id:'anual',label:'Serie anual 1990–2025'},{id:'ciclo',label:'Ciclo ganadero'}].map(v => {
-          const active = vista===v.id;
-          return <button key={v.id} onClick={()=>setVista(v.id)} style={{
-            fontFamily:'var(--mono)', fontSize:10, fontWeight:600, padding:'5px 14px', borderRadius:6, cursor:'pointer',
-            border:`1px solid ${active?'var(--accent)':'var(--line)'}`,
-            background: active?'var(--acc-bg)':'transparent',
-            color: active?'var(--accent)':'var(--text3)', transition:'all .15s'
-          }}>{v.label.toUpperCase()}</button>;
+        {[
+          { id:'mensual', label:'Mensual' },
+          { id:'ciclo',   label:'Ciclo ganadero' },
+          { id:'anual',   label:'Serie anual' },
+        ].map(v => {
+          const active = vista === v.id;
+          return (
+            <button key={v.id} onClick={() => setVista(v.id)} style={{
+              fontFamily:'var(--mono)', fontSize:10, fontWeight:600,
+              padding:'5px 14px', borderRadius:6, cursor:'pointer',
+              border:`1px solid ${active ? 'var(--accent)' : 'var(--line)'}`,
+              background: active ? 'var(--acc-bg)' : 'transparent',
+              color: active ? 'var(--accent)' : 'var(--text3)',
+              transition:'all .15s',
+            }}>{v.label.toUpperCase()}</button>
+          );
         })}
       </div>
 
       {/* ── VISTA: MENSUAL ── */}
       {vista === 'mensual' && (
         <div>
+          {/* KPIs */}
           <div className="grid grid-3" style={{ marginBottom:20 }}>
-            <KpiCard label="Últimos 12 meses" value={fK(totalFaena12)} sub="cabezas faenadas" accent="var(--accent)" color="var(--accent)"/>
-            <KpiCard label="Peso prom. res" value={pesoPromFaena12?pesoPromFaena12+' kg':'—'} sub="promedio últimos 12m" color="var(--green)" accent="var(--green)"/>
-            <KpiCard label="% Hembras prom." value={phPromFaena12?phPromFaena12+'%':'—'} sub={cicloFaseActual.label} color={cicloFaseActual.color} accent={cicloFaseActual.color}/>
+            <KpiCard
+              label={`Faena acum. · últimos 12m`}
+              value={fK(total12)}
+              sub="cabezas faenadas"
+              accent="var(--accent)" color="var(--accent)"
+            />
+            <KpiCard
+              label={`Peso prom. res · ${ultMes ? parseFecha(ultMes.f).label : '—'}`}
+              value={pesoUlt ? pesoUlt.toFixed(1) + ' kg' : '—'}
+              sub="kg res con hueso"
+              color="var(--green)" accent="var(--green)"
+            />
+            <KpiCard
+              label="% Hembras · último mes"
+              value={phUlt ? phUlt.toFixed(1) + '%' : '—'}
+              sub={<span style={{ color: cicloActual.color, fontWeight:600 }}>{cicloActual.label}</span>}
+              color={cicloActual.color} accent={cicloActual.color}
+            />
           </div>
 
-          {/* Chart faena */}
+          {/* Composición último mes */}
+          {composicion.length > 0 && (
+            <div style={{ marginBottom:20 }}>
+              <div className="section-title">
+                Composición faena · {ultMes ? parseFecha(ultMes.f).label : '—'} · {fK(totalUlt)} cabezas
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {composicion.map(cat => {
+                  const pct = totalUlt > 0 ? (cat.val / totalUlt * 100) : 0;
+                  return (
+                    <div key={cat.label} style={{
+                      display:'grid', gridTemplateColumns:'110px 1fr 80px 60px',
+                      alignItems:'center', gap:12, padding:'8px 14px',
+                      background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:8,
+                    }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                        <div style={{ width:3, height:14, background:cat.color, borderRadius:2, flexShrink:0 }}/>
+                        <Mono style={{ fontSize:11, color:'var(--text)' }}>{cat.label}</Mono>
+                      </div>
+                      <div style={{ height:5, background:'var(--bg3)', borderRadius:3, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:`${pct.toFixed(1)}%`, background:cat.color, opacity:.7, borderRadius:3 }}/>
+                      </div>
+                      <Mono style={{ fontSize:11, fontWeight:700, color:cat.color, textAlign:'right' }}>
+                        {fK(cat.val)}
+                      </Mono>
+                      <Mono style={{ fontSize:10, color:'var(--text3)', textAlign:'right' }}>
+                        {pct.toFixed(1)}%
+                      </Mono>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Sparkline faena total */}
           <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
-            <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase', display:'block', marginBottom:10 }}>Faena total · cabezas mensuales</Mono>
-            <Sparkline data={faenaData.map(d=>d.t)} color="var(--accent)" height={60}/>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+              <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' }}>
+                Faena total · cabezas mensuales · 2019–2026
+              </Mono>
+              <Mono style={{ fontSize:9, color:'var(--text3)' }}>
+                {faenaData[0]?.f} – {faenaData[faenaData.length-1]?.f}
+              </Mono>
+            </div>
+            <Sparkline data={faenaData.map(d => d.t)} color="var(--accent)" height={64}/>
             <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
               {['2019','2020','2021','2022','2023','2024','2025','2026'].map(y => (
                 <Mono key={y} style={{ fontSize:9, color:'var(--text3)' }}>{y}</Mono>
@@ -711,8 +787,9 @@ function TabFaena({ faenaLive, faenaStatus }) {
             </div>
           </div>
 
-          {/* Tabla */}
-          <div className="tbl-wrap tbl-scroll" style={{ maxHeight:380 }}>
+          {/* Tabla detallada */}
+          <div className="section-title">Detalle mensual</div>
+          <div className="tbl-wrap tbl-scroll" style={{ maxHeight:360 }}>
             <table>
               <thead>
                 <tr>
@@ -724,30 +801,32 @@ function TabFaena({ faenaLive, faenaStatus }) {
                   <th className="r">Vaquillonas</th>
                   <th className="r">Novillos</th>
                   <th className="r">Peso res</th>
-                  <th className="r">% Hembras</th>
+                  <th className="r">% Hem.</th>
                 </tr>
               </thead>
               <tbody>
                 {[...faenaData].reverse().map((d, i, arr) => {
-                  const prev = arr[i+1];
-                  const vr = (prev && prev.t) ? ((d.t - prev.t)/prev.t*100) : null;
+                  const prev = arr[i + 1];
+                  const vr = (prev?.t && d.t) ? ((d.t - prev.t) / prev.t * 100) : null;
                   return (
                     <tr key={d.f}>
                       <td><Mono style={{ fontSize:12 }}>{parseFecha(d.f).label}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:13, fontWeight:700, color:'var(--accent)' }}>{fK(d.t)}</Mono></td>
+                      <td className="r"><Mono style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{fK(d.t)}</Mono></td>
                       <td className="r">
                         {vr != null
-                          ? <Mono style={{ fontSize:10, fontWeight:700, color:vr>=0?'var(--green)':'var(--red)' }}>{vr>=0?'▲ +':'▼ '}{Math.abs(vr).toFixed(1)}%</Mono>
+                          ? <Mono style={{ fontSize:10, fontWeight:700, color:vr>=0?'var(--green)':'var(--red)' }}>
+                              {vr>=0?'▲ +':'▼ '}{Math.abs(vr).toFixed(1)}%
+                            </Mono>
                           : <Mono style={{ color:'var(--text3)', fontSize:10 }}>—</Mono>}
                       </td>
                       <td className="r"><Mono style={{ fontSize:11, color:'#4080d8' }}>{fK(d.nt)}</Mono></td>
                       <td className="r"><Mono style={{ fontSize:11, color:'#8fb8f0' }}>{fK(d.va)}</Mono></td>
                       <td className="r"><Mono style={{ fontSize:11, color:'#6faafc' }}>{fK(d.vq)}</Mono></td>
                       <td className="r"><Mono style={{ fontSize:11, color:'#5b9cf6' }}>{fK(d.no)}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'var(--green)' }}>{d.pr != null ? d.pr+' kg' : '—'}</Mono></td>
+                      <td className="r"><Mono style={{ fontSize:11, color:'var(--green)' }}>{d.pr != null ? d.pr.toFixed(1)+' kg' : '—'}</Mono></td>
                       <td className="r">
-                        <Mono style={{ fontSize:11, color: d.ph>48.5?'var(--red)':d.ph<46?'var(--green)':'var(--text2)' }}>
-                          {d.ph != null ? d.ph+'%' : '—'}
+                        <Mono style={{ fontSize:11, color: d.ph > 48.5 ? 'var(--red)' : d.ph < 46 ? 'var(--green)' : 'var(--text2)' }}>
+                          {d.ph != null ? d.ph.toFixed(1)+'%' : '—'}
                         </Mono>
                       </td>
                     </tr>
@@ -756,139 +835,164 @@ function TabFaena({ faenaLive, faenaStatus }) {
               </tbody>
             </table>
           </div>
-          <div className="source" style={{ marginTop:8 }}>Fuente: MAGYP/DNCCA · Faena Bovina 2019–2026</div>
-        </div>
-      )}
-
-      {/* ── VISTA: ANUAL ── */}
-      {vista === 'anual' && (
-        <div>
-          <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
-              <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase' }}>Faena anual · cabezas totales · 1990–2025</Mono>
-              <Mono style={{ fontSize:9, color:'var(--text3)' }}>récord: {fK(Math.max(...faenaAnual.map(x=>x.fa)))}</Mono>
-            </div>
-            <Sparkline data={faenaAnual.map(x=>x.fa)} color="var(--accent)" height={80}/>
-            <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
-              {['1990','1995','2000','2005','2010','2015','2020','2025'].map(y => (
-                <Mono key={y} style={{ fontSize:9, color:'var(--text3)' }}>{y}</Mono>
-              ))}
-            </div>
-          </div>
-
-          <div className="tbl-wrap tbl-scroll" style={{ maxHeight:400 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Año</th>
-                  <th className="r">Cabezas</th>
-                  <th className="r">Var. a/a</th>
-                  <th className="r">Peso res</th>
-                  <th className="r">% Hembras</th>
-                  <th className="r">Producción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...faenaAnual].reverse().map((d, i, arr) => {
-                  const prev = arr[i+1];
-                  const vr = (prev && prev.fa) ? ((d.fa - prev.fa)/prev.fa*100) : null;
-                  return (
-                    <tr key={d.anio}>
-                      <td><Mono style={{ fontSize:13, fontWeight:700, color:'var(--white)' }}>{d.anio}</Mono></td>
-                      <td className="r"><Mono style={{ fontSize:13, fontWeight:600, color:'var(--accent)' }}>{(d.fa/1e6).toFixed(2)} M</Mono></td>
-                      <td className="r">
-                        {vr != null
-                          ? <Mono style={{ fontSize:11, fontWeight:600, color:vr>=0?'var(--green)':'var(--red)' }}>{vr>=0?'▲':'▼'} {Math.abs(vr).toFixed(1)}%</Mono>
-                          : <Mono style={{ color:'var(--text3)', fontSize:11 }}>—</Mono>}
-                      </td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'var(--green)' }}>{d.pr != null ? d.pr+' kg' : '—'}</Mono></td>
-                      <td className="r">
-                        <Mono style={{ fontSize:11, color: d.ph>48.5?'var(--red)':d.ph<46?'var(--green)':'var(--text2)' }}>
-                          {d.ph != null ? d.ph+'%' : '—'}
-                        </Mono>
-                      </td>
-                      <td className="r"><Mono style={{ fontSize:11, color:'var(--text2)' }}>{d.pk != null ? d.pk.toFixed(0)+' kt' : '—'}</Mono></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="source" style={{ marginTop:8 }}>Fuente: MAGYP/DNCCA · ex Junta Nacional de Carnes · 1990–2025</div>
+          <div className="source" style={{ marginTop:8 }}>Fuente: SAGyP/DNCCA · Faena Bovina Mensual 2019–2026</div>
         </div>
       )}
 
       {/* ── VISTA: CICLO GANADERO ── */}
       {vista === 'ciclo' && (
         <div>
-          <div style={{
-            padding:'18px 22px', marginBottom:20, borderRadius:12,
-            background: cicloFase.color==='var(--green)'?'rgba(74,191,120,.06)':cicloFase.color==='var(--red)'?'rgba(224,92,92,.06)':'rgba(91,156,246,.06)',
-            border:`1px solid ${cicloFase.color==='var(--green)'?'rgba(74,191,120,.2)':cicloFase.color==='var(--red)'?'rgba(224,92,92,.2)':'rgba(91,156,246,.2)'}`
-          }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-              <div style={{ width:10, height:10, borderRadius:'50%', background:cicloFase.color, boxShadow:`0 0 8px ${cicloFase.color}` }}/>
-              <span style={{ fontFamily:'var(--display)', fontSize:15, fontWeight:700, color:'var(--white)' }}>
-                Ciclo ganadero · <span style={{ color:cicloFase.color }}>{cicloFase.label.toUpperCase()}</span>
-              </span>
-            </div>
-            <p style={{ fontSize:13, color:'var(--text)', lineHeight:1.7 }}>
-              {cicloFase.desc}. Porcentaje de hembras en faena: <strong style={{color:cicloFase.color}}>{fPct(lastFaena?.ph)}</strong> en {lastFaena?.f && parseFecha(lastFaena.f).label}.
-            </p>
+          <div className="grid grid-3" style={{ marginBottom:20 }}>
+            <KpiCard
+              label="% Hembras en faena"
+              value={phUlt ? phUlt.toFixed(1)+'%' : '—'}
+              sub={<span style={{ color:cicloActual.color, fontWeight:600 }}>{cicloActual.label}</span>}
+              color={cicloActual.color} accent={cicloActual.color}
+            />
+            <KpiCard
+              label="Promedio 12 meses"
+              value={(() => {
+                const r = ult12.filter(d => d.ph != null);
+                return r.length ? (r.reduce((s,d)=>s+d.ph,0)/r.length).toFixed(1)+'%' : '—';
+              })()}
+              sub="% hembras promedio"
+              color="var(--text)" accent="var(--line)"
+            />
+            <KpiCard
+              label="Referencia ciclo"
+              value="48.5%"
+              sub="umbral liquidación"
+              color="var(--red)" accent="var(--red)"
+            />
           </div>
 
-          {/* Evolución % hembras */}
-          <div className="section-title">Evolución % hembras en faena · indicador de ciclo</div>
+          {/* Sparkline % hembras */}
           <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
-            <div style={{ marginBottom:8, display:'flex', gap:20 }}>
-              <Mono style={{ fontSize:9, color:'var(--red)' }}>{'> 50% → Liquidación'}</Mono>
-              <Mono style={{ fontSize:9, color:'var(--accent)' }}>{'46–50% → Zona neutra'}</Mono>
-              <Mono style={{ fontSize:9, color:'var(--green)' }}>{'< 46% → Retención'}</Mono>
-            </div>
-            <Sparkline data={faena.map(d=>d.ph)} color="var(--accent)" height={60}/>
+            <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase', display:'block', marginBottom:10 }}>
+              % Hembras en faena · 2019–2026
+            </Mono>
+            <Sparkline data={faenaData.map(d => d.ph)} color="#e8a020" height={60}/>
             <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
-              {['2019','2020','2021','2022','2023','2024','2025'].map(y => (
+              {['2019','2020','2021','2022','2023','2024','2025','2026'].map(y => (
                 <Mono key={y} style={{ fontSize:9, color:'var(--text3)' }}>{y}</Mono>
               ))}
             </div>
           </div>
 
-          {/* Tabla de referencia */}
-          <div className="section-title">Guía de interpretación</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {[
-              { rango:'< 44%',  label:'Retención fuerte',    color:'var(--green)', desc:'Rodeo en recomposición acelerada. Oferta futura en ascenso, precios firmes por escasez actual.' },
-              { rango:'44–46%', label:'Retención moderada',  color:'#4abf78',      desc:'Señal de retención clara. El productor invierte en vientres para el ciclo siguiente.' },
-              { rango:'46–48%', label:'Zona neutra',         color:'var(--accent)',desc:'Mercado en equilibrio o leve retención. Precios estables.' },
-              { rango:'48–50%', label:'Zona de alerta',      color:'#e8a020',      desc:'Inicio de liquidación. Presión bajista de corto plazo sobre precios.' },
-              { rango:'> 50%',  label:'Liquidación activa',  color:'var(--red)',   desc:'Salida masiva de vientres. Oferta elevada hoy, escasez futura garantizada.' },
-            ].map(item => {
-              const ph = lastFaena?.ph;
-              const actual = ph != null && (
-                (item.rango === '< 44%' && ph < 44) ||
-                (item.rango === '44–46%' && ph >= 44 && ph < 46) ||
-                (item.rango === '46–48%' && ph >= 46 && ph < 48) ||
-                (item.rango === '48–50%' && ph >= 48 && ph < 50) ||
-                (item.rango === '> 50%' && ph >= 50)
-              );
-              return (
-                <div key={item.rango} style={{
-                  padding: actual ? '12px 16px' : '8px 16px',
-                  background: actual ? item.color+'12' : 'var(--bg1)',
-                  border:`1px solid ${actual?item.color+'40':'var(--line)'}`, borderRadius:8
-                }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{ width:7, height:7, borderRadius:'50%', background:item.color, flexShrink:0 }}/>
-                    <Mono style={{ fontSize:10, fontWeight:700, color:item.color, width:70, flexShrink:0 }}>{item.rango}</Mono>
-                    <span style={{ fontSize:12, fontWeight:actual?600:400, color:actual?'var(--white)':'var(--text2)', flex:1 }}>{item.label}</span>
-                    {actual && <Mono style={{ fontSize:8, color:item.color, background:item.color+'18', border:`1px solid ${item.color}40`, padding:'2px 7px', borderRadius:4 }}>← HOY</Mono>}
-                  </div>
-                  {actual && <p style={{ fontSize:12, color:'var(--text)', lineHeight:1.6, marginTop:6, marginLeft:17 }}>{item.desc}</p>}
+          {/* Leyenda ciclo */}
+          <div className="section-title">Interpretación del ciclo ganadero</div>
+          {[
+            { rango:'< 44%',      label:'Retención fuerte',   color:'var(--green)', desc:'El productor está reteniendo vientres activamente. El rodeo crece.' },
+            { rango:'44–46%',     label:'Retención moderada', color:'#4abf78',      desc:'Señal positiva de retención. Stock en recuperación.' },
+            { rango:'46–48.5%',   label:'Retención leve',     color:'#f5c518',      desc:'Mercado en equilibrio. Transición entre fases.' },
+            { rango:'48.5–50%',   label:'Zona de alerta',     color:'#e8a020',      desc:'El productor empieza a vender hembras. Stock estancado.' },
+            { rango:'> 50%',      label:'Liquidación',        color:'var(--red)',   desc:'Salida masiva de vientres. El stock ganadero cae.' },
+          ].map(item => {
+            const actual = phUlt != null && (() => {
+              if (item.label === 'Retención fuerte'   && phUlt < 44)   return true;
+              if (item.label === 'Retención moderada' && phUlt >= 44 && phUlt < 46)  return true;
+              if (item.label === 'Retención leve'     && phUlt >= 46 && phUlt < 48.5) return true;
+              if (item.label === 'Zona de alerta'     && phUlt >= 48.5 && phUlt < 50) return true;
+              if (item.label === 'Liquidación'        && phUlt >= 50)  return true;
+              return false;
+            })();
+            return (
+              <div key={item.label} style={{
+                padding:'12px 16px', marginBottom:6,
+                background: actual ? `${item.color}12` : 'var(--bg1)',
+                border:`1px solid ${actual ? item.color : 'var(--line)'}`,
+                borderLeft:`3px solid ${item.color}`,
+                borderRadius:8,
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: actual ? 4 : 0 }}>
+                  <Mono style={{ fontSize:10, color:'var(--text3)', minWidth:70 }}>{item.rango}</Mono>
+                  <span style={{ fontSize:13, fontWeight:600, color: actual ? item.color : 'var(--text)', fontFamily:'var(--display)' }}>
+                    {item.label}
+                  </span>
+                  {actual && <Mono style={{ fontSize:9, background:item.color, color:'#000', padding:'2px 7px', borderRadius:4, fontWeight:700 }}>ACTUAL</Mono>}
                 </div>
-              );
-            })}
-          </div>
-          <div className="source" style={{ marginTop:16 }}>Análisis ciclo ganadero · Fuente: MAGYP/DNCCA 2019–2026</div>
+                {actual && <p style={{ fontSize:12, color:'var(--text2)', margin:0, marginLeft:80 }}>{item.desc}</p>}
+              </div>
+            );
+          })}
+          <div className="source" style={{ marginTop:12 }}>Análisis: MAGYP/DNCCA · Faena Bovina 2019–2026</div>
+        </div>
+      )}
+
+      {/* ── VISTA: SERIE ANUAL ── */}
+      {vista === 'anual' && (
+        <div>
+          <div className="section-title">Faena anual · cabezas totales</div>
+          {/* Construir serie anual desde datos mensuales */}
+          {(() => {
+            const byYear = {};
+            faenaData.forEach(d => {
+              const y = d.f.slice(0, 4);
+              if (!byYear[y]) byYear[y] = { anio: +y, fa: 0, meses: 0, pr: [], ph: [] };
+              byYear[y].fa += d.t || 0;
+              byYear[y].meses++;
+              if (d.pr) byYear[y].pr.push(d.pr);
+              if (d.ph) byYear[y].ph.push(d.ph);
+            });
+            const anual = Object.values(byYear)
+              .filter(x => x.meses >= 10) // solo años con datos casi completos
+              .map(x => ({
+                anio: x.anio,
+                fa:   x.fa,
+                pr:   x.pr.length ? +(x.pr.reduce((a,b)=>a+b,0)/x.pr.length).toFixed(1) : null,
+                ph:   x.ph.length ? +(x.ph.reduce((a,b)=>a+b,0)/x.ph.length).toFixed(1) : null,
+              }))
+              .sort((a, b) => a.anio - b.anio);
+
+            return (
+              <>
+                <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
+                  <Sparkline data={anual.map(d => d.fa)} color="var(--accent)" height={60}/>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
+                    {anual.map(d => <Mono key={d.anio} style={{ fontSize:9, color:'var(--text3)' }}>{d.anio}</Mono>)}
+                  </div>
+                </div>
+                <div className="tbl-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Año</th>
+                        <th className="r">Faena total</th>
+                        <th className="r">Peso prom.</th>
+                        <th className="r">% Hembras</th>
+                        <th className="r">Ciclo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...anual].reverse().map((d, i, arr) => {
+                        const prev = arr[i + 1];
+                        const vr = (prev?.fa && d.fa) ? ((d.fa - prev.fa)/prev.fa*100) : null;
+                        const ciclo = d.ph != null
+                          ? d.ph < 44 ? {l:'Retención', c:'var(--green)'}
+                          : d.ph < 48.5 ? {l:'Equilibrio', c:'#f5c518'}
+                          : {l:'Liquidación', c:'var(--red)'}
+                          : null;
+                        return (
+                          <tr key={d.anio}>
+                            <td><Mono style={{ fontSize:12, fontWeight:700 }}>{d.anio}</Mono></td>
+                            <td className="r"><Mono style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{fK(d.fa)}</Mono></td>
+                            <td className="r"><Mono style={{ fontSize:11, color:'var(--green)' }}>{d.pr ? d.pr+' kg' : '—'}</Mono></td>
+                            <td className="r"><Mono style={{ fontSize:11, color: d.ph > 48.5 ? 'var(--red)' : d.ph < 46 ? 'var(--green)' : 'var(--text2)' }}>
+                              {d.ph ? d.ph.toFixed(1)+'%' : '—'}
+                            </Mono></td>
+                            <td className="r">
+                              {ciclo && <Mono style={{ fontSize:9, color:ciclo.c, fontWeight:600 }}>{ciclo.l}</Mono>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+          <div className="source" style={{ marginTop:8 }}>Fuente: SAGyP/DNCCA · Faena Bovina Mensual 2019–2026</div>
         </div>
       )}
     </div>

@@ -59,19 +59,17 @@ async function descargarXLS() {
 }
 
 // ── Parsear el XLS ────────────────────────────────────────────────────────────
-// Estructura real del XLS del MAGYP (confirmada 29/04/2026):
-//
+// Estructura real confirmada (29/04/2026):
 // Fila 0: vacía
 // Fila 1: grupos — "TRANSFORMACIÓN", "CLASIFICACIÓN POR SEXO Y EDAD"
-// Fila 2: encabezados — "Mes/Año", "Faena Total País (Cabezas)", "% Hembras",
-//          "Producción (en miles de ton...)", "Peso promedio Res",
-//          "Vaquillonas", "Vacas", "MEJ", "Novillitos", "Novillos", "Toros"
-// Fila 3+: datos — fecha como número serie Excel (ej: 43556 = abr-2019)
+// Fila 2: encabezados — "Mes/Año" | "Faena Total País (Cabezas)" | "% Hembras" |
+//          "Producción (miles de ton)" | "Peso promedio Res" |
+//          "Vaquillonas" | "Vacas" | "MEJ" | "Novillitos" | "Novillos" | "Toros"
+// Fila 3+: fechas como número serie Excel, valores numéricos con formato AR
 
 // Convierte número serie Excel → "YYYY-MM"
 function excelDateToISO(serial) {
   if (!serial || typeof serial !== 'number') return null;
-  // Excel usa epoch 1900-01-01 (con el bug del año bisiesto de Lotus 1-2-3)
   const date = new Date((serial - 25569) * 86400 * 1000);
   if (isNaN(date.getTime())) return null;
   const y = date.getUTCFullYear();
@@ -80,75 +78,93 @@ function excelDateToISO(serial) {
   return `${y}-${m}`;
 }
 
+// Parsea el texto formateado del XLS (ej: "1.072.584" → 1072584, "52,3" → 52.3)
+function parseNumAR(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const s = String(raw).trim();
+  if (s === '' || s === '-') return null;
+  // Formato argentino: punto = miles, coma = decimal
+  // "1.072.584" → "1072584"
+  // "239,167" → "239.167"
+  // "52,3" → "52.3"
+  const clean = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(clean);
+  return isNaN(n) ? null : n;
+}
+
 function parsearFaena(buffer) {
-  const wb = XLSX.read(buffer, { type: 'buffer' });
+  // Leer con cellText:true para obtener los valores formateados como aparecen en la celda
+  // Esto evita el problema de números con separadores de miles mal interpretados
+  const wb = XLSX.read(buffer, { type: 'buffer', cellText: true, cellNF: false });
 
   console.log(`[hacienda-faena] Hojas: ${wb.SheetNames.join(', ')}`);
 
-  // Tomar la primera hoja (única hoja confirmada)
   const hoja = wb.SheetNames[0];
   const ws   = wb.Sheets[hoja];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
-  // El encabezado real siempre está en la fila 2 (índice 2)
-  // Columnas confirmadas:
-  // 0=Mes/Año, 1=Faena Total, 2=%Hembras, 3=Prod kt, 4=Peso res,
-  // 5=Vaquillonas, 6=Vacas, 7=MEJ, 8=Novillitos, 9=Novillos, 10=Toros
-  const HEADER_ROW = 2;
-  const DATA_START = 3;
+  // Obtener con texto formateado (w) y valor numérico (v) para comparar
+  const rows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+  const rowsRaw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true  });
 
-  // Verificar que el encabezado tiene el formato esperado
-  const header = (rows[HEADER_ROW] || []).map(c => String(c ?? '').toLowerCase());
-  console.log(`[hacienda-faena] Fila ${HEADER_ROW} (encabezado):`, header.slice(0, 6).join(' | '));
-
-  // Si el encabezado no matchea, buscar dinámicamente
-  let headerIdx = HEADER_ROW;
-  if (!header.some(h => h.includes('faena') || h.includes('mes'))) {
-    for (let i = 0; i < Math.min(15, rows.length); i++) {
-      const r = (rows[i] || []).map(c => String(c ?? '').toLowerCase());
-      if (r.some(h => h.includes('faena') || h.includes('mes/a'))) {
-        headerIdx = i;
-        break;
-      }
-    }
-    console.log(`[hacienda-faena] Encabezado reuicado en fila ${headerIdx}`);
-  }
-
-  const num = (row, idx) => {
-    if (idx < 0 || row[idx] == null) return null;
-    const v = parseFloat(String(row[idx]).replace(/\./g, '').replace(',', '.'));
-    return isNaN(v) ? null : v;
-  };
+  // Verificar encabezado en fila 2
+  const header = (rows[2] || []).map(c => String(c ?? '').toLowerCase());
+  console.log(`[hacienda-faena] Encabezado fila 2: ${header.slice(0, 5).join(' | ')}`);
 
   const faena = [];
 
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.every(c => c == null)) continue;
+  for (let i = 3; i < rows.length; i++) {
+    const rowTxt = rows[i];    // valores como texto formateado
+    const rowRaw = rowsRaw[i]; // valores numéricos crudos
 
-    // Col 0: fecha como número serie Excel
-    const fecha = excelDateToISO(row[0]);
+    if (!rowTxt || rowTxt.every(c => c == null || c === '')) continue;
+
+    // Col 0: fecha — usar el valor numérico crudo para la conversión
+    const fecha = excelDateToISO(rowRaw?.[0]);
     if (!fecha) continue;
 
-    const t = num(row, 1); // Faena Total País
+    // Col 1: Faena Total — usar texto formateado
+    const t = parseNumAR(rowTxt[1]);
     if (!t || t < 100000) continue;
+
+    // % Hembras: el XLS tiene valores como "52,3" → 52.3
+    // Si el texto formateado tiene coma decimal, parseNumAR lo maneja bien
+    const ph = parseNumAR(rowTxt[2]);
+    const phFinal = ph != null && ph > 100 ? ph / 100 : ph; // por si viene como 523 en vez de 52.3
+
+    // Producción kt: valores como "239,167" → 239.167
+    const pk = parseNumAR(rowTxt[3]);
+
+    // Peso res: "222,983" → 222.983 (kg)
+    const pr = parseNumAR(rowTxt[4]);
+    const prFinal = pr != null && pr > 1000 ? pr / 1000 : pr;
+
+    // Categorías (cols 5-10): cabezas, números enteros grandes
+    const cabeza = (idx) => {
+      const v = parseNumAR(rowTxt[idx]);
+      return v != null ? Math.round(v) : null;
+    };
 
     faena.push({
       f:  fecha,
       t:  Math.round(t),
-      ph: num(row, 2),           // % Hembras
-      pk: num(row, 3),           // Producción kt
-      pr: num(row, 4),           // Peso promedio res
-      vq: Math.round(num(row, 5) ?? 0) || null, // Vaquillonas
-      va: Math.round(num(row, 6) ?? 0) || null, // Vacas
-      me: Math.round(num(row, 7) ?? 0) || null, // MEJ
-      nt: Math.round(num(row, 8) ?? 0) || null, // Novillitos
-      no: Math.round(num(row, 9) ?? 0) || null, // Novillos
-      to: Math.round(num(row, 10) ?? 0) || null, // Toros
+      ph: phFinal != null ? +phFinal.toFixed(2) : null,
+      pk: pk != null ? +pk.toFixed(3) : null,
+      pr: prFinal != null ? +prFinal.toFixed(1) : null,
+      vq: cabeza(5),
+      va: cabeza(6),
+      me: cabeza(7),
+      nt: cabeza(8),
+      no: cabeza(9),
+      to: cabeza(10),
     });
   }
 
   faena.sort((a, b) => a.f.localeCompare(b.f));
+  console.log(`[hacienda-faena] Registros procesados: ${faena.length}`);
+  if (faena.length > 0) {
+    const ult = faena[faena.length - 1];
+    console.log(`[hacienda-faena] Último: ${ult.f} | fa=${ult.t} | ph=${ult.ph} | pk=${ult.pk} | pr=${ult.pr}`);
+  }
   return faena;
 }
 

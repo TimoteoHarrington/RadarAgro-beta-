@@ -61,13 +61,15 @@ async function descargarXLS() {
 // ── Parsear el XLS ────────────────────────────────────────────────────────────
 // Estructura real confirmada (29/04/2026):
 // Fila 0: vacía
-// Fila 1: grupos — "TRANSFORMACIÓN", "CLASIFICACIÓN POR SEXO Y EDAD"
-// Fila 2: encabezados — "Mes/Año" | "Faena Total País (Cabezas)" | "% Hembras" |
-//          "Producción (miles de ton)" | "Peso promedio Res" |
-//          "Vaquillonas" | "Vacas" | "MEJ" | "Novillitos" | "Novillos" | "Toros"
-// Fila 3+: fechas como número serie Excel, valores numéricos con formato AR
+// Fila 1: "TRANSFORMACIÓN" | "CLASIFICACIÓN POR SEXO Y EDAD"
+// Fila 2: "Mes/Año" | "Faena Total País (Cabezas)" | "% Hembras" |
+//         "Producción (miles de ton res c/h)" | "Peso promedio Res" |
+//         "Vaquillonas" | "Vacas" | "MEJ" | "Novillitos" | "Novillos" | "Toros"
+// Fila 3+: fecha=número serie Excel, resto=floats directos
+//
+// Valores reales ejemplo fila 3 (abril 2019):
+//   fecha=43556, faena=1072583.5, ph=52.299, pk=239.167, pr=222.983
 
-// Convierte número serie Excel → "YYYY-MM"
 function excelDateToISO(serial) {
   if (!serial || typeof serial !== 'number') return null;
   const date = new Date((serial - 25569) * 86400 * 1000);
@@ -78,96 +80,66 @@ function excelDateToISO(serial) {
   return `${y}-${m}`;
 }
 
-// Parsea el texto formateado del XLS (ej: "1.072.584" → 1072584, "52,3" → 52.3)
-function parseNumAR(raw) {
-  if (raw === null || raw === undefined || raw === '') return null;
-  const s = String(raw).trim();
-  if (s === '' || s === '-') return null;
-  // Formato argentino: punto = miles, coma = decimal
-  // "1.072.584" → "1072584"
-  // "239,167" → "239.167"
-  // "52,3" → "52.3"
-  const clean = s.replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(clean);
-  return isNaN(n) ? null : n;
-}
-
 function parsearFaena(buffer) {
-  // Leer con cellText:true para obtener los valores formateados como aparecen en la celda
-  // Esto evita el problema de números con separadores de miles mal interpretados
-  const wb = XLSX.read(buffer, { type: 'buffer', cellText: true, cellNF: false });
+  // raw: true — los valores numéricos del XLS ya son floats correctos
+  // NO usar cellText: true (rompe el parseo del XLS binario .xls)
+  const wb   = XLSX.read(buffer, { type: 'buffer' });
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 
-  console.log(`[hacienda-faena] Hojas: ${wb.SheetNames.join(', ')}`);
+  console.log(`[hacienda-faena] Hojas: ${wb.SheetNames.join(', ')}, filas: ${rows.length}`);
+  console.log(`[hacienda-faena] Encabezado fila 2: ${(rows[2] || []).slice(0, 4).join(' | ')}`);
 
-  const hoja = wb.SheetNames[0];
-  const ws   = wb.Sheets[hoja];
-
-  // Obtener con texto formateado (w) y valor numérico (v) para comparar
-  const rows    = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
-  const rowsRaw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true  });
-
-  // Verificar encabezado en fila 2
-  const header = (rows[2] || []).map(c => String(c ?? '').toLowerCase());
-  console.log(`[hacienda-faena] Encabezado fila 2: ${header.slice(0, 5).join(' | ')}`);
+  const num = (v) => {
+    if (v == null) return null;
+    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+    return isNaN(n) ? null : n;
+  };
 
   const faena = [];
 
   for (let i = 3; i < rows.length; i++) {
-    const rowTxt = rows[i];    // valores como texto formateado
-    const rowRaw = rowsRaw[i]; // valores numéricos crudos
+    const row = rows[i];
+    if (!row || row.every(c => c == null)) continue;
 
-    if (!rowTxt || rowTxt.every(c => c == null || c === '')) continue;
-
-    // Col 0: fecha — usar el valor numérico crudo para la conversión
-    const fecha = excelDateToISO(rowRaw?.[0]);
+    const fecha = excelDateToISO(row[0]);
     if (!fecha) continue;
 
-    // Col 1: Faena Total — usar texto formateado
-    const t = parseNumAR(rowTxt[1]);
+    const t = num(row[1]);
     if (!t || t < 100000) continue;
 
-    // % Hembras: el XLS tiene valores como "52,3" → 52.3
-    // Si el texto formateado tiene coma decimal, parseNumAR lo maneja bien
-    const ph = parseNumAR(rowTxt[2]);
-    const phFinal = ph != null && ph > 100 ? ph / 100 : ph; // por si viene como 523 en vez de 52.3
+    const ph = num(row[2]);
+    const pk = num(row[3]);
+    const pr = num(row[4]);
 
-    // Producción kt: valores como "239,167" → 239.167
-    const pk = parseNumAR(rowTxt[3]);
-
-    // Peso res: "222,983" → 222.983 (kg)
-    const pr = parseNumAR(rowTxt[4]);
-    const prFinal = pr != null && pr > 1000 ? pr / 1000 : pr;
-
-    // Categorías (cols 5-10): cabezas, números enteros grandes
-    const cabeza = (idx) => {
-      const v = parseNumAR(rowTxt[idx]);
+    const cab = (idx) => {
+      const v = num(row[idx]);
       return v != null ? Math.round(v) : null;
     };
 
     faena.push({
       f:  fecha,
       t:  Math.round(t),
-      ph: phFinal != null ? +phFinal.toFixed(2) : null,
+      ph: ph != null ? +ph.toFixed(2) : null,
       pk: pk != null ? +pk.toFixed(3) : null,
-      pr: prFinal != null ? +prFinal.toFixed(1) : null,
-      vq: cabeza(5),
-      va: cabeza(6),
-      me: cabeza(7),
-      nt: cabeza(8),
-      no: cabeza(9),
-      to: cabeza(10),
+      pr: pr != null ? +pr.toFixed(1) : null,
+      vq: cab(5),
+      va: cab(6),
+      me: cab(7),
+      nt: cab(8),
+      no: cab(9),
+      to: cab(10),
     });
   }
 
   faena.sort((a, b) => a.f.localeCompare(b.f));
-  console.log(`[hacienda-faena] Registros procesados: ${faena.length}`);
+  console.log(`[hacienda-faena] Registros: ${faena.length}`);
   if (faena.length > 0) {
-    const ult = faena[faena.length - 1];
-    console.log(`[hacienda-faena] Último: ${ult.f} | fa=${ult.t} | ph=${ult.ph} | pk=${ult.pk} | pr=${ult.pr}`);
+    const u = faena[faena.length - 1];
+    console.log(`[hacienda-faena] Último: ${u.f} fa=${u.t} ph=${u.ph} pk=${u.pk} pr=${u.pr}`);
   }
   return faena;
 }
-
 // ── Fallback — últimos 12 meses del haciendaXLS.js ───────────────────────────
 const FALLBACK_FAENA = [
   { f:'2025-04', t:1134031, ph:48.1, pk:259.9, pr:229.2, no:92152, nt:466285, vq:310201, va:235518, me:13654, to:16222 },

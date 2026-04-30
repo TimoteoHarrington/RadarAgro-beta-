@@ -202,6 +202,10 @@ export async function fetchHaciendaReal() {
   return get('/api/hacienda');
 }
 
+export async function fetchHaciendaFaena() {
+  return get('/api/hacienda-faena');
+}
+
 // ─────────────────────────────────────────────────────────────
 // Fertilizantes — via proxy /api/fertilizantes
 // ─────────────────────────────────────────────────────────────

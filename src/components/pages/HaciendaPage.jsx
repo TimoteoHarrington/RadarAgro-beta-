@@ -1,6 +1,7 @@
-// HaciendaPage.jsx — Live data: MAG Cañuelas scraping + XLS histórico (MAGYP)
+// HaciendaPage.jsx — Live data: MAG Cañuelas scraping + MAGYP XLS faena
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { DATA } from '../../data/haciendaXLS.js';
+import { fetchHaciendaFaena } from '../../services/api.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fARS = v => v == null ? '—' : '$ ' + Math.round(v).toLocaleString('es-AR');
@@ -267,7 +268,30 @@ function useHaciendaLive() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Componente: Tabla de precios del último remate MAG
+// Hook: datos de faena desde /api/hacienda-faena (XLS MAGYP)
+// Solo se carga cuando el usuario abre el tab Faena
+// ─────────────────────────────────────────────────────────────────────────────
+function useHaciendaFaena(enabled) {
+  const [data,   setData]   = useState(null);
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'ok' | 'fallback' | 'error'
+
+  useEffect(() => {
+    if (!enabled || status !== 'idle') return;
+    setStatus('loading');
+    fetchHaciendaFaena()
+      .then(({ data: json, error }) => {
+        if (error || !json?.ok) throw new Error(error ?? 'sin datos');
+        setData(json);
+        setStatus(json.esFallback ? 'fallback' : 'ok');
+      })
+      .catch(err => {
+        console.warn('[HaciendaPage] /api/hacienda-faena:', err.message);
+        setStatus('error');
+      });
+  }, [enabled, status]);
+
+  return { data, status };
+}
 // ─────────────────────────────────────────────────────────────────────────────
 const GRUPO_COLORS = {
   novillos:    '#5b9cf6',
@@ -610,22 +634,50 @@ function TabPrecios() {
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB: FAENA & PRODUCCIÓN
 // ─────────────────────────────────────────────────────────────────────────────
-function TabFaena() {
+function TabFaena({ faenaLive, faenaStatus }) {
   const [vista, setVista] = useState('mensual');
 
-  const faena12 = faena.slice(-12);
-  const totalFaena12 = faena12.reduce((s,d) => s+(d.t||0), 0);
+  // Usar datos live si están disponibles, sino el XLS estático como fallback visual
+  const faenaData   = faenaLive?.faena ?? faena;
+  const esFallback  = !faenaLive || faenaStatus === 'error' || faenaStatus === 'idle' || faenaStatus === 'loading';
+  const ultimoLive  = faenaLive?.ultimo ?? null;
+
+  const faena12 = faenaData.slice(-12);
+  const totalFaena12 = faenaLive?.kpis?.faena12meses ?? faena12.reduce((s,d) => s+(d.t||0), 0);
   const pesoPromFaena12 = (() => {
-    const r = faena12.filter(d => d.pr); 
+    const r = faena12.filter(d => d.pr);
     return r.length ? (r.reduce((s,d)=>s+d.pr,0)/r.length).toFixed(1) : null;
   })();
   const phPromFaena12 = (() => {
     const r = faena12.filter(d => d.ph);
     return r.length ? (r.reduce((s,d)=>s+d.ph,0)/r.length).toFixed(1) : null;
   })();
+  const cicloFaseActual = faenaLive?.kpis?.cicloGanadero ?? cicloFase;
 
   return (
     <div>
+      {/* Banner estado fuente */}
+      {faenaStatus === 'loading' && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
+          background:'rgba(90,150,246,.05)', border:'1px solid rgba(90,150,246,.15)', borderRadius:8 }}>
+          <Mono style={{ fontSize:9, color:'var(--accent)' }}>CARGANDO DATOS DE FAENA DEL MAGYP…</Mono>
+        </div>
+      )}
+      {faenaStatus === 'ok' && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
+          background:'rgba(74,191,120,.05)', border:'1px solid rgba(74,191,120,.15)', borderRadius:8 }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)', boxShadow:'0 0 5px var(--green)' }}/>
+          <Mono style={{ fontSize:9, color:'var(--green)', fontWeight:700, letterSpacing:'.08em' }}>LIVE</Mono>
+          <Mono style={{ fontSize:9, color:'var(--text2)' }}>{faenaLive.fuente}</Mono>
+        </div>
+      )}
+      {faenaStatus === 'fallback' && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', marginBottom:16,
+          background:'rgba(232,160,32,.05)', border:'1px solid rgba(232,160,32,.2)', borderRadius:8 }}>
+          <Mono style={{ fontSize:9, color:'#e8a020' }}>⚠ FALLBACK · {faenaLive?.fuente}</Mono>
+        </div>
+      )}
+
       {/* Tabs internas */}
       <div style={{ display:'flex', gap:6, marginBottom:20, flexWrap:'wrap' }}>
         {[{id:'mensual',label:'Mensual 2019–2026'},{id:'anual',label:'Serie anual 1990–2025'},{id:'ciclo',label:'Ciclo ganadero'}].map(v => {
@@ -645,13 +697,13 @@ function TabFaena() {
           <div className="grid grid-3" style={{ marginBottom:20 }}>
             <KpiCard label="Últimos 12 meses" value={fK(totalFaena12)} sub="cabezas faenadas" accent="var(--accent)" color="var(--accent)"/>
             <KpiCard label="Peso prom. res" value={pesoPromFaena12?pesoPromFaena12+' kg':'—'} sub="promedio últimos 12m" color="var(--green)" accent="var(--green)"/>
-            <KpiCard label="% Hembras prom." value={phPromFaena12?phPromFaena12+'%':'—'} sub={cicloFase.label} color={cicloFase.color} accent={cicloFase.color}/>
+            <KpiCard label="% Hembras prom." value={phPromFaena12?phPromFaena12+'%':'—'} sub={cicloFaseActual.label} color={cicloFaseActual.color} accent={cicloFaseActual.color}/>
           </div>
 
           {/* Chart faena */}
           <div style={{ background:'var(--bg1)', border:'1px solid var(--line)', borderRadius:10, padding:'16px 20px', marginBottom:16 }}>
             <Mono style={{ fontSize:9, color:'var(--text3)', letterSpacing:'.1em', textTransform:'uppercase', display:'block', marginBottom:10 }}>Faena total · cabezas mensuales</Mono>
-            <Sparkline data={faena.map(d=>d.t)} color="var(--accent)" height={60}/>
+            <Sparkline data={faenaData.map(d=>d.t)} color="var(--accent)" height={60}/>
             <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
               {['2019','2020','2021','2022','2023','2024','2025','2026'].map(y => (
                 <Mono key={y} style={{ fontSize:9, color:'var(--text3)' }}>{y}</Mono>
@@ -676,7 +728,7 @@ function TabFaena() {
                 </tr>
               </thead>
               <tbody>
-                {[...faena].reverse().map((d, i, arr) => {
+                {[...faenaData].reverse().map((d, i, arr) => {
                   const prev = arr[i+1];
                   const vr = (prev && prev.t) ? ((d.t - prev.t)/prev.t*100) : null;
                   return (
@@ -1069,6 +1121,10 @@ const TABS = [
 export function HaciendaPage({ goPage }) {
   const [tab, setTab] = useState('resumen');
 
+  // Cargar datos de faena solo cuando el usuario abre ese tab
+  const faenaEnabled = tab === 'faena';
+  const { data: faenaLive, status: faenaStatus } = useHaciendaFaena(faenaEnabled);
+
   return (
     <div className="page-enter">
       {/* Header */}
@@ -1121,7 +1177,7 @@ export function HaciendaPage({ goPage }) {
       <div>
         {tab === 'resumen'          && <TabResumen/>}
         {tab === 'precios'          && <TabPrecios/>}
-        {tab === 'faena'            && <TabFaena/>}
+        {tab === 'faena'            && <TabFaena faenaLive={faenaLive} faenaStatus={faenaStatus}/>}
         {tab === 'consumo'          && <TabConsumo/>}
         {tab === 'comercializacion' && <TabComercializacion/>}
       </div>

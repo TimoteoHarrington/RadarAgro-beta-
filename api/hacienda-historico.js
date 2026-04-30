@@ -147,68 +147,6 @@ async function procesarAnio(y, mesHasta = 12) {
   return resultados;
 }
 
-// ── Fallback embebido — serie mensual verificada 2022–2026 ───────────────────
-// Datos reales del MAG Cañuelas. Actualizar manualmente si el scraping falla
-// consistentemente. Fuente: haciendaXLS.js DATA.precios (ig=IGMAG).
-const FALLBACK_SERIE = [
-  // 2022
-  { f:'2022-01', igmag:205.896, inmag:219.765 },
-  { f:'2022-02', igmag:225.019, inmag:251.656 },
-  { f:'2022-03', igmag:235.247, inmag:270.437 },
-  { f:'2022-04', igmag:239.879, inmag:283.261 },
-  { f:'2022-05', igmag:233.652, inmag:284.544 },
-  { f:'2022-06', igmag:231.203, inmag:275.647 },
-  { f:'2022-07', igmag:237.468, inmag:274.778 },
-  { f:'2022-08', igmag:272.447, inmag:292.454 },
-  { f:'2022-09', igmag:270.335, inmag:287.820 },
-  { f:'2022-10', igmag:251.561, inmag:277.191 },
-  { f:'2022-11', igmag:255.453, inmag:275.700 },
-  { f:'2022-12', igmag:265.828, inmag:288.685 },
-  // 2023
-  { f:'2023-01', igmag:298.561, inmag:331.131 },
-  { f:'2023-02', igmag:380.452, inmag:436.895 },
-  { f:'2023-03', igmag:352.733, inmag:437.567 },
-  { f:'2023-04', igmag:335.005, inmag:454.812 },
-  { f:'2023-05', igmag:335.509, inmag:450.947 },
-  { f:'2023-06', igmag:342.098, inmag:467.107 },
-  { f:'2023-07', igmag:399.628, inmag:490.009 },
-  { f:'2023-08', igmag:613.139, inmag:710.387 },
-  { f:'2023-09', igmag:637.071, inmag:704.831 },
-  { f:'2023-10', igmag:779.709, inmag:849.499 },
-  { f:'2023-11', igmag:870.733, inmag:945.975 },
-  { f:'2023-12', igmag:1243.837, inmag:1405.297 },
-  // 2024
-  { f:'2024-01', igmag:1307.190, inmag:1424.196 },
-  { f:'2024-02', igmag:1440.579, inmag:1689.308 },
-  { f:'2024-03', igmag:1433.337, inmag:1704.034 },
-  { f:'2024-04', igmag:1413.169, inmag:1763.050 },
-  { f:'2024-05', igmag:1332.770, inmag:1777.352 },
-  { f:'2024-06', igmag:1412.047, inmag:1826.803 },
-  { f:'2024-07', igmag:1583.874, inmag:1937.645 },
-  { f:'2024-08', igmag:1744.401, inmag:1953.108 },
-  { f:'2024-09', igmag:1740.934, inmag:1871.695 },
-  { f:'2024-10', igmag:1740.960, inmag:1900.880 },
-  { f:'2024-11', igmag:1872.780, inmag:2012.505 },
-  { f:'2024-12', igmag:2024.757, inmag:2264.201 },
-  // 2025
-  { f:'2025-01', igmag:2030.424, inmag:2248.700 },
-  { f:'2025-02', igmag:2206.313, inmag:2583.102 },
-  { f:'2025-03', igmag:2232.712, inmag:2677.532 },
-  { f:'2025-04', igmag:2207.653, inmag:2788.127 },
-  { f:'2025-05', igmag:2210.540, inmag:2799.670 },
-  { f:'2025-06', igmag:2199.270, inmag:2822.690 },
-  { f:'2025-07', igmag:2367.745, inmag:2924.286 },
-  { f:'2025-08', igmag:2625.060, inmag:3028.500 },
-  { f:'2025-09', igmag:2792.560, inmag:3132.540 },
-  { f:'2025-10', igmag:2956.245, inmag:3248.780 },
-  { f:'2025-11', igmag:3334.520, inmag:3855.520 },
-  { f:'2025-12', igmag:3570.220, inmag:4085.620 },
-  // 2026
-  { f:'2026-01', igmag:3512.834, inmag:4117.701 },
-  { f:'2026-02', igmag:3810.026, inmag:4460.072 },
-  { f:'2026-03', igmag:3711.320, inmag:4441.932 },
-];
-
 // ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

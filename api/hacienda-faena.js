@@ -59,69 +59,63 @@ async function descargarXLS() {
 }
 
 // ── Parsear el XLS ────────────────────────────────────────────────────────────
-// El archivo Faena_Bovina tiene esta estructura aproximada:
-// Año | Mes | Total cabezas | Novillos | Novillitos | Vaquillonas | Vacas | MEJ | Toros
-// + columnas de % hembras, producción kt, peso res
+// Estructura real del XLS del MAGYP (confirmada 29/04/2026):
+//
+// Fila 0: vacía
+// Fila 1: grupos — "TRANSFORMACIÓN", "CLASIFICACIÓN POR SEXO Y EDAD"
+// Fila 2: encabezados — "Mes/Año", "Faena Total País (Cabezas)", "% Hembras",
+//          "Producción (en miles de ton...)", "Peso promedio Res",
+//          "Vaquillonas", "Vacas", "MEJ", "Novillitos", "Novillos", "Toros"
+// Fila 3+: datos — fecha como número serie Excel (ej: 43556 = abr-2019)
+
+// Convierte número serie Excel → "YYYY-MM"
+function excelDateToISO(serial) {
+  if (!serial || typeof serial !== 'number') return null;
+  // Excel usa epoch 1900-01-01 (con el bug del año bisiesto de Lotus 1-2-3)
+  const date = new Date((serial - 25569) * 86400 * 1000);
+  if (isNaN(date.getTime())) return null;
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  if (y < 2000 || y > 2030) return null;
+  return `${y}-${m}`;
+}
+
 function parsearFaena(buffer) {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const wb = XLSX.read(buffer, { type: 'buffer' });
 
   console.log(`[hacienda-faena] Hojas: ${wb.SheetNames.join(', ')}`);
 
-  // Buscar la hoja de datos mensuales
-  const KEYWORDS = ['faena', 'mensual', 'datos', 'bovino', 'resumen'];
-  const hoja = wb.SheetNames.find(n =>
-    KEYWORDS.some(k => n.toLowerCase().includes(k))
-  ) ?? wb.SheetNames[0];
-
-  console.log(`[hacienda-faena] Usando hoja: "${hoja}"`);
-
+  // Tomar la primera hoja (única hoja confirmada)
+  const hoja = wb.SheetNames[0];
   const ws   = wb.Sheets[hoja];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
-  // Encontrar fila de encabezado
-  let headerIdx = -1;
-  let headers   = [];
+  // El encabezado real siempre está en la fila 2 (índice 2)
+  // Columnas confirmadas:
+  // 0=Mes/Año, 1=Faena Total, 2=%Hembras, 3=Prod kt, 4=Peso res,
+  // 5=Vaquillonas, 6=Vacas, 7=MEJ, 8=Novillitos, 9=Novillos, 10=Toros
+  const HEADER_ROW = 2;
+  const DATA_START = 3;
 
-  for (let i = 0; i < Math.min(30, rows.length); i++) {
-    const row = (rows[i] || []).map(c => String(c ?? '').toLowerCase().trim());
-    if (row.some(c => c.includes('total') || c.includes('faena') || c.includes('novillo') || c.includes('mes'))) {
-      headerIdx = i;
-      headers   = row;
-      break;
+  // Verificar que el encabezado tiene el formato esperado
+  const header = (rows[HEADER_ROW] || []).map(c => String(c ?? '').toLowerCase());
+  console.log(`[hacienda-faena] Fila ${HEADER_ROW} (encabezado):`, header.slice(0, 6).join(' | '));
+
+  // Si el encabezado no matchea, buscar dinámicamente
+  let headerIdx = HEADER_ROW;
+  if (!header.some(h => h.includes('faena') || h.includes('mes'))) {
+    for (let i = 0; i < Math.min(15, rows.length); i++) {
+      const r = (rows[i] || []).map(c => String(c ?? '').toLowerCase());
+      if (r.some(h => h.includes('faena') || h.includes('mes/a'))) {
+        headerIdx = i;
+        break;
+      }
     }
+    console.log(`[hacienda-faena] Encabezado reuicado en fila ${headerIdx}`);
   }
 
-  if (headerIdx < 0) throw new Error('No se encontró encabezado en el XLS de faena');
-  console.log(`[hacienda-faena] Encabezados (fila ${headerIdx}): ${headers.slice(0, 10).join(' | ')}`);
-
-  // Mapeo de columnas
-  const col = (...kws) => {
-    const idx = headers.findIndex(h => kws.some(k => h.includes(k)));
-    return idx >= 0 ? idx : null;
-  };
-
-  const C = {
-    anio:     col('año', 'anio', 'year', 'a�o'),
-    mes:      col('mes', 'month'),
-    fecha:    col('fecha', 'periodo'),
-    total:    col('total', 'faena total', 'cabezas total'),
-    novillos: col('novillo', 'nov '),
-    novillitos: col('novillito', 'novit'),
-    vaquillonas: col('vaquillon', 'vaq'),
-    vacas:    col('vaca', 'vac '),
-    mej:      col('mej'),
-    toros:    col('toro'),
-    ph:       col('hembra', '% hem', 'particip'),
-    prodkt:   col('miles de ton', 'producci', 'kt', 'prod'),
-    pesoRes:  col('peso res', 'peso prom', 'kilo gan', 'kg gan'),
-  };
-
-  console.log('[hacienda-faena] Cols:', Object.fromEntries(
-    Object.entries(C).filter(([,v]) => v !== null).map(([k,v]) => [k, v])
-  ));
-
   const num = (row, idx) => {
-    if (idx === null || row[idx] == null) return null;
+    if (idx < 0 || row[idx] == null) return null;
     const v = parseFloat(String(row[idx]).replace(/\./g, '').replace(',', '.'));
     return isNaN(v) ? null : v;
   };
@@ -132,45 +126,25 @@ function parsearFaena(buffer) {
     const row = rows[i];
     if (!row || row.every(c => c == null)) continue;
 
-    // Determinar fecha
-    let fecha = null;
-
-    if (C.fecha !== null && row[C.fecha]) {
-      const raw = row[C.fecha];
-      if (raw instanceof Date) {
-        fecha = `${raw.getFullYear()}-${String(raw.getMonth()+1).padStart(2,'0')}`;
-      } else {
-        const s = String(raw).trim();
-        const m = s.match(/^(\d{4})-(\d{2})/);
-        if (m) fecha = `${m[1]}-${m[2]}`;
-      }
-    }
-
-    if (!fecha && C.anio !== null && C.mes !== null) {
-      const a = parseInt(row[C.anio], 10);
-      const m = parseInt(row[C.mes],  10);
-      if (a >= 2000 && a <= 2030 && m >= 1 && m <= 12) {
-        fecha = `${a}-${String(m).padStart(2, '0')}`;
-      }
-    }
-
+    // Col 0: fecha como número serie Excel
+    const fecha = excelDateToISO(row[0]);
     if (!fecha) continue;
 
-    const t = num(row, C.total);
-    if (!t || t < 100000) continue; // faena mensual siempre > 100k
+    const t = num(row, 1); // Faena Total País
+    if (!t || t < 100000) continue;
 
     faena.push({
       f:  fecha,
       t:  Math.round(t),
-      no: C.novillos    !== null ? Math.round(num(row, C.novillos)    ?? 0) || null : null,
-      nt: C.novillitos  !== null ? Math.round(num(row, C.novillitos)  ?? 0) || null : null,
-      vq: C.vaquillonas !== null ? Math.round(num(row, C.vaquillonas) ?? 0) || null : null,
-      va: C.vacas       !== null ? Math.round(num(row, C.vacas)       ?? 0) || null : null,
-      me: C.mej         !== null ? Math.round(num(row, C.mej)         ?? 0) || null : null,
-      to: C.toros       !== null ? Math.round(num(row, C.toros)       ?? 0) || null : null,
-      ph: num(row, C.ph),
-      pk: num(row, C.prodkt),
-      pr: num(row, C.pesoRes),
+      ph: num(row, 2),           // % Hembras
+      pk: num(row, 3),           // Producción kt
+      pr: num(row, 4),           // Peso promedio res
+      vq: Math.round(num(row, 5) ?? 0) || null, // Vaquillonas
+      va: Math.round(num(row, 6) ?? 0) || null, // Vacas
+      me: Math.round(num(row, 7) ?? 0) || null, // MEJ
+      nt: Math.round(num(row, 8) ?? 0) || null, // Novillitos
+      no: Math.round(num(row, 9) ?? 0) || null, // Novillos
+      to: Math.round(num(row, 10) ?? 0) || null, // Toros
     });
   }
 
